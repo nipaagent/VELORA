@@ -1,0 +1,6 @@
+{
+  "name": "VELORA AI Chat",
+  "description": "VELORA - Advanced AI Chatbot with Firebase Realtime Database & Username/Password Authentication.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
