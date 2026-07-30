@@ -2,6 +2,7 @@ export interface Message {
   id: string;
   role: 'user' | 'model';
   text: string;
+  thinking?: string;
   timestamp: number;
 }
 

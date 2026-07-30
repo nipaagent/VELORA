@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, MessageSquare, Trash2, LogOut, User, Sparkles, Code2, ShieldCheck } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, LogOut, User, Sparkles, Code2, ShieldCheck, BrainCircuit } from 'lucide-react';
 import { Chat, UserProfile } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';

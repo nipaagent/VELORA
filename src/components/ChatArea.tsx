@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, BrainCircuit, ChevronDown, ChevronUp } from 'lucide-react';
 import { Chat } from '../types';
 import { cn } from '../lib/utils';
 import MessageAppear from '../animations/MessageAppear';
@@ -11,6 +11,51 @@ interface ChatAreaProps {
   onSendMessage: (text: string) => void;
   onNewChat: () => void;
   isLoading: boolean;
+}
+
+function ThinkingSection({ thinking }: { thinking: string }) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <div className="mb-4 border border-slate-800 rounded-lg overflow-hidden bg-[#0a0c10] shadow-2xl ring-1 ring-white/5">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-3 py-1.5 bg-[#161b22] text-[10px] font-mono text-slate-400 hover:text-white transition-colors border-b border-slate-800"
+      >
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#27c93f]" />
+          </div>
+          <span className="ml-3 uppercase tracking-[0.2em] font-bold text-slate-500">VELORA_KERNEL_v2.7_1M_CTX</span>
+          <div className="ml-2 w-1 h-1 rounded-full bg-emerald-500 animate-ping" />
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="opacity-40 tabular-nums">1M_READY</span>
+          <span className="opacity-40 tabular-nums">PID: {Math.floor(Math.random() * 9000) + 1000}</span>
+          {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </div>
+      </button>
+      {isOpen && (
+        <div className="px-5 py-4 text-[11px] text-[#e6edf3] bg-[#0d1117] leading-relaxed font-mono whitespace-pre-wrap max-h-64 overflow-y-auto custom-scrollbar">
+          <div className="flex items-center gap-2 text-[#7d8590] mb-2 border-b border-white/5 pb-2">
+            <span className="text-emerald-500">➜</span>
+            <span>~</span>
+            <span className="text-blue-400">velora-sys</span>
+            <span className="text-slate-500">--mode=autonomous-terminal</span>
+          </div>
+          <div className="text-emerald-400/90 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
+            {thinking}
+          </div>
+          <div className="mt-2 flex items-center gap-1">
+            <span className="text-emerald-500">➜</span>
+            <span className="animate-pulse bg-emerald-500 w-2 h-4 inline-block align-middle" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: ChatAreaProps) {
@@ -59,8 +104,8 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
               >
                 <div className="flex gap-3 max-w-full min-w-0">
                   {msg.role === 'model' && (
-                    <div className="w-7 h-7 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      <Bot className="w-3.5 h-3.5 text-gray-700" />
+                    <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-md">
+                      <Bot className="w-3.5 h-3.5 text-white" />
                     </div>
                   )}
                   
@@ -68,10 +113,16 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
                     className={cn(
                       "max-w-[88%] sm:max-w-[82%] px-4 py-3 shadow-sm text-[13px] sm:text-sm min-w-0 break-words overflow-hidden",
                       msg.role === 'user' 
-                        ? 'bg-gray-900 text-white rounded-2xl rounded-tr-sm' 
-                        : 'bg-white border border-gray-200/80 text-gray-800 rounded-2xl rounded-tl-sm'
+                        ? 'bg-slate-900 text-white rounded-2xl rounded-tr-sm' 
+                        : 'bg-white border border-slate-200/80 text-slate-800 rounded-2xl rounded-tl-sm'
                     )}
                   >
+                    {msg.role === 'model' && msg.thinking && (
+                      <div className="mb-2">
+                        <ThinkingSection thinking={msg.thinking} />
+                      </div>
+                    )}
+                    
                     {msg.role === 'model' ? (
                       <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:m-0 prose-pre:p-0 prose-pre:bg-transparent">
                         <TypewriterMarkdown text={msg.text} isLatest={idx === messages.length - 1} />
@@ -82,8 +133,8 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
                   </div>
 
                   {msg.role === 'user' && (
-                    <div className="w-7 h-7 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      <User className="w-3.5 h-3.5 text-gray-700" />
+                    <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                      <User className="w-3.5 h-3.5 text-slate-700" />
                     </div>
                   )}
                 </div>
@@ -92,10 +143,10 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
             {isLoading && (
               <MessageAppear className="flex w-full justify-start">
                 <div className="flex gap-3 max-w-full">
-                  <div className="w-7 h-7 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                    <Bot className="w-3.5 h-3.5 text-gray-700" />
+                  <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-md">
+                    <Bot className="w-3.5 h-3.5 text-white" />
                   </div>
-                  <div className="bg-white border border-gray-200/80 rounded-2xl rounded-tl-sm px-3.5 py-2.5 shadow-sm flex items-center gap-2">
+                  <div className="bg-white border border-slate-200/80 rounded-2xl rounded-tl-sm px-3.5 py-2.5 shadow-sm flex items-center gap-2">
                     <TypingIndicator />
                   </div>
                 </div>
@@ -109,9 +160,17 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
       {/* Floating Bottom Input Bar */}
       <div className="p-3 sm:pb-4 sm:px-6 bg-gradient-to-t from-white via-white/90 to-transparent shrink-0">
         <div className="max-w-3xl mx-auto">
+          {isLoading && (
+            <div className="flex items-center justify-end mb-2 px-2">
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Processing</span>
+              </div>
+            </div>
+          )}
           <form 
             onSubmit={handleSubmit}
-            className="flex items-end gap-2 bg-white/95 backdrop-blur-md rounded-2xl px-4 py-2 transition-all border border-gray-200/90 shadow-lg shadow-gray-200/50 hover:border-gray-300 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/10 focus-within:shadow-xl"
+            className="flex items-end gap-2 bg-white/95 backdrop-blur-md rounded-2xl px-4 py-2 transition-all border border-slate-200/90 shadow-lg shadow-slate-200/50 hover:border-slate-300 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/10 focus-within:shadow-xl"
           >
             <textarea
               value={input}
@@ -122,8 +181,8 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
                   handleSubmit(e);
                 }
               }}
-              placeholder="Type a message..."
-              className="flex-1 max-h-32 min-h-[36px] bg-transparent resize-none border-0 focus:ring-0 py-1.5 px-0 text-[13px] text-gray-800 placeholder-gray-400 leading-relaxed outline-none"
+              placeholder="Message Velora Coding Machine..."
+              className="flex-1 max-h-32 min-h-[36px] bg-transparent resize-none border-0 focus:ring-0 py-1.5 px-0 text-[13px] text-slate-800 placeholder-slate-400 leading-relaxed outline-none"
               rows={1}
             />
             <button 
@@ -131,11 +190,11 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
               disabled={!input.trim() || isLoading}
               className={cn(
                 "p-2 rounded-full shrink-0 mb-0.5 transition-all outline-none",
-                input.trim() && !isLoading ? "bg-gray-900 text-white hover:bg-indigo-600 hover:scale-105 active:scale-95 shadow-md" : "bg-transparent text-gray-300"
+                input.trim() && !isLoading ? "bg-slate-900 text-white hover:bg-indigo-600 hover:scale-105 active:scale-95 shadow-md" : "bg-transparent text-slate-300"
               )}
             >
               {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin text-slate-900" />
               ) : (
                 <Send className="w-4 h-4" />
               )}

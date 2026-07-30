@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, LogOut, User, Sparkles } from 'lucide-react';
+import { Menu, LogOut, User, Sparkles, BrainCircuit } from 'lucide-react';
 import { Chat, Message, UserProfile } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
@@ -250,10 +250,20 @@ export default function App() {
       }
       
       if (response.ok && data.text) {
+        let responseText = data.text;
+        let thinkingContent = '';
+        
+        const thinkingMatch = responseText.match(/<thinking>([\s\S]*?)<\/thinking>/);
+        if (thinkingMatch) {
+          thinkingContent = thinkingMatch[1].trim();
+          responseText = responseText.replace(/<thinking>[\s\S]*?<\/thinking>/, '').trim();
+        }
+
         const modelMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'model',
-          text: data.text,
+          text: responseText,
+          thinking: thinkingContent,
           timestamp: Date.now(),
         };
         
@@ -435,7 +445,7 @@ export default function App() {
                 
                 <div className="flex items-center justify-center gap-1.5 flex-1">
                   <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <h1 className="text-base font-bold text-slate-900 tracking-wider uppercase">VELORA</h1>
+                  <h1 className="text-sm font-black text-slate-900 tracking-wider uppercase">VELORA</h1>
                 </div>
 
                 <div className="flex-1 flex justify-end items-center gap-2">
