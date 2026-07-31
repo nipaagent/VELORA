@@ -227,12 +227,21 @@ export default function App() {
     setIsLoading(true);
 
     try {
+      let activeGateway = userProfile?.gatewayConfig;
+      if (!activeGateway && user?.uid) {
+        const localGw = localStorage.getItem(`velora_gateway_config_${user.uid}`);
+        if (localGw) {
+          try { activeGateway = JSON.parse(localGw); } catch (e) {}
+        }
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: text, 
-          history: currentChatState.messages.map(h => ({ role: h.role, text: h.text })) 
+          history: currentChatState.messages.map(h => ({ role: h.role, text: h.text })),
+          gatewayConfig: activeGateway
         }),
       });
       

@@ -130,6 +130,78 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
     }
   };
 
+  const handleSaveGateway = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGwSuccess('');
+    setGwError('');
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    setSavingGw(true);
+
+    const updatedGw: GatewayConfig = {
+      enabled: gwEnabled,
+      baseUrl: gwBaseUrl.trim(),
+      apiKey: gwApiKey.trim(),
+      authScheme: gwAuthScheme,
+      model: gwModel.trim(),
+      credentialKind: 'Static API key'
+    };
+
+    const updatedProfile: UserProfile = {
+      ...userProfile,
+      gatewayConfig: updatedGw
+    };
+
+    try {
+      try {
+        await set(ref(db, `users/${currentUser.uid}/gatewayConfig`), updatedGw);
+      } catch (dbErr) {
+        console.warn("RTDB Gateway update notice:", dbErr);
+      }
+
+      localStorage.setItem(`velora_gateway_config_${currentUser.uid}`, JSON.stringify(updatedGw));
+      localStorage.setItem(`velora-profile-${currentUser.uid}`, JSON.stringify(updatedProfile));
+      onUpdateProfile(updatedProfile);
+
+      setGwSuccess('Gateway configuration saved successfully!');
+      setTimeout(() => setGwSuccess(''), 3500);
+    } catch (err: any) {
+      console.error("Gateway save error:", err);
+      setGwError('Failed to save Gateway settings.');
+    } finally {
+      setSavingGw(false);
+    }
+  };
+
+  const handleTestGateway = async () => {
+    setTestingGw(true);
+    setTestStatus(null);
+    try {
+      const res = await fetch('/api/gateway/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl: gwBaseUrl,
+          apiKey: gwApiKey,
+          authScheme: gwAuthScheme,
+          model: gwModel
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestStatus({ success: true, message: data.message });
+      } else {
+        setTestStatus({ success: false, message: data.error || 'Connection failed' });
+      }
+    } catch (err: any) {
+      setTestStatus({ success: false, message: `Network error: ${err.message}` });
+    } finally {
+      setTestingGw(false);
+    }
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}

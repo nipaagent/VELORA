@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Copy, Check, Eye, EyeOff, RotateCw, Shield, ShieldAlert, Code2, 
-  Settings, Terminal, Send, ArrowLeft, Lock, KeyRound, Sparkles, ShieldCheck
+  Settings, Terminal, Send, ArrowLeft, Lock, KeyRound, Sparkles, ShieldCheck,
+  Server, Globe, Radio, Activity, Cpu, Network, Layers, ExternalLink
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ref, onValue, update } from 'firebase/database';
@@ -27,6 +28,13 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
   
   // Tab for Code Snippets
   const [codeTab, setCodeTab] = useState<'JS' | 'PYTHON' | 'CURL'>('JS');
+
+  // Gateway specific states
+  const [copiedGwBaseUrl, setCopiedGwBaseUrl] = useState(false);
+  const [copiedGwCompletionsUrl, setCopiedGwCompletionsUrl] = useState(false);
+  const [isTestingGw, setIsTestingGw] = useState(false);
+  const [gwTestResult, setGwTestResult] = useState<{ success?: boolean; text?: string } | null>(null);
+  const [gwSnippetTab, setGwSnippetTab] = useState<'OPENAI' | 'PYTHON' | 'CURL'>('OPENAI');
 
   // Test input & output
   const [testMessage, setTestMessage] = useState('Hello Velora!');
@@ -152,6 +160,118 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
     } finally {
       setIsTesting(false);
     }
+  };
+
+  const gwBaseUrl = `${domain}/api/v1`;
+  const gwCompletionsUrl = `${domain}/api/v1/chat/completions`;
+
+  const handleRunGwTest = async () => {
+    if (!apiKey) return;
+    setIsTestingGw(true);
+    setGwTestResult(null);
+    try {
+      const res = await fetch('/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          stream: false,
+          messages: [{ role: 'user', content: 'Velora Cloud Gateway connection test.' }]
+        })
+      });
+      const text = await res.text();
+      
+      if (!res.ok) {
+        setGwTestResult({ success: false, text: `HTTP ${res.status}: ${text}` });
+        return;
+      }
+
+      if (text.startsWith('data:') || text.includes('data:')) {
+        const lines = text.split('\n').filter(l => l.startsWith('data:'));
+        let combined = '';
+        for (const line of lines) {
+          const raw = line.replace(/^data:\s*/, '').trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(raw);
+            const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.text || parsed.choices?.[0]?.message?.content || '';
+            combined += content;
+          } catch (e) {
+            // continue
+          }
+        }
+        setGwTestResult({
+          success: true,
+          text: combined || 'Gateway active and streaming response received!'
+        });
+      } else {
+        try {
+          const data = JSON.parse(text);
+          if (data.error) {
+            setGwTestResult({ success: false, text: data.error });
+          } else {
+            setGwTestResult({
+              success: true,
+              text: data.choices?.[0]?.message?.content || data.text || 'Gateway active and connected!'
+            });
+          }
+        } catch (e) {
+          setGwTestResult({ success: true, text: text || 'Gateway active!' });
+        }
+      }
+    } catch (err: any) {
+      setGwTestResult({ success: false, text: `Connection error: ${err.message}` });
+    } finally {
+      setIsTestingGw(false);
+    }
+  };
+
+  const gwCodeExamples = {
+    OPENAI: `// Velora Cloud Gateway - OpenAI SDK / Third-party Client Integration
+import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  baseURL: '${gwBaseUrl}',
+  apiKey: '${apiKey || 'YOUR_VELORA_API_KEY'}'
+});
+
+async function main() {
+  const completion = await openai.chat.completions.create({
+    model: 'velora-v2.7',
+    messages: [
+      { role: 'user', content: 'হ্যালো, Velora Cloud Gateway!' }
+    ]
+  });
+
+  console.log(completion.choices[0].message.content);
+}
+
+main();`,
+
+    PYTHON: `# Velora Cloud Gateway - Python Requests
+import requests
+
+url = "${gwCompletionsUrl}"
+headers = {
+    "Content-Type": "application/json",
+    "x-api-key": "${apiKey || 'YOUR_VELORA_API_KEY'}"
+}
+payload = {
+    "messages": [
+        {"role": "user", "content": "হ্যালো, Velora Cloud Gateway!"}
+    ]
+}
+
+response = requests.post(url, json=payload, headers=headers)
+print(response.json())`,
+
+    CURL: `# Velora Cloud Gateway - cURL Call
+curl -X POST "${gwCompletionsUrl}" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: ${apiKey || 'YOUR_VELORA_API_KEY'}" \\
+  -d '{"messages": [{"role": "user", "content": "হ্যালো, Velora Cloud Gateway!"}]}'`
   };
 
   // Determine API Access status from live profile or role
@@ -482,7 +602,153 @@ curl -X POST "${domain}/api/v1/chat" \\
               </div>
             </div>
 
-            {/* CARD 5: Bottom Feature Cards */}
+            {/* CARD 5: VELORA CLOUD GATEWAY (ক্লাউড গেটওয়ে এক্সটার্নাল এপিআই) */}
+            <div className="p-5 bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 rounded-2xl border border-indigo-900/60 shadow-xl text-white space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0">
+                    <Server className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                      VELORA CLOUD GATEWAY (ক্লাউড গেটওয়ে)
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      অন্য অ্যাপ বা এক্সটার্নাল ক্লায়েন্ট সার্ভিসে আপনার এই অ্যাপের AI ইন্টিগ্রেট করুন
+                    </p>
+                  </div>
+                </div>
+
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-[10px] tracking-wider uppercase self-start sm:self-auto">
+                  <Radio className="w-3 h-3 text-indigo-400 animate-pulse" />
+                  <span>GATEWAY ONLINE</span>
+                </span>
+              </div>
+
+              {/* Gateway Endpoints */}
+              <div className="grid grid-cols-1 gap-3">
+                {/* Gateway Base URL */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-300">
+                    <span>1. Gateway Base URL (OpenAI / SDK Compatible):</span>
+                    <span className="text-[10px] text-indigo-400 font-mono">x-api-key: {apiKey ? `${apiKey.slice(0,6)}...` : 'NONE'}</span>
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 font-mono text-xs text-indigo-300">
+                    <span className="truncate mr-2">{gwBaseUrl}</span>
+                    <button
+                      onClick={() => copyText(gwBaseUrl, setCopiedGwBaseUrl)}
+                      className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      {copiedGwBaseUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedGwBaseUrl ? 'কপি হয়েছে' : 'কপি'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Gateway Completions Endpoint */}
+                <div className="space-y-1">
+                  <div className="text-[11px] font-bold text-slate-300">
+                    2. Chat Completions Full Endpoint:
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 font-mono text-xs text-indigo-300">
+                    <span className="truncate mr-2">{gwCompletionsUrl}</span>
+                    <button
+                      onClick={() => copyText(gwCompletionsUrl, setCopiedGwCompletionsUrl)}
+                      className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      {copiedGwCompletionsUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedGwCompletionsUrl ? 'কপি হয়েছে' : 'কপি'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Code Snippets for External Applications */}
+              <div className="space-y-2 pt-1">
+                <div className="text-[11px] font-bold text-slate-300">
+                  অন্য অ্যাপ থেকে কল করার কোড উদাহরণ (Integration Snippets):
+                </div>
+
+                <div className="rounded-xl overflow-hidden border border-slate-800 bg-[#0f0f17]">
+                  <div className="bg-[#161622] px-3 pt-2 pb-0 flex items-center justify-between border-b border-slate-800/80">
+                    <div className="flex gap-1">
+                      {(['OPENAI', 'PYTHON', 'CURL'] as const).map((tab) => (
+                        <button
+                          key={tab}
+                          onClick={() => setGwSnippetTab(tab)}
+                          className={`px-3 py-1 rounded-t-lg text-[11px] font-bold transition-all ${
+                            gwSnippetTab === tab
+                              ? 'bg-[#0f0f17] text-indigo-400 border-t-2 border-indigo-500'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {tab}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => copyText(gwCodeExamples[gwSnippetTab], setCopiedCode)}
+                      className="p-1 text-slate-400 hover:text-white"
+                      title="Copy Snippet"
+                    >
+                      {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  <div className="p-3 overflow-x-auto text-slate-200 font-mono text-[11px] leading-relaxed max-h-48">
+                    <pre className="whitespace-pre">
+                      <code>{gwCodeExamples[gwSnippetTab]}</code>
+                    </pre>
+                  </div>
+                </div>
+              </div>
+
+              {/* Gateway Test Button & Output */}
+              <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    ক্লাউড গেটওয়ে এন্ডপয়েন্ট রেডি আছে কিনা পরীক্ষা করুন:
+                  </span>
+
+                  <button
+                    onClick={handleRunGwTest}
+                    disabled={isTestingGw || !apiKey}
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    {isTestingGw ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>টেস্ট হচ্ছে...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Activity className="w-3.5 h-3.5" />
+                        <span>টেস্ট গেটওয়ে (Test Gateway)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {gwTestResult && (
+                  <div className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                    gwTestResult.success 
+                      ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-200' 
+                      : 'bg-rose-950/40 border-rose-800/60 text-rose-200'
+                  }`}>
+                    <div className="font-bold font-mono text-[11px] mb-0.5 flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${gwTestResult.success ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                      <span>{gwTestResult.success ? 'GATEWAY CONNECTED SUCCESS' : 'GATEWAY ERROR'}</span>
+                    </div>
+                    <div className="font-mono text-[11px] opacity-90">
+                      {gwTestResult.text}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* CARD 6: Bottom Feature Cards */}
             <div className="grid grid-cols-2 gap-3 pt-1 pb-4">
               <div className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">

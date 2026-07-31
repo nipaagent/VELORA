@@ -13,6 +13,16 @@ export interface Chat {
   updatedAt: number;
 }
 
+export interface GatewayConfig {
+  enabled: boolean;
+  baseUrl: string;
+  apiKey: string;
+  authScheme: 'x-api-key' | 'Bearer' | 'x-goog-api-key';
+  model: string;
+  customHeaders?: Record<string, string>;
+  credentialKind?: 'Static API key' | 'Dynamic';
+}
+
 export interface UserProfile {
   uid: string;
   fullName: string;
@@ -23,5 +33,6 @@ export interface UserProfile {
   isBanned?: boolean;
   apiAccessEnabled?: boolean;
   apiKey?: string;
+  gatewayConfig?: GatewayConfig;
   createdAt: number;
 }

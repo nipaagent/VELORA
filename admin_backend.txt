@@ -1,0 +1,231 @@
+
+  app.get("/api/admin/stats", (req, res) => {
+    const keys = getApiKeys();
+    res.json({
+      status: "success",
+      apiKeyCount: keys.length,
+      timestamp: Date.now()
+    });
+  });
+
+  app.get("/api/v1/health", (req, res) => {
+    res.json({ status: "ok", service: "VELORA AI API", version: "1.0.0" });
+  });
+
+  // --- Admin Firebase Database API Endpoints ---
+  const FIREBASE_DB_URL = "https://v-e-l-o-r-a-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+  app.get("/api/admin/users", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : "";
+      const queryParam = idToken ? `?auth=${idToken}` : "";
+      
+      // 1. Try reading /users.json
+      let response = await fetch(`${FIREBASE_DB_URL}/users.json${queryParam}`);
+      let data = await response.json();
+
+      if (data && !data.error && typeof data === "object") {
+        const userList = Object.keys(data).map(uid => ({
+          uid,
+          fullName: data[uid].fullName || "No Name",
+          username: data[uid].username || uid,
+          password: data[uid].password || "",
+          createdAt: data[uid].createdAt || Date.now(),
+          role: data[uid].role || (data[uid].username === "admin" ? "admin" : "user"),
+          status: data[uid].status || (data[uid].isBanned ? "banned" : "approved"),
+          isBanned: !!data[uid].isBanned || data[uid].status === "banned",
+          apiAccessEnabled: data[uid].apiAccessEnabled ?? (data[uid].username === "admin" || data[uid].role === "admin"),
+          apiKey: data[uid].apiKey || ""
+        }));
+        userList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return res.json({ status: "success", users: userList });
+      }
+
+      // 2. Try reading /user_list.json
+      response = await fetch(`${FIREBASE_DB_URL}/user_list.json${queryParam}`);
+      data = await response.json();
+
+      if (data && !data.error && typeof data === "object") {
+        const userList = Object.keys(data).map(uid => ({
+          uid,
+          fullName: data[uid].fullName || "No Name",
+          username: data[uid].username || uid,
+          password: data[uid].password || "",
+          createdAt: data[uid].createdAt || Date.now(),
+          role: data[uid].role || (data[uid].username === "admin" ? "admin" : "user"),
+          status: data[uid].status || (data[uid].isBanned ? "banned" : "approved"),
+          isBanned: !!data[uid].isBanned || data[uid].status === "banned",
+          apiAccessEnabled: data[uid].apiAccessEnabled ?? (data[uid].username === "admin" || data[uid].role === "admin"),
+          apiKey: data[uid].apiKey || ""
+        }));
+        userList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return res.json({ status: "success", users: userList });
+      }
+
+      // 3. Fallback: Try reading usernames.json and then each user
+      response = await fetch(`${FIREBASE_DB_URL}/usernames.json${queryParam}`);
+      data = await response.json();
+
+      if (data && !data.error && typeof data === "object") {
+        const uids = Array.from(new Set(Object.values(data) as string[]));
+        const userPromises = uids.map(async (uId) => {
+          try {
+            const uRes = await fetch(`${FIREBASE_DB_URL}/users/${uId}.json${queryParam}`);
+            const uData = await uRes.json();
+            if (uData && !uData.error) {
+              return {
+                uid: uId,
+                fullName: uData.fullName || "No Name",
+                username: uData.username || uId,
+                password: uData.password || "",
+                createdAt: uData.createdAt || Date.now(),
+                role: uData.role || (uData.username === "admin" ? "admin" : "user"),
+                status: uData.status || (uData.isBanned ? "banned" : "approved"),
+                isBanned: !!uData.isBanned || uData.status === "banned",
+                apiAccessEnabled: uData.apiAccessEnabled ?? (uData.username === "admin" || uData.role === "admin"),
+                apiKey: uData.apiKey || ""
+              };
+            }
+          } catch (e) {
+            console.warn("Individual user fetch err:", e);
+          }
+          return null;
+        });
+
+        const results = (await Promise.all(userPromises)).filter(Boolean);
+        results.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+        return res.json({ status: "success", users: results });
+      }
+
+      return res.json({ status: "success", users: [] });
+    } catch (err: any) {
+      console.error("Admin GET users error:", err);
+      return res.status(500).json({ error: err.message || "Failed to fetch users" });
+    }
+  });
+
+  app.put("/api/admin/users/:uid", async (req, res) => {
+    try {
+      const { uid } = req.params;
+      const { fullName, username, password, role, status, isBanned, apiAccessEnabled, apiKey, oldUsername } = req.body;
+      const authHeader = req.headers.authorization;
+      const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : "";
+      const queryParam = idToken ? `?auth=${idToken}` : "";
+
+      const cleanUsername = (username || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+
+      const updatedUser: any = {
+        uid,
+        fullName: (fullName || "").trim(),
+        username: cleanUsername,
+        password: (password || "").trim(),
+        role: role || (cleanUsername === "admin" ? "admin" : "user"),
+        status: status || (isBanned ? "banned" : "approved"),
+        isBanned: isBanned !== undefined ? isBanned : (status === "banned"),
+        updatedAt: Date.now()
+      };
+
+      if (apiAccessEnabled !== undefined) {
+        updatedUser.apiAccessEnabled = !!apiAccessEnabled;
+      }
+      if (apiKey !== undefined) {
+        updatedUser.apiKey = apiKey;
+      }
+
+      await fetch(`${FIREBASE_DB_URL}/users/${uid}.json${queryParam}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedUser)
+      });
+
+      await fetch(`${FIREBASE_DB_URL}/user_list/${uid}.json${queryParam}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedUser)
+      });
+
+      if (oldUsername && oldUsername !== cleanUsername) {
+        await fetch(`${FIREBASE_DB_URL}/usernames/${oldUsername}.json${queryParam}`, { method: "DELETE" });
+      }
+      if (cleanUsername) {
+        await fetch(`${FIREBASE_DB_URL}/usernames/${cleanUsername}.json${queryParam}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(uid)
+        });
+      }
+
+      return res.json({ status: "success", user: updatedUser });
+    } catch (err: any) {
+      console.error("Admin PUT user error:", err);
+      return res.status(500).json({ error: err.message || "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/admin/users/:uid", async (req, res) => {
+    try {
+      const { uid } = req.params;
+      const { username } = req.query;
+      const authHeader = req.headers.authorization;
+      const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : "";
+      const queryParam = idToken ? `?auth=${idToken}` : "";
+
+      await fetch(`${FIREBASE_DB_URL}/users/${uid}.json${queryParam}`, { method: "DELETE" });
+      await fetch(`${FIREBASE_DB_URL}/user_list/${uid}.json${queryParam}`, { method: "DELETE" });
+      if (username) {
+        await fetch(`${FIREBASE_DB_URL}/usernames/${username}.json${queryParam}`, { method: "DELETE" });
+      }
+
+      return res.json({ status: "success", message: "User deleted from Firebase" });
+    } catch (err: any) {
+      console.error("Admin DELETE user error:", err);
+      return res.status(500).json({ error: err.message || "Failed to delete user" });
+    }
+  });
+
+  app.post("/api/admin/users", async (req, res) => {
+    try {
+      const { fullName, username, password, role, status } = req.body;
+      const authHeader = req.headers.authorization;
+      const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : "";
+      const queryParam = idToken ? `?auth=${idToken}` : "";
+
+      const cleanUsername = (username || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+      const generatedUid = `user_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+
+      const newUser = {
+        uid: generatedUid,
+        fullName: (fullName || "").trim(),
+        username: cleanUsername,
+        password: (password || "").trim(),
+        createdAt: Date.now(),
+        role: role || (cleanUsername === "admin" ? "admin" : "user"),
+        status: status || "approved",
+        isBanned: status === "banned"
+      };
+
+      await fetch(`${FIREBASE_DB_URL}/users/${generatedUid}.json${queryParam}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newUser)
+      });
+
+      await fetch(`${FIREBASE_DB_URL}/user_list/${generatedUid}.json${queryParam}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newUser)
+      });
+
+      await fetch(`${FIREBASE_DB_URL}/usernames/${cleanUsername}.json${queryParam}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(generatedUid)
+      });
+
+      return res.json({ status: "success", user: newUser });
+    } catch (err: any) {
+      console.error("Admin POST user error:", err);
+      return res.status(500).json({ error: err.message || "Failed to create user" });
+    }
+  });

@@ -44,14 +44,6 @@ async function startServer() {
       let message = req.body?.message || req.query?.q || req.query?.message;
       let history = req.body?.history || [];
       let messages = req.body?.messages;
-      
-      const availableKeys = getApiKeys();
-      
-      if (availableKeys.length === 0) {
-        return res.status(200).json({ 
-          error: "No Naga API key found. Please set NAGA_API_KEY in environment variables." 
-        });
-      }
 
       // If developer sent 'messages' array (OpenAI format), parse it
       if (!message && Array.isArray(messages) && messages.length > 0) {
@@ -67,8 +59,58 @@ async function startServer() {
         return res.status(400).json({ error: "Message parameter 'q' or 'message' is required." });
       }
 
+      // Check for custom Gateway configuration (from request body or custom headers)
+      const customGateway = req.body?.gatewayConfig || (req.headers['x-gateway-url'] ? {
+        enabled: true,
+        baseUrl: req.headers['x-gateway-url'] as string,
+        apiKey: (req.headers['x-gateway-key'] as string) || '',
+        authScheme: (req.headers['x-gateway-auth-scheme'] as string) || 'x-api-key',
+        model: (req.headers['x-gateway-model'] as string) || 'nemotron-3-ultra-550b-a55b:free'
+      } : null);
+
+      let gatewayUrl = "https://api.naga.ac/v1/chat/completions";
+      let requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      let modelName = "nemotron-3-ultra-550b-a55b:free";
+
+      if (customGateway && customGateway.enabled !== false && customGateway.baseUrl) {
+        let cleanBase = customGateway.baseUrl.trim().replace(/\/+$/, "");
+        if (cleanBase.endsWith("/chat/completions")) {
+          gatewayUrl = cleanBase;
+        } else {
+          gatewayUrl = `${cleanBase}/chat/completions`;
+        }
+
+        const gwApiKey = customGateway.apiKey ? customGateway.apiKey.trim() : "";
+        const scheme = customGateway.authScheme || 'x-api-key';
+
+        if (scheme === 'x-api-key') {
+          requestHeaders["x-api-key"] = gwApiKey;
+        } else if (scheme === 'x-goog-api-key') {
+          requestHeaders["x-goog-api-key"] = gwApiKey;
+        } else {
+          requestHeaders["Authorization"] = `Bearer ${gwApiKey}`;
+        }
+
+        if (customGateway.customHeaders && typeof customGateway.customHeaders === 'object') {
+          Object.assign(requestHeaders, customGateway.customHeaders);
+        }
+
+        if (customGateway.model && customGateway.model.trim()) {
+          modelName = customGateway.model.trim();
+        }
+      } else {
+        const availableKeys = getApiKeys();
+        if (availableKeys.length === 0) {
+          return res.status(200).json({ 
+            error: "No Naga API key found. Please set NAGA_API_KEY in environment variables or configure Gateway in settings." 
+          });
+        }
+        const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+        requestHeaders["Authorization"] = `Bearer ${apiKey}`;
+      }
+
       const systemPrompt = `You are VELORA v2.7.
-Identity: High-speed technical entity.
+Identity: High-speed technical entity. You are a unified 100% powerful brain formed by combining all available API keys.
 CRITICAL RULES:
 1. LANGUAGE: Respond in the SAME LANGUAGE used by the user (Bengali, English, etc.).
 2. SPEED: Respond as fast as possible.
@@ -76,7 +118,6 @@ CRITICAL RULES:
 4. FINAL ANSWER: After the </thinking> tag, you MUST provide the actual answer to the user. Do NOT stop after thinking.
 5. ZERO FILLER: No conversational fluff. Be direct and precise after your thinking block.`;
 
-      const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
       const formattedMessages = [
         { role: "system", content: systemPrompt },
         ...history.map((msg: any) => ({
@@ -86,39 +127,52 @@ CRITICAL RULES:
         { role: "user", content: message }
       ];
 
-      const response = await fetch("https://api.naga.ac/v1/chat/completions", {
+      const isStream = req.body?.stream !== false;
+
+      const response = await fetch(gatewayUrl, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
+        headers: requestHeaders,
         body: JSON.stringify({
-          model: "nemotron-3-ultra-550b-a55b:free",
+          model: modelName,
           messages: formattedMessages,
           temperature: 0.2,
           max_tokens: 4000,
-          stream: true
+          stream: isStream
         })
       });
 
       if (response.ok && response.body) {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(decoder.decode(value));
+        if (isStream) {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+          
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(decoder.decode(value));
+          }
+          return res.end();
+        } else {
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const data = await response.json();
+            return res.status(200).json(data);
+          } else {
+            const text = await response.text();
+            return res.status(200).json({
+              id: "chatcmpl-" + Date.now(),
+              choices: [{ message: { role: "assistant", content: text } }]
+            });
+          }
         }
-        return res.end();
       } else if (!response.ok) {
         const errorText = await response.text();
-        console.error("Naga API Error Response:", errorText);
+        console.error("Gateway API Error Response:", errorText);
         return res.status(200).json({ 
-          error: `Naga API Error (${response.status}): ${errorText}` 
+          error: `Gateway API Error (${response.status}): ${errorText}` 
         });
       }
       return res.status(200).json({ error: "Failed to read response body." });
@@ -131,6 +185,74 @@ CRITICAL RULES:
   app.post("/api/chat", handleChatRequest);
   app.post("/api/v1/chat", handleChatRequest);
   app.get("/api/v1/chat", handleChatRequest);
+  app.post("/api/v1/chat/completions", handleChatRequest);
+  app.get("/api/v1/chat/completions", handleChatRequest);
+
+  // Gateway Connection Test Endpoint
+  app.post("/api/gateway/test", async (req, res) => {
+    try {
+      const { baseUrl, apiKey, authScheme, model, customHeaders } = req.body || {};
+      
+      if (!baseUrl) {
+        return res.status(400).json({ success: false, error: "Gateway base URL is required." });
+      }
+
+      let cleanBase = baseUrl.trim().replace(/\/+$/, "");
+      let gatewayUrl = cleanBase.endsWith("/chat/completions") ? cleanBase : `${cleanBase}/chat/completions`;
+
+      let headers: Record<string, string> = { "Content-Type": "application/json" };
+      const scheme = authScheme || 'x-api-key';
+      const keyVal = (apiKey || '').trim();
+
+      if (scheme === 'x-api-key') {
+        headers["x-api-key"] = keyVal;
+      } else if (scheme === 'x-goog-api-key') {
+        headers["x-goog-api-key"] = keyVal;
+      } else {
+        headers["Authorization"] = `Bearer ${keyVal}`;
+      }
+
+      if (customHeaders && typeof customHeaders === 'object') {
+        Object.assign(headers, customHeaders);
+      }
+
+      const testModel = model || "nemotron-3-ultra-550b-a55b:free";
+
+      const testRes = await fetch(gatewayUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: testModel,
+          messages: [{ role: "user", content: "Hi" }],
+          max_tokens: 5,
+          stream: false
+        })
+      });
+
+      if (testRes.ok) {
+        const data = await testRes.json();
+        return res.json({ 
+          success: true, 
+          status: testRes.status, 
+          message: "Gateway connection successful! (200 OK)",
+          model: testModel,
+          sampleResponse: data?.choices?.[0]?.message?.content || "Connection verified."
+        });
+      } else {
+        const errText = await testRes.text();
+        return res.status(400).json({ 
+          success: false, 
+          status: testRes.status, 
+          error: `Gateway returned status ${testRes.status}: ${errText.slice(0, 200)}` 
+        });
+      }
+    } catch (err: any) {
+      return res.status(500).json({ 
+        success: false, 
+        error: `Network error connecting to Gateway: ${err.message}` 
+      });
+    }
+  });
 
   app.get("/api/admin/stats", (req, res) => {
     const keys = getApiKeys();
@@ -362,7 +484,6 @@ CRITICAL RULES:
       return res.status(500).json({ error: err.message || "Failed to create user" });
     }
   });
-
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
