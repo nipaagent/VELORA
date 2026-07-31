@@ -644,22 +644,25 @@ curl -X POST "${domain}/api/v1/chat" \\
                 {/* Model ID Field */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-300">
-                    <span>1. Model Name (আপনার অ্যাপের "Model" ফিল্ডে এটি লিখুন):</span>
+                    <span>1. Model Name (আপনার অ্যাপের "Model" ফিল্ডে এটি হুবহু লিখুন):</span>
                     <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
                       <Cpu className="w-3 h-3" />
-                      ACTIVE MODEL
+                      CLAUDE-READY
                     </span>
                   </div>
                   <div className="flex items-center justify-between bg-slate-950 border border-emerald-500/30 rounded-xl p-3 font-mono text-sm text-emerald-400 ring-1 ring-emerald-500/10 shadow-lg">
-                    <span className="font-black tracking-wider">velora-v2.7</span>
+                    <span className="font-black tracking-wider">claude run</span>
                     <button
-                      onClick={() => copyText('velora-v2.7', setCopiedCode)}
+                      onClick={() => copyText('claude run', setCopiedCode)}
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-md active:scale-95"
                     >
                       {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedCode ? 'কপি হয়েছে' : 'মডেল আইডি কপি'}</span>
                     </button>
                   </div>
+                  <p className="text-[9px] text-slate-500 px-1 italic">
+                    * আপনার থার্ড-পার্টি ক্লায়েন্ট অ্যাপে "claude run" নামটি ব্যবহার করুন।
+                  </p>
                 </div>
 
                 {/* Gateway Base URL */}

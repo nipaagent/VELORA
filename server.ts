@@ -183,8 +183,6 @@ CRITICAL RULES:
   };
 
   // --- VELORA CLOUD GATEWAY: HYPER-RESILIENT ROUTING ---
-  // We use regex to catch any path that looks like it's trying to find models or completions
-  // This handles /v1/models, /api/v1/models, /api/v1/v1/models, etc.
   
   const handleModelsRequest = (req: express.Request, res: express.Response) => {
     console.log(`[Gateway] Discovery request: ${req.method} ${req.url}`);
@@ -192,7 +190,7 @@ CRITICAL RULES:
       object: "list",
       data: [
         {
-          id: "velora-v2.7",
+          id: "claude run",
           object: "model",
           created: Math.floor(Date.now() / 1000),
           owned_by: "velora",
@@ -210,30 +208,24 @@ CRITICAL RULES:
             group: null,
             is_blocking: false
           }]
-        },
-        {
-          id: "velora-latest",
-          object: "model",
-          created: Math.floor(Date.now() / 1000),
-          owned_by: "velora",
         }
       ]
     });
   };
 
-  // 1. COMPLETIONS: Catch any path ending in completions, including model-specific paths
+  // 1. COMPLETIONS (OpenAI Style): Catch any path ending in completions
   app.all(/.*\/chat\/completions$/, handleChatRequest);
-  app.all(/.*\/velora-v2.7\/chat\/completions$/, handleChatRequest); // Allows model name in path
-  app.all(/.*\/velora-latest\/chat\/completions$/, handleChatRequest);
   
-  // 2. MODELS: Catch any path ending in models
+  // 2. MESSAGES (Anthropic Style): Catch any path ending in messages (Fix for 404 /api/v1/v1/messages)
+  app.all(/.*\/messages$/, handleChatRequest);
+  
+  // 3. MODELS: Catch any path ending in models
   app.all(/.*\/models$/, handleModelsRequest);
-  app.all(/.*\/v1\/models$/, handleModelsRequest);
 
-  // 3. MODEL SPECIFIC: Catch any path ending in specific model ID
-  app.get(/.*\/models\/velora-v2.7$/, (req, res) => {
+  // 4. MODEL SPECIFIC: Catch specific model IDs
+  app.get(/.*\/models\/claude\srun$/, (req, res) => {
     res.json({
-      id: "velora-v2.7",
+      id: "claude run",
       object: "model",
       created: Math.floor(Date.now() / 1000),
       owned_by: "velora"
@@ -242,8 +234,10 @@ CRITICAL RULES:
 
   // Native explicit routes as fallback
   app.post("/api/v1/chat/completions", handleChatRequest);
+  app.post("/api/v1/messages", handleChatRequest);
   app.get("/api/v1/models", handleModelsRequest);
   app.post("/chat/completions", handleChatRequest);
+  app.post("/messages", handleChatRequest);
   app.get("/models", handleModelsRequest);
 
   // Gateway Connection Test Endpoint
