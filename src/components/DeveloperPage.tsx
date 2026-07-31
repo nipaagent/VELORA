@@ -619,10 +619,24 @@ curl -X POST "${domain}/api/v1/chat" \\
                   </div>
                 </div>
 
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-[10px] tracking-wider uppercase self-start sm:self-auto">
-                  <Radio className="w-3 h-3 text-indigo-400 animate-pulse" />
-                  <span>DISCOVERY ACTIVE</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold text-[10px] tracking-wider uppercase self-start sm:self-auto">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400 animate-pulse" />
+                  <span>VELORA NATIVE ACTIVE</span>
                 </span>
+              </div>
+
+              <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-xl p-3 mb-1">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-indigo-600/20 flex items-center justify-center border border-indigo-500/30">
+                    <Cpu className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest">Active Model Platform</div>
+                    <div className="text-sm font-bold text-white flex items-center gap-2">
+                      Velora Intelligence v2.7 <span className="text-[9px] bg-indigo-500/30 px-1.5 py-0.5 rounded text-indigo-200">INTERNAL</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Gateway Endpoints */}
@@ -630,22 +644,27 @@ curl -X POST "${domain}/api/v1/chat" \\
                 {/* Gateway Base URL */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-300">
-                    <span>1. Gateway Base URL (OpenAI / SDK Client-এ এটি ব্যবহার করুন):</span>
-                    <span className="text-[10px] text-emerald-400 font-mono">MODELS SUPPORTED</span>
+                    <span>1. Gateway Base URL (OpenAI Client-এর "Base URL" ফিল্ডে এটি দিন):</span>
+                    <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                      <Layers className="w-3 h-3" />
+                      AUTO-DISCOVERY ON
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 font-mono text-xs text-indigo-300">
-                    <span className="truncate mr-2 font-bold">{gwBaseUrl}</span>
+                  <div className="flex items-center justify-between bg-slate-900/90 border border-indigo-500/20 rounded-xl p-3 font-mono text-sm text-indigo-300 ring-1 ring-indigo-500/10 shadow-lg">
+                    <span className="truncate mr-2 font-bold tracking-tight">{gwBaseUrl}</span>
                     <button
                       onClick={() => copyText(gwBaseUrl, setCopiedGwBaseUrl)}
-                      className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 shrink-0"
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-md active:scale-95"
                     >
-                      {copiedGwBaseUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedGwBaseUrl ? 'কপি হয়েছে' : 'কপি'}</span>
+                      {copiedGwBaseUrl ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedGwBaseUrl ? 'কপি হয়েছে' : 'কপি করুন'}</span>
                     </button>
                   </div>
-                  <p className="text-[9px] text-slate-500 px-1 italic">
-                    * OpenAI Compatible অ্যাপের "Base URL" বা "Gateway URL" ফিল্ডে উপরের লিংকটি দিন।
-                  </p>
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mt-1">
+                    <p className="text-[10px] text-amber-200 leading-tight">
+                      <strong>বিঃদ্রঃ:</strong> আপনার থার্ড-পার্টি অ্যাপে (যেমন Claude, ChatGPT Next) "Base URL" হিসেবে শুধুমাত্র এই উপরের লিংকটি দিবেন। শেষে <code>/chat/completions</code> দিবেন না।
+                    </p>
+                  </div>
                 </div>
 
                 {/* Gateway Completions Endpoint */}

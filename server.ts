@@ -187,8 +187,14 @@ CRITICAL RULES:
   app.get("/api/v1/chat", handleChatRequest);
   app.post("/api/v1/chat/completions", handleChatRequest);
   app.get("/api/v1/chat/completions", handleChatRequest);
+  
+  // Resilient paths for misconfigured clients
+  app.post("/api/v1/chat/completions/chat/completions", handleChatRequest);
+  app.post("/api/v1/chat/completions/v1/chat/completions", handleChatRequest);
+  app.post("/api/v1/chat/chat/completions", handleChatRequest);
+  app.post("/chat/completions", handleChatRequest);
 
-  // Models Discovery Endpoints (For tools like the one in user screenshot)
+  // Models Discovery Endpoints (For OpenAI Compatible Clients)
   const handleModelsRequest = (req: express.Request, res: express.Response) => {
     res.json({
       object: "list",
@@ -196,27 +202,48 @@ CRITICAL RULES:
         {
           id: "velora-v2.7",
           object: "model",
-          created: 1710000000,
+          created: Math.floor(Date.now() / 1000),
           owned_by: "velora",
+          permission: [{
+            id: "modelperm-native",
+            object: "model_permission",
+            created: Math.floor(Date.now() / 1000),
+            allow_create_engine: true,
+            allow_sampling: true,
+            allow_logprobs: true,
+            allow_search_indices: false,
+            allow_view: true,
+            allow_fine_tuning: false,
+            organization: "*",
+            group: null,
+            is_blocking: false
+          }]
         },
         {
-          id: "gemini-1.5-flash",
+          id: "velora-latest",
           object: "model",
-          created: 1710000000,
-          owned_by: "google",
-        },
-        {
-          id: "nemotron-3-ultra-550b-a55b:free",
-          object: "model",
-          created: 1710000000,
-          owned_by: "nvidia",
+          created: Math.floor(Date.now() / 1000),
+          owned_by: "velora",
         }
       ]
     });
   };
 
+  // Supported variations of model discovery paths for maximum compatibility
   app.get("/api/v1/models", handleModelsRequest);
-  app.get("/api/v1/chat/completions/v1/models", handleModelsRequest); // Specific fix for user's screenshot configuration
+  app.get("/api/v1/chat/completions/v1/models", handleModelsRequest); 
+  app.get("/api/v1/chat/completions/models", handleModelsRequest);
+  app.get("/api/v1/chat/models", handleModelsRequest);
+  app.get("/v1/models", handleModelsRequest);
+  app.get("/models", handleModelsRequest);
+  app.get("/api/v1/models/velora-v2.7", (req, res) => {
+    res.json({
+      id: "velora-v2.7",
+      object: "model",
+      created: Math.floor(Date.now() / 1000),
+      owned_by: "velora"
+    });
+  });
 
   // Gateway Connection Test Endpoint
   app.post("/api/gateway/test", async (req, res) => {
