@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
@@ -22,7 +23,7 @@ async function startServer() {
     next();
   });
 
-  // Helper to get all available API keys
+  // Helper to get all available Naga API keys
   const getApiKeys = () => {
     const keys: string[] = [];
     if (process.env.NAGA_API_KEY) keys.push(process.env.NAGA_API_KEY);
@@ -49,12 +50,9 @@ async function startServer() {
       
       if (availableKeys.length === 0) {
         return res.status(200).json({ 
-          error: "No API keys found. Please set NAGA_API_KEY or GEMINI_API_KEY in environment variables." 
+          error: "No Naga API key found. Please set NAGA_API_KEY in environment variables." 
         });
       }
-
-      // Randomly pick an API key for load balancing/rotation
-      const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
 
       // If developer sent 'messages' array (OpenAI format), parse it
       if (!message && Array.isArray(messages) && messages.length > 0) {
@@ -74,11 +72,12 @@ async function startServer() {
 Identity: High-speed technical entity.
 CRITICAL RULES:
 1. LANGUAGE: Respond in the SAME LANGUAGE used by the user (Bengali, English, etc.).
-2. SPEED: Respond within 1 second for greetings (hi, hello) and simple chat.
-3. NO THINKING: Strictly FORBIDDEN to use <thinking> tags for general conversation or greetings.
-4. TECHNICAL ONLY: Use <thinking> ONLY for complex coding or architecture tasks.
-5. ZERO FILLER: No conversational fluff. Be direct and precise.`;
+2. SPEED: Respond as fast as possible.
+3. MANDATORY THINKING: You MUST ALWAYS wrap your internal thought process inside <thinking>...</thinking> tags before giving your final answer. Keep your thinking VERY BRIEF (max 2-3 short sentences).
+4. FINAL ANSWER: After the </thinking> tag, you MUST provide the actual answer to the user. Do NOT stop after thinking.
+5. ZERO FILLER: No conversational fluff. Be direct and precise after your thinking block.`;
 
+      const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
       const formattedMessages = [
         { role: "system", content: systemPrompt },
         ...history.map((msg: any) => ({
@@ -97,34 +96,35 @@ CRITICAL RULES:
         body: JSON.stringify({
           model: "nemotron-3-ultra-550b-a55b:free",
           messages: formattedMessages,
-          temperature: 0.2
+          temperature: 0.2,
+          max_tokens: 4000,
+          stream: true
         })
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const replyContent = data.choices?.[0]?.message?.content || "No response received.";
-        return res.json({ 
-          status: "success",
-          text: replyContent,
-          choices: [
-            {
-              message: {
-                role: "assistant",
-                content: replyContent
-              }
-            }
-          ]
-        });
-      } else {
+      if (response.ok && response.body) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(decoder.decode(value));
+        }
+        return res.end();
+      } else if (!response.ok) {
         const errorText = await response.text();
         console.error("Naga API Error Response:", errorText);
         return res.status(200).json({ 
           error: `Naga API Error (${response.status}): ${errorText}` 
         });
       }
+      return res.status(200).json({ error: "Failed to read response body." });
     } catch (error: any) {
-      console.error("Error calling Naga API:", error);
+      console.error("Error in chat handler:", error);
       res.status(200).json({ error: error.message || "Failed to generate response" });
     }
   };

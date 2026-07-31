@@ -236,51 +236,120 @@ export default function App() {
         }),
       });
       
-      let data: any = {};
-      try {
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          data = await response.json();
-        } else {
-          const rawText = await response.text();
-          data = { error: rawText.length < 200 ? rawText : 'Failed to receive a valid response from the server.' };
-        }
-      } catch (parseErr) {
-        data = { error: 'Failed to process response format.' };
-      }
+      const contentType = response.headers.get('content-type') || '';
       
-      if (response.ok && data.text) {
-        let responseText = data.text;
-        let thinkingContent = '';
+      if (response.ok && contentType.includes('text/event-stream')) {
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("No readable stream available");
         
-        const thinkingMatch = responseText.match(/<thinking>([\s\S]*?)<\/thinking>/);
-        if (thinkingMatch) {
-          thinkingContent = thinkingMatch[1].trim();
-          responseText = responseText.replace(/<thinking>[\s\S]*?<\/thinking>/, '').trim();
-        }
-
+        const decoder = new TextDecoder("utf-8");
+        const modelMessageId = (Date.now() + 1).toString();
+        let fullResponse = "";
+        
         const modelMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: modelMessageId,
           role: 'model',
-          text: responseText,
-          thinking: thinkingContent,
+          text: "",
+          thinking: "",
           timestamp: Date.now(),
         };
         
-        const updatedWithModel: Chat = {
-          ...updatedWithUser,
-          messages: [...updatedWithUser.messages, modelMessage],
-          updatedAt: Date.now(),
-        };
+        setChats(prev => prev.map(c => {
+          if (c.id === chatId) {
+            return {
+              ...c,
+              messages: [...c.messages, modelMessage],
+              updatedAt: Date.now()
+            };
+          }
+          return c;
+        }));
 
-        setChats(prev => prev.map(c => c.id === chatId ? updatedWithModel : c));
-
-        try {
-          await set(ref(db, `chats/${user.uid}/${chatId}`), updatedWithModel);
-        } catch (e) {
-          console.warn("DB save error:", e);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n').filter(line => line.trim() !== '');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6);
+              if (dataStr === '[DONE]') continue;
+              
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
+                  fullResponse += data.choices[0].delta.content;
+                  
+                  let currentText = fullResponse;
+                  let currentThinking = '';
+                  
+                  const thinkingStart = currentText.indexOf('<thinking>');
+                  const thinkStart = currentText.indexOf('<think>');
+                  
+                  const startIdx = thinkingStart !== -1 ? thinkingStart : (thinkStart !== -1 ? thinkStart : -1);
+                  
+                  if (startIdx !== -1) {
+                    const endIdx = currentText.indexOf('</thinking>');
+                    const endIdx2 = currentText.indexOf('</think>');
+                    
+                    const actualEndIdx = endIdx !== -1 ? endIdx : (endIdx2 !== -1 ? endIdx2 : -1);
+                    
+                    if (actualEndIdx !== -1) {
+                      const offset = endIdx !== -1 ? 11 : 8;
+                      const startOffset = thinkingStart !== -1 ? 10 : 7;
+                      
+                      currentThinking = currentText.substring(startIdx + startOffset, actualEndIdx).trim();
+                      currentText = currentText.substring(0, startIdx) + currentText.substring(actualEndIdx + offset);
+                    } else {
+                      const startOffset = thinkingStart !== -1 ? 10 : 7;
+                      currentThinking = currentText.substring(startIdx + startOffset).trim();
+                      currentText = currentText.substring(0, startIdx);
+                    }
+                  }
+                  
+                  setChats(prev => prev.map(c => {
+                    if (c.id === chatId) {
+                      const newMessages = c.messages.map(m => {
+                        if (m.id === modelMessageId) {
+                          return { ...m, text: currentText.trim(), thinking: currentThinking };
+                        }
+                        return m;
+                      });
+                      return { ...c, messages: newMessages, updatedAt: Date.now() };
+                    }
+                    return c;
+                  }));
+                }
+              } catch (e) {
+                // Ignore parsing errors for incomplete JSON chunks
+              }
+            }
+          }
         }
+        
+        setChats(prev => {
+          const finalChat = prev.find(c => c.id === chatId);
+          if (finalChat && user) {
+            set(ref(db, `chats/${user.uid}/${chatId}`), finalChat).catch(console.warn);
+          }
+          return prev;
+        });
+
       } else {
+        let data: any = {};
+        try {
+          if (contentType.includes('application/json')) {
+            data = await response.json();
+          } else {
+            const rawText = await response.text();
+            data = { error: rawText.length < 200 ? rawText : 'Failed to receive a valid response from the server.' };
+          }
+        } catch (parseErr) {
+          data = { error: 'Failed to process response format.' };
+        }
+        
         console.error("Error from API:", data.error);
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),

@@ -13,45 +13,33 @@ interface ChatAreaProps {
   isLoading: boolean;
 }
 
-function ThinkingSection({ thinking }: { thinking: string }) {
-  const [isOpen, setIsOpen] = useState(true);
+function ThinkingSection({ thinking, isGenerating }: { thinking: string; isGenerating: boolean }) {
+  const [isOpen, setIsOpen] = useState(isGenerating);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setIsOpen(false);
+    } else {
+      setIsOpen(true);
+    }
+  }, [isGenerating]);
 
   return (
-    <div className="mb-4 border border-slate-800 rounded-lg overflow-hidden bg-[#0a0c10] shadow-2xl ring-1 ring-white/5">
+    <div className="mb-3">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-[#161b22] text-[10px] font-mono text-slate-400 hover:text-white transition-colors border-b border-slate-800"
+        className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors py-1 group"
       >
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]" />
-            <div className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]" />
-            <div className="w-2.5 h-2.5 rounded-full bg-[#27c93f]" />
-          </div>
-          <span className="ml-3 uppercase tracking-[0.2em] font-bold text-slate-500">VELORA_KERNEL_v2.7_1M_CTX</span>
-          <div className="ml-2 w-1 h-1 rounded-full bg-emerald-500 animate-ping" />
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="opacity-40 tabular-nums">1M_READY</span>
-          <span className="opacity-40 tabular-nums">PID: {Math.floor(Math.random() * 9000) + 1000}</span>
-          {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </div>
+        <BrainCircuit className={cn("w-3.5 h-3.5", isGenerating ? "text-indigo-400 animate-pulse" : "")} />
+        <span className="text-xs font-medium">
+          {isGenerating ? 'Thinking...' : 'Show thought process'}
+        </span>
+        {isOpen ? <ChevronUp className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" /> : <ChevronDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />}
       </button>
+      
       {isOpen && (
-        <div className="px-5 py-4 text-[11px] text-[#e6edf3] bg-[#0d1117] leading-relaxed font-mono whitespace-pre-wrap max-h-64 overflow-y-auto custom-scrollbar">
-          <div className="flex items-center gap-2 text-[#7d8590] mb-2 border-b border-white/5 pb-2">
-            <span className="text-emerald-500">➜</span>
-            <span>~</span>
-            <span className="text-blue-400">velora-sys</span>
-            <span className="text-slate-500">--mode=autonomous-terminal</span>
-          </div>
-          <div className="text-emerald-400/90 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
-            {thinking}
-          </div>
-          <div className="mt-2 flex items-center gap-1">
-            <span className="text-emerald-500">➜</span>
-            <span className="animate-pulse bg-emerald-500 w-2 h-4 inline-block align-middle" />
-          </div>
+        <div className="mt-2 px-4 py-3 bg-slate-50/50 rounded-xl text-[13px] text-slate-500 leading-relaxed font-sans whitespace-pre-wrap border-l-[3px] border-l-indigo-300">
+          {thinking}
         </div>
       )}
     </div>
@@ -61,18 +49,27 @@ function ThinkingSection({ thinking }: { thinking: string }) {
 export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: ChatAreaProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    // Check if within 150px of the bottom
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
+    setIsAutoScrollEnabled(isAtBottom);
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [chat?.messages, isLoading]);
+    if (isAutoScrollEnabled) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    }
+  }, [chat?.messages, isLoading, isAutoScrollEnabled]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
+    setIsAutoScrollEnabled(true);
     onSendMessage(input.trim());
     setInput('');
   };
@@ -81,7 +78,11 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
 
   return (
     <div className="flex-1 flex flex-col bg-white h-full overflow-hidden relative">
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar"
+      >
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-gray-400">
             <MessageAppear>
@@ -119,7 +120,10 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
                   >
                     {msg.role === 'model' && msg.thinking && (
                       <div className="mb-2">
-                        <ThinkingSection thinking={msg.thinking} />
+                        <ThinkingSection 
+                          thinking={msg.thinking} 
+                          isGenerating={isLoading && idx === messages.length - 1} 
+                        />
                       </div>
                     )}
                     
@@ -140,7 +144,7 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
                 </div>
               </MessageAppear>
             ))}
-            {isLoading && (
+            {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
               <MessageAppear className="flex w-full justify-start">
                 <div className="flex gap-3 max-w-full">
                   <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-md">
@@ -175,12 +179,6 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
               placeholder="Message Velora Coding Machine..."
               className="flex-1 max-h-32 min-h-[36px] bg-transparent resize-none border-0 focus:ring-0 py-1.5 px-0 text-[13px] text-slate-800 placeholder-slate-400 leading-relaxed outline-none"
               rows={1}

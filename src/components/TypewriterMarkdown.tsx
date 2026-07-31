@@ -59,33 +59,6 @@ function CodeBlock({ children, className, ...props }: any) {
 }
 
 export default function TypewriterMarkdown({ text, isLatest }: TypewriterMarkdownProps) {
-  const [displayedText, setDisplayedText] = useState(isLatest ? '' : text);
-  const [isTypingComplete, setIsTypingComplete] = useState(!isLatest);
-
-  useEffect(() => {
-    if (!isLatest) {
-      setDisplayedText(text);
-      setIsTypingComplete(true);
-      return;
-    }
-
-    let currentIndex = 0;
-    const step = Math.max(1, Math.ceil(text.length / 80));
-    
-    const interval = setInterval(() => {
-      currentIndex += step;
-      if (currentIndex >= text.length) {
-        setDisplayedText(text);
-        setIsTypingComplete(true);
-        clearInterval(interval);
-      } else {
-        setDisplayedText(text.slice(0, currentIndex));
-      }
-    }, 12);
-
-    return () => clearInterval(interval);
-  }, [text, isLatest]);
-
   return (
     <div className="relative">
       <ReactMarkdown
@@ -114,12 +87,8 @@ export default function TypewriterMarkdown({ text, isLatest }: TypewriterMarkdow
           )
         }}
       >
-        {displayedText}
+        {text}
       </ReactMarkdown>
-
-      {!isTypingComplete && (
-        <span className="inline-block w-1.5 h-4 bg-indigo-600 animate-pulse ml-0.5 align-middle rounded-full" />
-      )}
     </div>
   );
 }
