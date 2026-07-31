@@ -188,6 +188,36 @@ CRITICAL RULES:
   app.post("/api/v1/chat/completions", handleChatRequest);
   app.get("/api/v1/chat/completions", handleChatRequest);
 
+  // Models Discovery Endpoints (For tools like the one in user screenshot)
+  const handleModelsRequest = (req: express.Request, res: express.Response) => {
+    res.json({
+      object: "list",
+      data: [
+        {
+          id: "velora-v2.7",
+          object: "model",
+          created: 1710000000,
+          owned_by: "velora",
+        },
+        {
+          id: "gemini-1.5-flash",
+          object: "model",
+          created: 1710000000,
+          owned_by: "google",
+        },
+        {
+          id: "nemotron-3-ultra-550b-a55b:free",
+          object: "model",
+          created: 1710000000,
+          owned_by: "nvidia",
+        }
+      ]
+    });
+  };
+
+  app.get("/api/v1/models", handleModelsRequest);
+  app.get("/api/v1/chat/completions/v1/models", handleModelsRequest); // Specific fix for user's screenshot configuration
+
   // Gateway Connection Test Endpoint
   app.post("/api/gateway/test", async (req, res) => {
     try {

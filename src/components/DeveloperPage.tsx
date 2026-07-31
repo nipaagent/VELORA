@@ -614,14 +614,14 @@ curl -X POST "${domain}/api/v1/chat" \\
                       VELORA CLOUD GATEWAY (ক্লাউড গেটওয়ে)
                     </h3>
                     <p className="text-[11px] text-slate-400 font-medium">
-                      অন্য অ্যাপ বা এক্সটার্নাল ক্লায়েন্ট সার্ভিসে আপনার এই অ্যাপের AI ইন্টিগ্রেট করুন
+                      অন্য অ্যাপ বা OpenAI Compatible ক্লায়েন্টে আপনার এই অ্যাপের AI ইন্টিগ্রেট করুন
                     </p>
                   </div>
                 </div>
 
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-[10px] tracking-wider uppercase self-start sm:self-auto">
                   <Radio className="w-3 h-3 text-indigo-400 animate-pulse" />
-                  <span>GATEWAY ONLINE</span>
+                  <span>DISCOVERY ACTIVE</span>
                 </span>
               </div>
 
@@ -630,11 +630,11 @@ curl -X POST "${domain}/api/v1/chat" \\
                 {/* Gateway Base URL */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-300">
-                    <span>1. Gateway Base URL (OpenAI / SDK Compatible):</span>
-                    <span className="text-[10px] text-indigo-400 font-mono">x-api-key: {apiKey ? `${apiKey.slice(0,6)}...` : 'NONE'}</span>
+                    <span>1. Gateway Base URL (OpenAI / SDK Client-এ এটি ব্যবহার করুন):</span>
+                    <span className="text-[10px] text-emerald-400 font-mono">MODELS SUPPORTED</span>
                   </div>
                   <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 font-mono text-xs text-indigo-300">
-                    <span className="truncate mr-2">{gwBaseUrl}</span>
+                    <span className="truncate mr-2 font-bold">{gwBaseUrl}</span>
                     <button
                       onClick={() => copyText(gwBaseUrl, setCopiedGwBaseUrl)}
                       className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 shrink-0"
@@ -643,6 +643,9 @@ curl -X POST "${domain}/api/v1/chat" \\
                       <span>{copiedGwBaseUrl ? 'কপি হয়েছে' : 'কপি'}</span>
                     </button>
                   </div>
+                  <p className="text-[9px] text-slate-500 px-1 italic">
+                    * OpenAI Compatible অ্যাপের "Base URL" বা "Gateway URL" ফিল্ডে উপরের লিংকটি দিন।
+                  </p>
                 </div>
 
                 {/* Gateway Completions Endpoint */}
