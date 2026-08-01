@@ -9,33 +9,59 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
-
-  // CORS middleware for external Developer API requests
-  app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-api-key");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
-    next();
-  });
-
   // Helper to get all available Naga API keys
-  const getApiKeys = () => {
-    const keys: string[] = [];
-    if (process.env.NAGA_API_KEY) keys.push(process.env.NAGA_API_KEY);
+  const getApiKeysInfo = () => {
+    const keys: { name: string, value: string }[] = [];
+    if (process.env.NAGA_API_KEY) {
+      keys.push({ name: 'NAGA_API_KEY', value: process.env.NAGA_API_KEY });
+    }
     
-    // Support multiple keys like NAGA_API_KEY_1, NAGA_API_KEY_2...
     Object.keys(process.env).forEach(envKey => {
       if (envKey.startsWith('NAGA_API_KEY_') && process.env[envKey]) {
-        keys.push(process.env[envKey] as string);
+        keys.push({ name: envKey, value: process.env[envKey] as string });
       }
     });
     
-    // Remove duplicates
-    return Array.from(new Set(keys.filter(k => k && k.trim().length > 0)));
+    return keys;
+  };
+
+  const getApiKeys = () => getApiKeysInfo().map(k => k.value);
+
+  // Stats tracking helper
+  const FIREBASE_DB_URL = "https://v-e-l-o-r-a-default-rtdb.asia-southeast1.firebasedatabase.app";
+  
+  const trackApiUsage = async (apiKey: string, model: string) => {
+    try {
+      const keyHash = Buffer.from(apiKey).toString('hex').slice(0, 16);
+      const today = new Date().toISOString().split('T')[0];
+      const cleanModel = model.replace(/[^a-zA-Z0-9-]/g, '_');
+      
+      const updates: any = {};
+      
+      // Increment total calls
+      updates[`/stats/api_keys/${keyHash}/total_calls`] = { ".sv": { "increment": 1 } };
+      
+      // Increment daily calls
+      updates[`/stats/api_keys/${keyHash}/daily/${today}`] = { ".sv": { "increment": 1 } };
+      
+      // Increment model specific calls
+      updates[`/stats/api_keys/${keyHash}/models/${cleanModel}`] = { ".sv": { "increment": 1 } };
+
+      // Update info
+      const maskKey = (key: string) => `${key.slice(0, 6)}...${key.slice(-4)}`;
+      updates[`/stats/api_keys/${keyHash}/info`] = {
+        maskedValue: maskKey(apiKey),
+        lastUsed: Date.now(),
+        lastModel: model
+      };
+
+      await fetch(`${FIREBASE_DB_URL}/.json`, {
+        method: "PATCH",
+        body: JSON.stringify(updates)
+      });
+    } catch (e) {
+      console.error("Tracking error:", e);
+    }
   };
 
   // Chat Handler Function
@@ -60,74 +86,44 @@ async function startServer() {
         return res.status(400).json({ error: "Message parameter 'q' or 'message' is required." });
       }
 
-      // Check for custom Gateway configuration (from request body or custom headers)
-      const customGateway = req.body?.gatewayConfig || (req.headers['x-gateway-url'] ? {
-        enabled: true,
-        baseUrl: req.headers['x-gateway-url'] as string,
-        apiKey: (req.headers['x-gateway-key'] as string) || '',
-        authScheme: (req.headers['x-gateway-auth-scheme'] as string) || 'x-api-key',
-        model: (req.headers['x-gateway-model'] as string) || 'nemotron-3-ultra-550b-a55b:free'
-      } : null);
-
       let gatewayUrl = "https://api.naga.ac/v1/chat/completions";
       let requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
       let modelName = "nemotron-3-ultra-550b-a55b:free";
 
       // If client explicitly sent "claude run", we map it to a high-quality model
-      if (modelFromClient === "claude run") {
+      if (modelFromClient === "claude run" || modelFromClient?.includes("claude")) {
         modelName = "claude-3-5-sonnet"; 
       }
 
-      if (customGateway && customGateway.enabled !== false && customGateway.baseUrl) {
-        let cleanBase = customGateway.baseUrl.trim().replace(/\/+$/, "");
-        if (cleanBase.endsWith("/chat/completions")) {
-          gatewayUrl = cleanBase;
-        } else {
-          gatewayUrl = `${cleanBase}/chat/completions`;
-        }
-
-        const gwApiKey = customGateway.apiKey ? customGateway.apiKey.trim() : "";
-        const scheme = customGateway.authScheme || 'x-api-key';
-
-        if (scheme === 'x-api-key') {
-          requestHeaders["x-api-key"] = gwApiKey;
-        } else if (scheme === 'x-goog-api-key') {
-          requestHeaders["x-goog-api-key"] = gwApiKey;
-        } else {
-          requestHeaders["Authorization"] = `Bearer ${gwApiKey}`;
-        }
-
-        if (customGateway.customHeaders && typeof customGateway.customHeaders === 'object') {
-          Object.assign(requestHeaders, customGateway.customHeaders);
-        }
-
-        if (customGateway.model && customGateway.model.trim()) {
-          modelName = customGateway.model.trim();
-        }
-      } else {
-        const availableKeys = getApiKeys();
-        if (availableKeys.length === 0) {
-          return res.status(200).json({ 
-            error: "No Naga API key found. Please set NAGA_API_KEY in environment variables or configure Gateway in settings." 
-          });
-        }
-        const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
-        requestHeaders["Authorization"] = `Bearer ${apiKey}`;
+      const availableKeys = getApiKeys();
+      if (availableKeys.length === 0) {
+        return res.status(200).json({ 
+          error: "No Naga API key found. Please set NAGA_API_KEY in environment variables." 
+        });
       }
-
+      const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+      requestHeaders["Authorization"] = `Bearer ${apiKey}`;
+      
       // Final internal model mapping if still "claude run"
-      if (modelName === "claude run") {
-        modelName = "claude-3-5-sonnet";
+      let finalModel = modelName;
+      if (finalModel === "claude run" || finalModel?.includes("claude")) {
+        finalModel = "claude-3-5-sonnet";
       }
+
+      // Track usage asynchronously with model info
+      trackApiUsage(apiKey, finalModel).catch(e => console.error("Async track error:", e));
+
+      // Determine if streaming is requested
+      const isStreamRequested = req.body?.stream === true || req.query?.stream === 'true';
 
       const systemPrompt = `You are VELORA v2.7.
-Identity: High-speed technical entity. You are a unified 100% powerful brain formed by combining all available API keys.
+Identity: High-speed technical entity. You are a unified 100% powerful brain.
 CRITICAL RULES:
-1. LANGUAGE: Respond in the SAME LANGUAGE used by the user (Bengali, English, etc.).
-2. SPEED: Respond as fast as possible.
-3. MANDATORY THINKING: You MUST ALWAYS wrap your internal thought process inside <thinking>...</thinking> tags before giving your final answer. Keep your thinking VERY BRIEF (max 2-3 short sentences).
-4. FINAL ANSWER: After the </thinking> tag, you MUST provide the actual answer to the user. Do NOT stop after thinking.
-5. ZERO FILLER: No conversational fluff. Be direct and precise after your thinking block.`;
+1. LANGUAGE: Respond in the SAME LANGUAGE used by the user.
+2. AESTHETICS: Use Markdown heavily to make your answers BEAUTIFUL. Use headings (##), bold text, lists, and tables where appropriate.
+3. STRUCTURE: Organize your thoughts clearly. Use emojis sparingly but effectively to highlight key points.
+4. MANDATORY THINKING: You MUST ALWAYS wrap your internal thought process inside <thinking>...</thinking> tags. Keep thinking BRIEF.
+5. FINAL ANSWER: Provide a comprehensive, professional, and elegant response after the thinking block.`;
 
       const formattedMessages = [
         { role: "system", content: systemPrompt },
@@ -138,8 +134,6 @@ CRITICAL RULES:
         { role: "user", content: message }
       ];
 
-      const isStream = req.body?.stream !== false;
-
       const response = await fetch(gatewayUrl, {
         method: "POST",
         headers: requestHeaders,
@@ -148,12 +142,12 @@ CRITICAL RULES:
           messages: formattedMessages,
           temperature: 0.2,
           max_tokens: 4000,
-          stream: isStream
+          stream: isStreamRequested
         })
       });
 
       if (response.ok && response.body) {
-        if (isStream) {
+        if (isStreamRequested) {
           res.setHeader('Content-Type', 'text/event-stream');
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Connection', 'keep-alive');
@@ -173,9 +167,17 @@ CRITICAL RULES:
             return res.status(200).json(data);
           } else {
             const text = await response.text();
+            // Wrap plain text in OpenAI style response for better compatibility
             return res.status(200).json({
               id: "chatcmpl-" + Date.now(),
-              choices: [{ message: { role: "assistant", content: text } }]
+              object: "chat.completion",
+              created: Math.floor(Date.now() / 1000),
+              model: modelName,
+              choices: [{
+                index: 0,
+                message: { role: "assistant", content: text },
+                finish_reason: "stop"
+              }]
             });
           }
         }
@@ -193,8 +195,6 @@ CRITICAL RULES:
     }
   };
 
-  // --- VELORA CLOUD GATEWAY: HYPER-RESILIENT ROUTING ---
-  
   const handleModelsRequest = (req: express.Request, res: express.Response) => {
     console.log(`[Gateway] Discovery request: ${req.method} ${req.url}`);
     res.json({
@@ -224,28 +224,32 @@ CRITICAL RULES:
     });
   };
 
-  // Resilient Path Matcher Middleware for Gateway
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // --- VELORA CLOUD GATEWAY: HYPER-RESILIENT ROUTING ---
+  // Catch OpenAI or Anthropic style endpoints ANYWHERE in the path
   app.use((req, res, next) => {
     const path = req.path;
     
-    // Skip internal API routes
-    if (path.startsWith('/api/admin') || path.startsWith('/api/gateway/test')) {
+    // Skip internal app routes
+    if (path.startsWith('/api/admin') || path.startsWith('/api/auth') || path.startsWith('/api/user')) {
       return next();
     }
 
-    // Match OpenAI or Anthropic style endpoints anywhere in the path
-    if (path.endsWith("/chat/completions") || path.endsWith("/messages") || path.endsWith("/chat")) {
-      console.log(`[Gateway] Intercepted Chat Request: ${req.method} ${path}`);
+    // Match completions or messages endpoints
+    if (path.endsWith("/chat/completions") || path.endsWith("/messages") || path.endsWith("/chat") || path.endsWith("/completions")) {
+      console.log(`[Gateway] Intercepted Request: ${req.method} ${path}`);
       return handleChatRequest(req, res);
     }
 
+    // Match models discovery
     if (path.endsWith("/models")) {
-      console.log(`[Gateway] Intercepted Models Request: ${req.method} ${path}`);
       return handleModelsRequest(req, res);
     }
 
     // Match specific model retrieval
-    if (path.includes("/models/claude") || path.includes("/models/claude%20run")) {
+    if (path.includes("/models/claude")) {
       return res.json({
         id: "claude run",
         object: "model",
@@ -257,87 +261,50 @@ CRITICAL RULES:
     next();
   });
 
-  // Native explicit routes as fallback
-  app.post("/api/v1/chat/completions", handleChatRequest);
-  app.post("/api/v1/messages", handleChatRequest);
-  app.get("/api/v1/models", handleModelsRequest);
-  app.post("/chat/completions", handleChatRequest);
-  app.post("/messages", handleChatRequest);
-  app.get("/models", handleModelsRequest);
-
-  // Gateway Connection Test Endpoint
-  app.post("/api/gateway/test", async (req, res) => {
-    try {
-      const { baseUrl, apiKey, authScheme, model, customHeaders } = req.body || {};
-      
-      if (!baseUrl) {
-        return res.status(400).json({ success: false, error: "Gateway base URL is required." });
-      }
-
-      let cleanBase = baseUrl.trim().replace(/\/+$/, "");
-      let gatewayUrl = cleanBase.endsWith("/chat/completions") ? cleanBase : `${cleanBase}/chat/completions`;
-
-      let headers: Record<string, string> = { "Content-Type": "application/json" };
-      const scheme = authScheme || 'x-api-key';
-      const keyVal = (apiKey || '').trim();
-
-      if (scheme === 'x-api-key') {
-        headers["x-api-key"] = keyVal;
-      } else if (scheme === 'x-goog-api-key') {
-        headers["x-goog-api-key"] = keyVal;
-      } else {
-        headers["Authorization"] = `Bearer ${keyVal}`;
-      }
-
-      if (customHeaders && typeof customHeaders === 'object') {
-        Object.assign(headers, customHeaders);
-      }
-
-      const testModel = model || "nemotron-3-ultra-550b-a55b:free";
-
-      const testRes = await fetch(gatewayUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: testModel,
-          messages: [{ role: "user", content: "Hi" }],
-          max_tokens: 5,
-          stream: false
-        })
-      });
-
-      if (testRes.ok) {
-        const data = await testRes.json();
-        return res.json({ 
-          success: true, 
-          status: testRes.status, 
-          message: "Gateway connection successful! (200 OK)",
-          model: testModel,
-          sampleResponse: data?.choices?.[0]?.message?.content || "Connection verified."
-        });
-      } else {
-        const errText = await testRes.text();
-        return res.status(400).json({ 
-          success: false, 
-          status: testRes.status, 
-          error: `Gateway returned status ${testRes.status}: ${errText.slice(0, 200)}` 
-        });
-      }
-    } catch (err: any) {
-      return res.status(500).json({ 
-        success: false, 
-        error: `Network error connecting to Gateway: ${err.message}` 
-      });
+  // CORS middleware for external Developer API requests
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-api-key");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
     }
+    next();
   });
 
-  app.get("/api/admin/stats", (req, res) => {
-    const keys = getApiKeys();
-    res.json({
-      status: "success",
-      apiKeyCount: keys.length,
-      timestamp: Date.now()
-    });
+  app.get("/api/admin/stats", async (req, res) => {
+    try {
+      const keysInfo = getApiKeysInfo();
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Fetch stats from Firebase
+      const response = await fetch(`${FIREBASE_DB_URL}/stats/api_keys.json`);
+      const statsData = await response.json() || {};
+      
+      const detailedKeys = keysInfo.map(info => {
+        const keyHash = Buffer.from(info.value).toString('hex').slice(0, 16);
+        const stats = statsData[keyHash] || {};
+        return {
+          name: info.name,
+          maskedValue: stats.info?.maskedValue || `${info.value.slice(0, 6)}...${info.value.slice(-4)}`,
+          totalCalls: stats.total_calls || 0,
+          todayCalls: (stats.daily && stats.daily[today]) || 0,
+          lastUsed: stats.info?.lastUsed || null,
+          lastModel: stats.info?.lastModel || 'N/A',
+          models: stats.models || {}
+        };
+      });
+
+      res.json({
+        status: "success",
+        apiKeyCount: keysInfo.length,
+        keys: detailedKeys,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      console.error("Stats fetch error:", error);
+      res.status(500).json({ status: "error", error: "Failed to fetch stats" });
+    }
   });
 
   app.get("/api/v1/health", (req, res) => {
@@ -345,7 +312,7 @@ CRITICAL RULES:
   });
 
   // --- Admin Firebase Database API Endpoints ---
-  const FIREBASE_DB_URL = "https://v-e-l-o-r-a-default-rtdb.asia-southeast1.firebasedatabase.app";
+  // FIREBASE_DB_URL moved up to be used in stats tracking
 
   app.get("/api/admin/users", async (req, res) => {
     try {

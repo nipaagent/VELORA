@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Globe, Activity } from 'lucide-react';
-import { UserProfile, GatewayConfig } from '../types';
+import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu } from 'lucide-react';
+import { UserProfile } from '../types';
 import { auth, db } from '../lib/firebase';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { ref, set } from 'firebase/database';
@@ -26,30 +26,9 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
   const [passSuccess, setPassSuccess] = useState('');
   const [passError, setPassError] = useState('');
 
-  // Gateway specific states
-  const [gwEnabled, setGwEnabled] = useState(false);
-  const [gwBaseUrl, setGwBaseUrl] = useState('');
-  const [gwApiKey, setGwApiKey] = useState('');
-  const [gwAuthScheme, setGwAuthScheme] = useState<'x-api-key' | 'Bearer' | 'x-goog-api-key'>('x-api-key');
-  const [gwModel, setGwModel] = useState('');
-  
-  const [savingGw, setSavingGw] = useState(false);
-  const [gwSuccess, setGwSuccess] = useState('');
-  const [gwError, setGwError] = useState('');
-  
-  const [testingGw, setTestingGw] = useState(false);
-  const [testStatus, setTestStatus] = useState<{ success: boolean; message: string } | null>(null);
-
   useEffect(() => {
     if (userProfile) {
       setFullName(userProfile.fullName || '');
-      if (userProfile.gatewayConfig) {
-        setGwEnabled(userProfile.gatewayConfig.enabled);
-        setGwBaseUrl(userProfile.gatewayConfig.baseUrl || '');
-        setGwApiKey(userProfile.gatewayConfig.apiKey || '');
-        setGwAuthScheme(userProfile.gatewayConfig.authScheme || 'x-api-key');
-        setGwModel(userProfile.gatewayConfig.model || '');
-      }
     }
   }, [userProfile]);
 
@@ -151,90 +130,30 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
     }
   };
 
-  const handleSaveGateway = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setGwSuccess('');
-    setGwError('');
-
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-
-    setSavingGw(true);
-
-    const updatedGw: GatewayConfig = {
-      enabled: gwEnabled,
-      baseUrl: gwBaseUrl.trim(),
-      apiKey: gwApiKey.trim(),
-      authScheme: gwAuthScheme,
-      model: gwModel.trim(),
-      credentialKind: 'Static API key'
-    };
-
-    const updatedProfile: UserProfile = {
-      ...userProfile,
-      gatewayConfig: updatedGw
-    };
-
-    try {
-      try {
-        await set(ref(db, `users/${currentUser.uid}/gatewayConfig`), updatedGw);
-      } catch (dbErr) {
-        console.warn("RTDB Gateway update notice:", dbErr);
-      }
-
-      localStorage.setItem(`velora_gateway_config_${currentUser.uid}`, JSON.stringify(updatedGw));
-      localStorage.setItem(`velora-profile-${currentUser.uid}`, JSON.stringify(updatedProfile));
-      onUpdateProfile(updatedProfile);
-
-      setGwSuccess('Gateway configuration saved successfully!');
-      setTimeout(() => setGwSuccess(''), 3500);
-    } catch (err: any) {
-      console.error("Gateway save error:", err);
-      setGwError('Failed to save Gateway settings.');
-    } finally {
-      setSavingGw(false);
-    }
-  };
-
-  const handleTestGateway = async () => {
-    setTestingGw(true);
-    setTestStatus(null);
-    try {
-      const res = await fetch('/api/gateway/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          baseUrl: gwBaseUrl,
-          apiKey: gwApiKey,
-          authScheme: gwAuthScheme,
-          model: gwModel
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setTestStatus({ success: true, message: data.message });
-      } else {
-        setTestStatus({ success: false, message: data.error || 'Connection failed' });
-      }
-    } catch (err: any) {
-      setTestStatus({ success: false, message: `Network error: ${err.message}` });
-    } finally {
-      setTestingGw(false);
-    }
-  };
-
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 10 }}
-      transition={{ duration: 0.15 }}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      variants={{
+        hidden: { opacity: 0 },
+        visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
+        exit: { opacity: 0 }
+      }}
       className="fixed inset-0 z-50 bg-white flex flex-col overflow-y-auto"
     >
       {/* Header */}
-      <header className="h-14 flex items-center px-4 bg-white border-b border-gray-100 shrink-0 z-10 relative">
+      <motion.header 
+        variants={{
+          hidden: { y: -20, opacity: 0 },
+          visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25, stiffness: 300 } }
+        }}
+        className="h-14 flex items-center px-4 bg-white border-b border-gray-100 shrink-0 z-10 relative"
+      >
         <div className="flex-1 flex justify-start items-center gap-2">
-          <button 
+          <motion.button 
+            whileHover={{ x: -2 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onBack}
             className="p-2 -ml-2 rounded-md hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors focus:ring-2 focus:ring-gray-200 outline-none flex items-center gap-1.5 text-xs font-semibold"
             aria-label="Back"
@@ -242,7 +161,7 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
           >
             <ArrowLeft className="w-4 h-4 text-gray-600" />
             <span>Back</span>
-          </button>
+          </motion.button>
         </div>
         
         <div className="flex items-center justify-center gap-1.5 flex-1">
@@ -251,20 +170,33 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
         </div>
 
         <div className="flex-1 flex justify-end items-center gap-2">
-          <span className="text-xs font-medium text-gray-600 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100 font-mono">
+          <motion.span 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="text-xs font-medium text-gray-600 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100 font-mono"
+          >
             @{userProfile.username}
-          </span>
+          </motion.span>
         </div>
-      </header>
+      </motion.header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 space-y-6 bg-white">
+      <main className="flex-1 w-full p-4 sm:p-8 md:p-12 space-y-6 bg-white">
         
         {/* User Card */}
-        <div className="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xl sm:text-2xl shadow-sm shrink-0">
+        <motion.div 
+          variants={{
+            hidden: { y: 20, opacity: 0 },
+            visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+          }}
+          className="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-100 flex items-center gap-4"
+        >
+          <motion.div 
+            whileHover={{ scale: 1.05, rotate: 2 }}
+            className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xl sm:text-2xl shadow-sm shrink-0"
+          >
             {userProfile.fullName ? userProfile.fullName.charAt(0).toUpperCase() : 'V'}
-          </div>
+          </motion.div>
 
           <div className="space-y-0.5 flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -276,13 +208,19 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
             </div>
             <p className="text-xs text-gray-500 font-mono">@{userProfile.username}</p>
           </div>
-        </div>
+        </motion.div>
 
         {/* Account Settings Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           
           {/* Edit Name Section */}
-          <section className="bg-white rounded-2xl p-5 border border-gray-200/90 shadow-sm space-y-4 flex flex-col justify-between">
+          <motion.section 
+            variants={{
+              hidden: { y: 20, opacity: 0 },
+              visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+            }}
+            className="bg-white rounded-2xl p-5 border border-gray-200/90 shadow-sm space-y-4 flex flex-col justify-between"
+          >
             <div className="space-y-3.5">
               <div className="flex items-center gap-2 text-gray-900 font-bold text-sm pb-2.5 border-b border-gray-100">
                 <User className="w-4 h-4 text-indigo-600" />
@@ -290,17 +228,25 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
               </div>
 
               {nameSuccess && (
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs flex items-center gap-2 font-medium">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs flex items-center gap-2 font-medium"
+                >
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
                   <span>{nameSuccess}</span>
-                </div>
+                </motion.div>
               )}
 
               {nameError && (
-                <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs flex items-center gap-2 font-medium">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs flex items-center gap-2 font-medium"
+                >
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
                   <span>{nameError}</span>
-                </div>
+                </motion.div>
               )}
 
               <form id="nameForm" onSubmit={handleSaveName} className="space-y-3">
@@ -333,7 +279,9 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
             </div>
 
             <div className="pt-3 border-t border-gray-100 flex justify-end">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 type="submit"
                 form="nameForm"
                 disabled={savingName || fullName.trim() === userProfile.fullName}
@@ -341,12 +289,18 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
               >
                 {savingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Save Name
-              </button>
+              </motion.button>
             </div>
-          </section>
+          </motion.section>
 
           {/* Change Password Section */}
-          <section className="bg-white rounded-2xl p-5 border border-gray-200/90 shadow-sm space-y-4 flex flex-col justify-between">
+          <motion.section 
+            variants={{
+              hidden: { y: 20, opacity: 0 },
+              visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+            }}
+            className="bg-white rounded-2xl p-5 border border-gray-200/90 shadow-sm space-y-4 flex flex-col justify-between"
+          >
             <div className="space-y-3.5">
               <div className="flex items-center gap-2 text-gray-900 font-bold text-sm pb-2.5 border-b border-gray-100">
                 <Key className="w-4 h-4 text-indigo-600" />
@@ -354,17 +308,25 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
               </div>
 
               {passSuccess && (
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs flex items-center gap-2 font-medium">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs flex items-center gap-2 font-medium"
+                >
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
                   <span>{passSuccess}</span>
-                </div>
+                </motion.div>
               )}
 
               {passError && (
-                <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs flex items-center gap-2 font-medium">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs flex items-center gap-2 font-medium"
+                >
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
                   <span>{passError}</span>
-                </div>
+                </motion.div>
               )}
 
               <form id="passForm" onSubmit={handleChangePassword} className="space-y-3">
@@ -417,7 +379,9 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
             </div>
 
             <div className="pt-3 border-t border-gray-100 flex justify-end">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 type="submit"
                 form="passForm"
                 disabled={updatingPass || !currentPassword || !newPassword}
@@ -425,128 +389,27 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
               >
                 {updatingPass ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                 Update Password
-              </button>
+              </motion.button>
             </div>
-          </section>
-
-          {/* Gateway Settings Section */}
-          <section className="bg-white rounded-2xl p-5 border border-gray-200/90 shadow-sm space-y-4 md:col-span-2">
-            <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
-              <div className="flex items-center gap-2 text-gray-900 font-bold text-sm">
-                <Globe className="w-4 h-4 text-indigo-600" />
-                <span>External Gateway Configuration</span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="sr-only peer" 
-                  checked={gwEnabled}
-                  onChange={(e) => setGwEnabled(e.target.checked)}
-                />
-                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            </div>
-
-            {gwSuccess && (
-              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs flex items-center gap-2 font-medium">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                <span>{gwSuccess}</span>
-              </div>
-            )}
-
-            {gwError && (
-              <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs flex items-center gap-2 font-medium">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                <span>{gwError}</span>
-              </div>
-            )}
-
-            <form id="gwForm" onSubmit={handleSaveGateway} className={`space-y-4 transition-opacity ${gwEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Gateway Base URL</label>
-                  <input
-                    type="text"
-                    value={gwBaseUrl}
-                    onChange={(e) => setGwBaseUrl(e.target.value)}
-                    placeholder="https://api.openai.com/v1"
-                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">API Model</label>
-                  <input
-                    type="text"
-                    value={gwModel}
-                    onChange={(e) => setGwModel(e.target.value)}
-                    placeholder="gpt-3.5-turbo"
-                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auth Scheme</label>
-                  <select
-                    value={gwAuthScheme}
-                    onChange={(e) => setGwAuthScheme(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 outline-none"
-                  >
-                    <option value="x-api-key">x-api-key (Naga Style)</option>
-                    <option value="Bearer">Bearer (OpenAI Style)</option>
-                    <option value="x-goog-api-key">x-goog-api-key (Gemini Style)</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">API Key</label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      value={gwApiKey}
-                      onChange={(e) => setGwApiKey(e.target.value)}
-                      placeholder="••••••••••••••••"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {testStatus && (
-                <div className={`p-2.5 rounded-xl text-[11px] font-medium border flex items-start gap-2 ${testStatus.success ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'}`}>
-                  {testStatus.success ? <CheckCircle2 className="w-4 h-4 mt-0.5" /> : <AlertCircle className="w-4 h-4 mt-0.5" />}
-                  <div className="break-all">{testStatus.message}</div>
-                </div>
-              )}
-            </form>
-
-            <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row gap-2 justify-end">
-              <button
-                type="button"
-                onClick={handleTestGateway}
-                disabled={testingGw || !gwBaseUrl || !gwEnabled}
-                className="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                {testingGw ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-                Test Connection
-              </button>
-              <button
-                type="submit"
-                form="gwForm"
-                disabled={savingGw}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                {savingGw ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                Save Gateway
-              </button>
-            </div>
-          </section>
+          </motion.section>
 
         </div>
 
         {/* VELORA Features Section */}
-        <section className="bg-gray-50 rounded-2xl p-5 border border-gray-200/90 space-y-4">
+        <motion.section 
+          variants={{
+            hidden: { y: 20, opacity: 0 },
+            visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+          }}
+          className="bg-gray-50 rounded-2xl p-5 border border-gray-200/90 space-y-4"
+        >
           <div className="flex items-center gap-2.5 border-b border-gray-200 pb-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+            <motion.div 
+              whileHover={{ rotate: 15 }}
+              className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0"
+            >
               <Sparkles className="w-4 h-4" />
-            </div>
+            </motion.div>
             <div>
               <h3 className="text-sm font-bold text-gray-900 tracking-wide">VELORA — Intelligent Capabilities</h3>
               <p className="text-[11px] text-gray-500">Fast, accurate, and reliable AI assistance for any task</p>
@@ -554,7 +417,10 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <div className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs">
+            <motion.div 
+              whileHover={{ y: -5 }}
+              className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs transition-shadow hover:shadow-md"
+            >
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-amber-500 shrink-0" />
                 <h4 className="font-bold text-xs text-gray-900">Instant Responses</h4>
@@ -562,9 +428,12 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
               <p className="text-[11px] text-gray-600 leading-relaxed">
                 VELORA delivers rapid, accurate answers to casual, analytical, or academic queries.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs">
+            <motion.div 
+              whileHover={{ y: -5 }}
+              className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs transition-shadow hover:shadow-md"
+            >
               <div className="flex items-center gap-2">
                 <Code2 className="w-4 h-4 text-indigo-600 shrink-0" />
                 <h4 className="font-bold text-xs text-gray-900">Advanced Coding</h4>
@@ -572,9 +441,12 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
               <p className="text-[11px] text-gray-600 leading-relaxed">
                 Write clean, properly formatted, fully functional code blocks with copy support.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs">
+            <motion.div 
+              whileHover={{ y: -5 }}
+              className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs transition-shadow hover:shadow-md"
+            >
               <div className="flex items-center gap-2">
                 <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
                 <h4 className="font-bold text-xs text-gray-900">Secure & Encrypted</h4>
@@ -582,19 +454,21 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
               <p className="text-[11px] text-gray-600 leading-relaxed">
                 Your profile credentials and chat history are safely stored with modern encryption.
               </p>
-            </div>
+            </motion.div>
           </div>
 
           <div className="bg-white rounded-xl p-3 border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-600">
             <span className="text-[11px] font-medium text-gray-600">VELORA AI Assistant — Version 1.0.0</span>
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onBack}
               className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold transition-colors"
             >
               Back to Chat
-            </button>
+            </motion.button>
           </div>
-        </section>
+        </motion.section>
 
       </main>
     </motion.div>

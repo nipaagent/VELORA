@@ -227,21 +227,12 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      let activeGateway = userProfile?.gatewayConfig;
-      if (!activeGateway && user?.uid) {
-        const localGw = localStorage.getItem(`velora_gateway_config_${user.uid}`);
-        if (localGw) {
-          try { activeGateway = JSON.parse(localGw); } catch (e) {}
-        }
-      }
-
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: text, 
-          history: currentChatState.messages.map(h => ({ role: h.role, text: h.text })),
-          gatewayConfig: activeGateway
+          history: currentChatState.messages.map(h => ({ role: h.role, text: h.text }))
         }),
       });
       
@@ -510,20 +501,22 @@ export default function App() {
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 bg-white">
               {/* Main Header (Single Header across the App) */}
-              <header className="h-14 flex items-center px-4 bg-slate-50/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs shrink-0 z-10 relative">
+              <header className="h-16 flex items-center px-6 bg-white border-b border-slate-100 shadow-sm shrink-0 z-10 relative">
                 <div className="flex-1 flex justify-start items-center gap-2">
                   <button 
                     onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 -ml-2 rounded-lg hover:bg-slate-200/60 text-slate-700 transition-colors focus:ring-2 focus:ring-slate-200 outline-none"
+                    className="p-2.5 -ml-2 rounded-xl hover:bg-slate-50 text-slate-600 transition-all border border-transparent hover:border-slate-200 active:scale-95 outline-none"
                     aria-label="Open menu"
                   >
-                    <Menu className="w-4.5 h-4.5" />
+                    <Menu className="w-5 h-5" />
                   </button>
                 </div>
                 
-                <div className="flex items-center justify-center gap-1.5 flex-1">
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <h1 className="text-sm font-black text-slate-900 tracking-wider uppercase">VELORA</h1>
+                <div className="flex items-center justify-center gap-2 flex-1">
+                  <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-100">
+                    <Sparkles className="w-4 h-4 text-white" />
+                  </div>
+                  <h1 className="text-base font-black text-slate-900 tracking-[0.2em] uppercase">VELORA</h1>
                 </div>
 
                 <div className="flex-1 flex justify-end items-center gap-2">

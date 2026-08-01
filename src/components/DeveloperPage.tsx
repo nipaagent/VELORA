@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Copy, Check, Eye, EyeOff, RotateCw, Shield, ShieldAlert, Code2, 
   Settings, Terminal, Send, ArrowLeft, Lock, KeyRound, Sparkles, ShieldCheck,
@@ -143,17 +144,37 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
           'Content-Type': 'application/json',
           'x-api-key': apiKey
         },
-        body: JSON.stringify({ message: testMessage })
+        body: JSON.stringify({ message: testMessage, stream: false })
       });
-      const data = await res.json();
-      if (data.text) {
-        setTestResult(data.text);
-      } else if (data.choices?.[0]?.message?.content) {
-        setTestResult(data.choices[0].message.content);
-      } else if (data.error) {
-        setTestResult(`Error: ${data.error}`);
+      
+      const text = await res.text();
+      
+      if (!res.ok) {
+        setTestResult(`Error ${res.status}: ${text.slice(0, 500)}`);
+        return;
+      }
+
+      // Check if it's SSE stream
+      if (text.includes('data:')) {
+        const lines = text.split('\n').filter(l => l.trim().startsWith('data:'));
+        let combined = '';
+        for (const line of lines) {
+          const raw = line.replace(/^data:\s*/, '').trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(raw);
+            const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.message?.content || parsed.text || '';
+            combined += content;
+          } catch (e) { /* skip */ }
+        }
+        setTestResult(combined || text);
       } else {
-        setTestResult(JSON.stringify(data, null, 2));
+        try {
+          const data = JSON.parse(text);
+          setTestResult(data.choices?.[0]?.message?.content || data.text || JSON.stringify(data, null, 2));
+        } catch (e) {
+          setTestResult(text);
+        }
       }
     } catch (err: any) {
       setTestResult(`Network Error: ${err.message}`);
@@ -318,11 +339,28 @@ curl -X POST "${domain}/api/v1/chat" \\
   };
 
   return (
-    <div className="flex-1 w-full h-full overflow-y-auto bg-slate-50/60 p-4 sm:p-6 md:p-8">
-      <div className="max-w-2xl mx-auto space-y-4">
+    <motion.div 
+      initial="hidden"
+      animate="visible"
+      variants={{
+        hidden: { opacity: 0 },
+        visible: { 
+          opacity: 1,
+          transition: { staggerChildren: 0.08 }
+        }
+      }}
+      className="flex-1 w-full h-full overflow-y-auto bg-slate-50/60 p-4 sm:p-6 md:p-8"
+    >
+      <div className="space-y-4 w-full px-2 sm:px-4 md:px-6">
         
         {/* Top Header Label & Back Button */}
-        <div className="flex items-center justify-between pb-1 border-b border-slate-200/80">
+        <motion.div 
+          variants={{
+            hidden: { y: -20, opacity: 0 },
+            visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+          }}
+          className="flex items-center justify-between pb-1 border-b border-slate-200/80"
+        >
           <div>
             <div className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
               সিস্টেম এপিআই ইন্টিগ্রেশন প্যানেল / API ACCESS
@@ -334,19 +372,27 @@ curl -X POST "${domain}/api/v1/chat" \\
           </div>
 
           {onBackToChat && (
-            <button
+            <motion.button
+              whileHover={{ x: -2 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onBackToChat}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs transition-all shadow-2xs"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>চ্যাটে ফিরুন</span>
-            </button>
+            </motion.button>
           )}
-        </div>
+        </motion.div>
 
         {/* CONDITION 1: API ACCESS IS DISABLED BY ADMIN (LOCKED STATE) */}
         {!isApiEnabled ? (
-          <div className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white rounded-3xl p-8 sm:p-12 shadow-2xl border border-slate-800 text-center space-y-6 my-6">
+          <motion.div 
+            variants={{
+              hidden: { scale: 0.95, opacity: 0 },
+              visible: { scale: 1, opacity: 1, transition: { type: 'spring', damping: 20 } }
+            }}
+            className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white rounded-3xl p-8 sm:p-12 shadow-2xl border border-slate-800 text-center space-y-6 my-6"
+          >
             
             {/* Background glowing effects */}
             <div className="absolute -top-24 -left-24 w-60 h-60 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -354,9 +400,14 @@ curl -X POST "${domain}/api/v1/chat" \\
 
             {/* Giant Lock Icon Container */}
             <div className="relative z-10 inline-flex items-center justify-center">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center shadow-inner animate-pulse">
+              <motion.div 
+                initial={{ rotate: -10 }}
+                animate={{ rotate: 0 }}
+                transition={{ repeat: Infinity, repeatType: 'reverse', duration: 2 }}
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center shadow-inner"
+              >
                 <Lock className="w-12 h-12 sm:w-14 sm:h-14 stroke-[2.2]" />
-              </div>
+              </motion.div>
             </div>
 
             {/* Status Pill */}
@@ -368,7 +419,7 @@ curl -X POST "${domain}/api/v1/chat" \\
             </div>
 
             {/* Main Message - EXACT USER REQUIREMENT */}
-            <div className="relative z-10 max-w-lg mx-auto space-y-3">
+            <div className="relative z-10 w-full space-y-3">
               <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
                 আপনার এপিআই কি জেনারেট সিস্টেম অফ আছে এডমিনের কাছে এনাবেল করে নেন
               </h3>
@@ -380,27 +431,38 @@ curl -X POST "${domain}/api/v1/chat" \\
             {/* Back Button */}
             {onBackToChat && (
               <div className="relative z-10 pt-2">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={onBackToChat}
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all border border-white/10"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>চ্যাটে ফিরে যান</span>
-                </button>
+                </motion.button>
               </div>
             )}
-          </div>
+          </motion.div>
         ) : !apiKey ? (
           /* CONDITION 2: API ACCESS IS ENABLED BUT KEY NOT GENERATED YET */
-          <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-sm border border-slate-200/80 text-center space-y-6 my-4">
+          <motion.div 
+            variants={{
+              hidden: { scale: 0.95, opacity: 0 },
+              visible: { scale: 1, opacity: 1, transition: { type: 'spring', damping: 20 } }
+            }}
+            className="bg-white rounded-3xl p-8 sm:p-10 shadow-sm border border-slate-200/80 text-center space-y-6 my-4"
+          >
             
             <div className="inline-flex items-center justify-center">
-              <div className="w-20 h-20 rounded-3xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner">
+              <motion.div 
+                whileHover={{ rotate: 15 }}
+                className="w-20 h-20 rounded-3xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner"
+              >
                 <KeyRound className="w-10 h-10" />
-              </div>
+              </motion.div>
             </div>
 
-            <div className="space-y-2 max-w-md mx-auto">
+            <div className="space-y-2 w-full">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200/80">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                 <span>এপিআই এক্সেস চালু আছে (API Enabled)</span>
@@ -414,10 +476,12 @@ curl -X POST "${domain}/api/v1/chat" \\
             </div>
 
             <div>
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={handleGenerateKey}
                 disabled={isGenerating}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-extrabold transition-all shadow-md hover:shadow-lg active:scale-98 disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-extrabold transition-all shadow-md hover:shadow-lg disabled:opacity-50"
               >
                 {isGenerating ? (
                   <>
@@ -430,14 +494,20 @@ curl -X POST "${domain}/api/v1/chat" \\
                     <span>এপিআই কি জেনারেট করুন</span>
                   </>
                 )}
-              </button>
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
         ) : (
           /* CONDITION 3: FULL DEVELOPER DASHBOARD */
           <>
             {/* CARD 1: API Keys */}
-            <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+            <motion.div 
+              variants={{
+                hidden: { y: 20, opacity: 0 },
+                visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+              }}
+              className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3"
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-pink-100/80 text-pink-600 flex items-center justify-center shrink-0">
@@ -457,20 +527,22 @@ curl -X POST "${domain}/api/v1/chat" \\
                   {showKey ? apiKey : `${apiKey.slice(0, 6)}••••••••••••`}
                 </span>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
                     onClick={() => setShowKey(!showKey)}
                     className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-200/60"
                     title={showKey ? "Hide key" : "Show key"}
                   >
                     {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
                     onClick={() => copyText(apiKey, setCopiedKey)}
                     className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-200/60"
                     title="Copy key"
                   >
                     {copiedKey ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                  </button>
+                  </motion.button>
                 </div>
               </div>
 
@@ -482,26 +554,36 @@ curl -X POST "${domain}/api/v1/chat" \\
 
               {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-2.5 pt-0.5">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={handleRegenerate}
                   className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-black text-[11px] transition-colors shadow-2xs"
                 >
                   <RotateCw className="w-3.5 h-3.5 text-slate-600" />
                   <span>REGENERATE</span>
-                </button>
+                </motion.button>
 
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={handleRevoke}
                   className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-pink-200 bg-white hover:bg-pink-50/50 text-pink-600 font-black text-[11px] transition-colors shadow-2xs"
                 >
                   <ShieldAlert className="w-3.5 h-3.5 text-pink-600" />
                   <span>REVOKE KEY</span>
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
 
             {/* CARD 2: API Link */}
-            <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-2">
+            <motion.div 
+              variants={{
+                hidden: { y: 20, opacity: 0 },
+                visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+              }}
+              className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-2"
+            >
               <h3 className="font-bold text-sm text-slate-900">
                 এপিআই লিংক (API Link)
               </h3>
@@ -510,18 +592,25 @@ curl -X POST "${domain}/api/v1/chat" \\
                 <span className="break-all whitespace-normal font-semibold text-left mr-2 flex-1">
                   {apiGetUrl}
                 </span>
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => copyText(apiGetUrl, setCopiedUrl)}
                   className="p-1.5 text-sky-700 hover:text-sky-900 shrink-0 bg-white rounded-lg border border-sky-200/80 shadow-2xs mt-0.5"
                   title="Copy API Link"
                 >
                   {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
 
             {/* CARD 3: Test Input & Runner */}
-            <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+            <motion.div 
+              variants={{
+                hidden: { y: 20, opacity: 0 },
+                visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+              }}
+              className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs space-y-3"
+            >
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
                   <Terminal className="w-4 h-4 text-indigo-600" />
@@ -537,7 +626,9 @@ curl -X POST "${domain}/api/v1/chat" \\
                   placeholder="Hello Velora!"
                   className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs"
                 />
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleRunTest}
                   disabled={isTesting || !testMessage.trim()}
                   className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-2xs shrink-0 flex items-center gap-1.5"
@@ -553,23 +644,33 @@ curl -X POST "${domain}/api/v1/chat" \\
                       <span>টেস্ট</span>
                     </>
                   )}
-                </button>
+                </motion.button>
               </div>
 
               {testResult && (
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1"
+                >
                   <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     রেসপন্স (Response Output):
                   </div>
                   <div className="p-3 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed max-h-48 overflow-y-auto">
                     <TypewriterMarkdown text={testResult} isLatest={false} />
                   </div>
-                </div>
+                </motion.div>
               )}
-            </div>
+            </motion.div>
 
             {/* CARD 4: Code Examples & Tabs */}
-            <div className="rounded-2xl overflow-hidden border border-slate-800 bg-[#181825] shadow-sm">
+            <motion.div 
+              variants={{
+                hidden: { y: 20, opacity: 0 },
+                visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+              }}
+              className="rounded-2xl overflow-hidden border border-slate-800 bg-[#181825] shadow-sm"
+            >
               <div className="bg-[#11111b] px-4 pt-2 pb-0 flex items-center justify-between border-b border-slate-800">
                 <div className="flex gap-1.5">
                   {(['JS', 'PYTHON', 'CURL'] as const).map((tab) => (
@@ -587,13 +688,14 @@ curl -X POST "${domain}/api/v1/chat" \\
                   ))}
                 </div>
 
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => copyText(codeExamples[codeTab], setCopiedCode)}
                   className="p-1 text-slate-400 hover:text-white transition-colors"
                   title="Copy Code"
                 >
                   {copiedCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                </button>
+                </motion.button>
               </div>
 
               <div className="p-4 overflow-x-auto text-slate-100 font-mono text-xs leading-relaxed">
@@ -601,15 +703,24 @@ curl -X POST "${domain}/api/v1/chat" \\
                   <code>{codeExamples[codeTab]}</code>
                 </pre>
               </div>
-            </div>
+            </motion.div>
 
             {/* CARD 5: VELORA CLOUD GATEWAY (ক্লাউড গেটওয়ে এক্সটার্নাল এপিআই) */}
-            <div className="p-5 bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 rounded-2xl border border-indigo-900/60 shadow-xl text-white space-y-4">
+            <motion.div 
+              variants={{
+                hidden: { y: 20, opacity: 0 },
+                visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+              }}
+              className="p-5 bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 rounded-2xl border border-indigo-900/60 shadow-xl text-white space-y-4"
+            >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0">
+                  <motion.div 
+                    whileHover={{ rotate: 10 }}
+                    className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0"
+                  >
                     <Server className="w-5 h-5" />
-                  </div>
+                  </motion.div>
                   <div>
                     <h3 className="font-bold text-sm text-white flex items-center gap-2">
                       VELORA CLOUD GATEWAY (ক্লাউড গেটওয়ে)
@@ -653,17 +764,16 @@ curl -X POST "${domain}/api/v1/chat" \\
                   </div>
                   <div className="flex items-center justify-between bg-slate-950 border border-emerald-500/30 rounded-xl p-3 font-mono text-sm text-emerald-400 ring-1 ring-emerald-500/10 shadow-lg">
                     <span className="font-black tracking-wider">claude run</span>
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       onClick={() => copyText('claude run', setCopiedCode)}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-md active:scale-95"
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-md"
                     >
                       {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedCode ? 'কপি হয়েছে' : 'মডেল আইডি কপি'}</span>
-                    </button>
+                    </motion.button>
                   </div>
-                  <p className="text-[9px] text-slate-500 px-1 italic">
-                    * আপনার থার্ড-পার্টি ক্লায়েন্ট অ্যাপে "claude run" নামটি ব্যবহার করুন।
-                  </p>
                 </div>
 
                 {/* Gateway Base URL */}
@@ -677,18 +787,15 @@ curl -X POST "${domain}/api/v1/chat" \\
                   </div>
                   <div className="flex items-center justify-between bg-slate-900/90 border border-indigo-500/20 rounded-xl p-3 font-mono text-sm text-indigo-300 ring-1 ring-indigo-500/10 shadow-lg">
                     <span className="truncate mr-2 font-bold tracking-tight">{gwBaseUrl}</span>
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       onClick={() => copyText(gwBaseUrl, setCopiedGwBaseUrl)}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-md active:scale-95"
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-md"
                     >
                       {copiedGwBaseUrl ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedGwBaseUrl ? 'URL কপি' : 'URL কপি করুন'}</span>
-                    </button>
-                  </div>
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mt-1">
-                    <p className="text-[10px] text-amber-200 leading-tight">
-                      <strong>সতর্কতা:</strong> কিছু অ্যাপ লিঙ্কের শেষে অটোমেটিক <code>/v1</code> যোগ করে। যদি আপনার অ্যাপে এরর দেখায়, তবে উপরের লিঙ্কের শেষ থেকে <code>/v1</code> টুকু মুছে দিয়ে শুধু <code>.../api</code> পর্যন্ত দিয়ে চেষ্টা করুন।
-                    </p>
+                    </motion.button>
                   </div>
                 </div>
               </div>
@@ -696,7 +803,7 @@ curl -X POST "${domain}/api/v1/chat" \\
               {/* Code Snippets for External Applications */}
               <div className="space-y-2 pt-1">
                 <div className="text-[11px] font-bold text-slate-300">
-                  অন্য অ্যাপ থেকে কল করার কোড উদাহরণ (Integration Snippets):
+                  Integration Snippets:
                 </div>
 
                 <div className="rounded-xl overflow-hidden border border-slate-800 bg-[#0f0f17]">
@@ -717,13 +824,14 @@ curl -X POST "${domain}/api/v1/chat" \\
                       ))}
                     </div>
 
-                    <button
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
                       onClick={() => copyText(gwCodeExamples[gwSnippetTab], setCopiedCode)}
                       className="p-1 text-slate-400 hover:text-white"
                       title="Copy Snippet"
                     >
                       {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+                    </motion.button>
                   </div>
 
                   <div className="p-3 overflow-x-auto text-slate-200 font-mono text-[11px] leading-relaxed max-h-48">
@@ -738,10 +846,12 @@ curl -X POST "${domain}/api/v1/chat" \\
               <div className="pt-2 border-t border-slate-800/80 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-slate-400 font-medium">
-                    ক্লাউড গেটওয়ে এন্ডপয়েন্ট রেডি আছে কিনা পরীক্ষা করুন:
+                    Test your Gateway endpoint:
                   </span>
 
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={handleRunGwTest}
                     disabled={isTestingGw || !apiKey}
                     className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
@@ -757,15 +867,18 @@ curl -X POST "${domain}/api/v1/chat" \\
                         <span>টেস্ট গেটওয়ে (Test Gateway)</span>
                       </>
                     )}
-                  </button>
+                  </motion.button>
                 </div>
 
                 {gwTestResult && (
-                  <div className={`p-3 rounded-xl border text-xs leading-relaxed ${
-                    gwTestResult.success 
-                      ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-200' 
-                      : 'bg-rose-950/40 border-rose-800/60 text-rose-200'
-                  }`}>
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                      gwTestResult.success 
+                        ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-200' 
+                        : 'bg-rose-950/40 border-rose-800/60 text-rose-200'
+                    }`}>
                     <div className="font-bold font-mono text-[11px] mb-0.5 flex items-center gap-1.5">
                       <span className={`w-2 h-2 rounded-full ${gwTestResult.success ? 'bg-emerald-400' : 'bg-rose-400'}`} />
                       <span>{gwTestResult.success ? 'GATEWAY CONNECTED SUCCESS' : 'GATEWAY ERROR'}</span>
@@ -773,14 +886,23 @@ curl -X POST "${domain}/api/v1/chat" \\
                     <div className="font-mono text-[11px] opacity-90">
                       {gwTestResult.text}
                     </div>
-                  </div>
+                  </motion.div>
                 )}
               </div>
-            </div>
+            </motion.div>
 
             {/* CARD 6: Bottom Feature Cards */}
-            <div className="grid grid-cols-2 gap-3 pt-1 pb-4">
-              <div className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center gap-2.5">
+            <motion.div 
+              variants={{
+                hidden: { y: 20, opacity: 0 },
+                visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+              }}
+              className="grid grid-cols-2 gap-3 pt-1 pb-4"
+            >
+              <motion.div 
+                whileHover={{ y: -3 }}
+                className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center gap-2.5"
+              >
                 <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
                   <Shield className="w-4 h-4" />
                 </div>
@@ -788,9 +910,12 @@ curl -X POST "${domain}/api/v1/chat" \\
                   <div className="font-bold text-xs text-slate-900">সিকিউর</div>
                   <div className="text-[10px] text-slate-500 font-medium">সার্ভার সাইড ব্যবহার</div>
                 </div>
-              </div>
+              </motion.div>
 
-              <div className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center gap-2.5">
+              <motion.div 
+                whileHover={{ y: -3 }}
+                className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center gap-2.5"
+              >
                 <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                   <Settings className="w-4 h-4" />
                 </div>
@@ -798,12 +923,13 @@ curl -X POST "${domain}/api/v1/chat" \\
                   <div className="font-bold text-xs text-slate-900">কাস্টম</div>
                   <div className="text-[10px] text-slate-500 font-medium">কোড পরিবর্তন</div>
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           </>
         )}
 
       </div>
-    </div>
+    </motion.div>
+
   );
 }
