@@ -150,19 +150,24 @@ CRITICAL RULES:
         const contentType = response.headers.get("content-type") || "";
         const isActuallyStream = contentType.includes("text/event-stream") || contentType.includes("application/x-ndjson");
 
-        if (isStreamRequested) {
+        if (isActuallyStream && isStreamRequested) {
           res.setHeader('Content-Type', 'text/event-stream');
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Connection', 'keep-alive');
           
           const reader = response.body.getReader();
           const decoder = new TextDecoder("utf-8");
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            res.write(decoder.decode(value));
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              res.write(decoder.decode(value, { stream: true }));
+            }
+          } catch (err) {
+            console.error("Stream read error:", err);
+          } finally {
+            return res.end();
           }
-          return res.end();
         } else {
           if (contentType.includes("application/json")) {
             const data = await response.json();

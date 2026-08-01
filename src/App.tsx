@@ -274,8 +274,9 @@ export default function App() {
           const lines = chunk.split('\n').filter(line => line.trim() !== '');
           
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataStr = line.slice(6);
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('data:')) {
+              let dataStr = trimmedLine.substring(5).trim();
               if (dataStr === '[DONE]') continue;
               
               try {
@@ -592,8 +593,8 @@ export default function App() {
                 </div>
                 
                 <div className="flex items-center justify-center gap-2 flex-1">
-                  <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-100">
-                    <Sparkles className="w-4 h-4 text-white" />
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg overflow-hidden">
+                    <img src="/logo.png" alt="Velora" className="w-full h-full object-cover" />
                   </div>
                   <h1 className="text-base font-black text-slate-900 tracking-[0.2em] uppercase">VELORA</h1>
                 </div>
