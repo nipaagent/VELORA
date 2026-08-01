@@ -86,9 +86,9 @@ async function startServer() {
         return res.status(400).json({ error: "Message parameter 'q' or 'message' is required." });
       }
 
-      let gatewayUrl = process.env.GATEWAY_URL || "https://saifu-gateway.onrender.com/v1/chat/completions";
+      let gatewayUrl = process.env.GATEWAY_URL || "https://api.naga.ac/v1/chat/completions";
       let requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
-      let modelName = "nemotron-3-ultra-550b-a55b:free";
+      let modelName = "gpt-3.5-turbo";
 
       // If client explicitly sent "claude run", we map it to a high-quality model
       if (modelFromClient === "claude run" || modelFromClient?.includes("claude")) {
@@ -174,14 +174,14 @@ CRITICAL RULES:
       } else if (!response.ok) {
         const errorText = await response.text();
         console.error("Gateway API Error Response:", errorText);
-        return res.status(200).json({ 
-          error: `Gateway API Error (${response.status}): ${errorText}` 
+        return res.status(response.status).json({ 
+          error: `Gateway API Error: ${errorText}` 
         });
       }
-      return res.status(200).json({ error: "Failed to read response body." });
+      return res.status(500).json({ error: "Failed to read response body from upstream." });
     } catch (error: any) {
       console.error("Error in chat handler:", error);
-      res.status(200).json({ error: error.message || "Failed to generate response" });
+      res.status(500).json({ error: error.message || "Failed to generate response" });
     }
   };
 
@@ -220,7 +220,7 @@ CRITICAL RULES:
   // --- VELORA CLOUD GATEWAY: HYPER-RESILIENT ROUTING ---
   // Catch OpenAI or Anthropic style endpoints ANYWHERE in the path
   app.use((req, res, next) => {
-    const path = req.path;
+    const path = req.path.replace(/\/v1\/v1\//g, "/v1/");
     
     // Skip internal app routes
     if (path.startsWith('/api/admin') || path.startsWith('/api/auth') || path.startsWith('/api/user')) {
@@ -229,7 +229,7 @@ CRITICAL RULES:
 
     // Match completions or messages endpoints
     if (path.endsWith("/chat/completions") || path.endsWith("/messages") || path.endsWith("/chat") || path.endsWith("/completions")) {
-      console.log(`[Gateway] Intercepted Request: ${req.method} ${path}`);
+      console.log(`[Gateway] Intercepted Request: ${req.method} ${req.path} -> normalized: ${path}`);
       return handleChatRequest(req, res);
     }
 

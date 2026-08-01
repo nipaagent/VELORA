@@ -593,9 +593,6 @@ export default function App() {
                 </div>
                 
                 <div className="flex items-center justify-center gap-2 flex-1">
-                  <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-100">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
                   <h1 className="text-base font-black text-slate-900 tracking-[0.2em] uppercase">VELORA</h1>
                 </div>
 

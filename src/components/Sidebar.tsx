@@ -167,21 +167,6 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
           </div>
         )}
 
-        {/* Saifu Gateway Status */}
-        <div className="p-2 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
-            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shadow-2xs">
-              <Sparkles className="w-4 h-4 text-orange-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black text-slate-900 truncate uppercase tracking-widest">saifu • Gateway</p>
-              <div className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <p className="text-[9px] font-bold text-slate-500 truncate">Connected</p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
