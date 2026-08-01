@@ -9,17 +9,33 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Helper to get all available Naga API keys
+  // Helper to get all available Naga API keys (supports comma/newline/space separated keys and NAGA_API_KEY_1..N)
   const getApiKeysInfo = () => {
-    const keys: { name: string, value: string }[] = [];
-    if (process.env.NAGA_API_KEY) {
-      keys.push({ name: 'NAGA_API_KEY', value: process.env.NAGA_API_KEY });
-    }
-    
+    const keysMap = new Map<string, string>(); // value -> name
+
     Object.keys(process.env).forEach(envKey => {
-      if (envKey.startsWith('NAGA_API_KEY_') && process.env[envKey]) {
-        keys.push({ name: envKey, value: process.env[envKey] as string });
+      if (
+        envKey.startsWith('NAGA_API_KEY') ||
+        envKey.startsWith('NAGA_KEY') ||
+        envKey.startsWith('API_KEY') ||
+        envKey.startsWith('GEMINI_API_KEY')
+      ) {
+        const val = process.env[envKey];
+        if (val && typeof val === 'string') {
+          // Split by commas, semicolons, newlines, or whitespace
+          const splitValues = val.split(/[\n,;\s]+/).map(k => k.trim()).filter(k => k.length > 5);
+          splitValues.forEach((k, idx) => {
+            if (!keysMap.has(k)) {
+              keysMap.set(k, splitValues.length > 1 ? `${envKey}_${idx + 1}` : envKey);
+            }
+          });
+        }
       }
+    });
+
+    const keys: { name: string, value: string }[] = [];
+    keysMap.forEach((name, value) => {
+      keys.push({ name, value });
     });
     
     return keys;
@@ -30,7 +46,13 @@ async function startServer() {
   // Stats tracking helper
   const FIREBASE_DB_URL = "https://v-e-l-o-r-a-default-rtdb.asia-southeast1.firebasedatabase.app";
   
-  const trackApiUsage = async (apiKey: string, model: string) => {
+  const trackApiUsage = async (
+    apiKey: string, 
+    model: string, 
+    isSuccess: boolean = true, 
+    statusCode: number = 200,
+    estimatedTokens: number = 120
+  ) => {
     try {
       const keyHash = Buffer.from(apiKey).toString('hex').slice(0, 16);
       const today = new Date().toISOString().split('T')[0];
@@ -40,6 +62,15 @@ async function startServer() {
       
       // Increment total calls
       updates[`/stats/api_keys/${keyHash}/total_calls`] = { ".sv": { "increment": 1 } };
+      
+      if (isSuccess) {
+        updates[`/stats/api_keys/${keyHash}/success_calls`] = { ".sv": { "increment": 1 } };
+        if (estimatedTokens > 0) {
+          updates[`/stats/api_keys/${keyHash}/total_tokens`] = { ".sv": { "increment": estimatedTokens } };
+        }
+      } else {
+        updates[`/stats/api_keys/${keyHash}/error_calls`] = { ".sv": { "increment": 1 } };
+      }
       
       // Increment daily calls
       updates[`/stats/api_keys/${keyHash}/daily/${today}`] = { ".sv": { "increment": 1 } };
@@ -52,7 +83,9 @@ async function startServer() {
       updates[`/stats/api_keys/${keyHash}/info`] = {
         maskedValue: maskKey(apiKey),
         lastUsed: Date.now(),
-        lastModel: model
+        lastModel: model,
+        status: isSuccess ? 'Active' : (statusCode === 429 ? 'Rate Limited' : `Error (${statusCode})`),
+        lastStatusCode: statusCode
       };
 
       await fetch(`${FIREBASE_DB_URL}/.json`, {
@@ -91,19 +124,15 @@ async function startServer() {
       
       let modelName = "nemotron-3-ultra-550b-a55b:free";
 
-      const availableKeys = getApiKeys();
-      if (availableKeys.length === 0) {
+      const allKeysInfo = getApiKeysInfo();
+      if (allKeysInfo.length === 0) {
         return res.status(401).json({ 
           error: "No Naga API key found. Please set NAGA_API_KEY in environment variables." 
         });
       }
-      const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
-      requestHeaders["Authorization"] = `Bearer ${apiKey}`;
-      
-      console.log(`[Gateway] Processing: ${req.method} ${req.path} | Client Model: ${modelFromClient || 'default'} -> Upstream Model: ${modelName}`);
 
-      // Track usage asynchronously with model info
-      trackApiUsage(apiKey, modelFromClient || modelName).catch(e => console.error("Async track error:", e));
+      // Shuffle keys to balance load, but keep trying until one succeeds or all fail
+      const shuffledKeys = [...allKeysInfo].sort(() => Math.random() - 0.5);
 
       // Determine if streaming is requested
       const isStreamRequested = req.body?.stream === true || req.query?.stream === 'true';
@@ -126,91 +155,113 @@ CRITICAL RULES:
         { role: "user", content: message }
       ];
 
-      const response = await fetch(gatewayUrl, {
-        method: "POST",
-        headers: requestHeaders,
-        body: JSON.stringify({
-          model: modelName,
-          messages: formattedMessages,
-          temperature: 0.2,
-          max_tokens: 4000,
-          stream: isStreamRequested
-        })
-      });
+      let lastErrorText = "";
 
-      if (response.ok && response.body) {
-        // Proxy the response directly to ensure minimal interference
-        const contentType = response.headers.get("content-type") || "application/json";
-        res.setHeader("Content-Type", contentType);
-        
-        // Proxy other important headers
-        const proxyHeaders = ["cache-control", "connection", "transfer-encoding"];
-        proxyHeaders.forEach(h => {
-          const val = response.headers.get(h);
-          if (val) res.setHeader(h, val);
-        });
+      for (let i = 0; i < shuffledKeys.length; i++) {
+        const keyObj = shuffledKeys[i];
+        const apiKey = keyObj.value;
+        const currentHeaders = { ...requestHeaders, "Authorization": `Bearer ${apiKey}` };
 
-        const reader = response.body.getReader();
+        console.log(`[Gateway] Attempt ${i + 1}/${shuffledKeys.length} using ${keyObj.name} (${apiKey.slice(0, 6)}...): ${req.method} ${req.path}`);
+
+        // Calculate estimated input tokens
+        const promptLength = formattedMessages.reduce((acc: number, m: any) => acc + (m.content ? m.content.length : 0), 0);
+        const estTokens = Math.max(50, Math.round(promptLength / 3.5));
+
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            res.write(value);
+          const response = await fetch(gatewayUrl, {
+            method: "POST",
+            headers: currentHeaders,
+            body: JSON.stringify({
+              model: modelName,
+              messages: formattedMessages,
+              temperature: 0.2,
+              max_tokens: 4000,
+              stream: isStreamRequested
+            })
+          });
+
+          if (response.ok && response.body) {
+            // Track successful usage asynchronously
+            trackApiUsage(apiKey, modelFromClient || modelName, true, response.status, estTokens).catch(e => console.error("Async track error:", e));
+
+            // Success! Proxy response directly
+            const contentType = response.headers.get("content-type") || "application/json";
+            res.setHeader("Content-Type", contentType);
+            
+            const proxyHeaders = ["cache-control", "connection", "transfer-encoding"];
+            proxyHeaders.forEach(h => {
+              const val = response.headers.get(h);
+              if (val) res.setHeader(h, val);
+            });
+
+            const reader = response.body.getReader();
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                res.write(value);
+              }
+            } catch (err) {
+              console.error("Gateway stream proxy error:", err);
+            } finally {
+              res.end();
+            }
+            return; // Success, end request
+          } else {
+            lastErrorText = await response.text();
+            console.warn(`[Gateway] Key ${keyObj.name} failed (${response.status}): ${lastErrorText}. Trying next key...`);
+            
+            // Track failed usage asynchronously
+            trackApiUsage(apiKey, modelFromClient || modelName, false, response.status, 0).catch(e => console.error("Async track error:", e));
           }
-        } catch (err) {
-          console.error("Gateway stream proxy error:", err);
-        } finally {
-          res.end();
+        } catch (attemptError: any) {
+          lastErrorText = attemptError.message || "Network error";
+          console.error(`[Gateway] Key ${keyObj.name} exception:`, attemptError);
+          trackApiUsage(apiKey, modelFromClient || modelName, false, 500, 0).catch(e => console.error("Async track error:", e));
         }
-        return;
-      } else {
-        const errorText = await response.text();
-        console.error("Gateway API Error Response:", errorText);
+      }
+
+      // If we reach here, ALL available keys failed
+      console.error(`[Gateway] All ${shuffledKeys.length} API keys failed. Last error:`, lastErrorText);
+
+      if (isStreamRequested) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
         
-        if (isStreamRequested) {
-          res.setHeader("Content-Type", "text/event-stream");
-          res.setHeader("Cache-Control", "no-cache");
-          res.setHeader("Connection", "keep-alive");
-          
-          let userErrMsg = "**ত্রুটি:** গেটওয়ে সার্ভিস সাময়িকভাবে ব্যস্ত। দয়া করে আবার চেষ্টা করুন।";
-          if (errorText.includes("rate_limit_exceeded")) {
-            userErrMsg = "**সীমা অতিক্রম (Rate Limit Reached):** এআই সার্ভিস প্রোভাইডারের দৈনিক সীমা পূর্ণ হয়েছে। দয়া করে কিছু সময় পর আবার চেষ্টা করুন।";
-          }
+        let userErrMsg = `**সীমা অতিক্রম (All Keys Rate Limited):** সিস্টেমে উপলব্ধ মোট ${shuffledKeys.length}টি API Key-এর প্রতিটিরই সীমা শেষ হয়েছে। দয়া করে নতুন Key যুক্ত করুন।`;
 
-          const errData = JSON.stringify({
-            id: `chatcmpl-err-${Date.now()}`,
-            object: "chat.completion.chunk",
-            created: Math.floor(Date.now() / 1000),
-            model: modelFromClient || "claude-3-5-sonnet",
-            choices: [{
-              index: 0,
-              delta: { content: `\n\n${userErrMsg}` },
-              finish_reason: "stop"
-            }]
-          });
-          res.write(`data: ${errData}\n\ndata: [DONE]\n\n`);
-          return res.end();
-        } else {
-          let userErrMsg = "**ত্রুটি:** গেটওয়ে সার্ভিস সাময়িকভাবে ব্যস্ত। দয়া করে আবার চেষ্টা করুন।";
-          if (errorText.includes("rate_limit_exceeded")) {
-            userErrMsg = "**সীমা অতিক্রম (Rate Limit Reached):** এআই সার্ভিস প্রোভাইডারের দৈনিক সীমা পূর্ণ হয়েছে। দয়া করে কিছু সময় পর আবার চেষ্টা করুন।";
-          }
+        const errData = JSON.stringify({
+          id: `chatcmpl-err-${Date.now()}`,
+          object: "chat.completion.chunk",
+          created: Math.floor(Date.now() / 1000),
+          model: modelFromClient || "claude-3-5-sonnet",
+          choices: [{
+            index: 0,
+            delta: { content: `\n\n${userErrMsg}` },
+            finish_reason: "stop"
+          }]
+        });
+        res.write(`data: ${errData}\n\ndata: [DONE]\n\n`);
+        return res.end();
+      } else {
+        let userErrMsg = `**সীমা অতিক্রম (All Keys Rate Limited):** সিস্টেমে উপলব্ধ মোট ${shuffledKeys.length}টি API Key-এর প্রতিটিরই সীমা শেষ হয়েছে। দয়া করে নতুন Key যুক্ত করুন।`;
 
-          return res.status(200).json({ 
-            id: `chatcmpl-err-${Date.now()}`,
-            object: "chat.completion",
-            created: Math.floor(Date.now() / 1000),
-            model: modelFromClient || "claude-3-5-sonnet",
-            choices: [{
-              index: 0,
-              message: {
-                role: "assistant",
-                content: userErrMsg
-              },
-              finish_reason: "stop"
-            }]
-          });
-        }
+        return res.status(200).json({ 
+          id: `chatcmpl-err-${Date.now()}`,
+          object: "chat.completion",
+          created: Math.floor(Date.now() / 1000),
+          model: modelFromClient || "claude-3-5-sonnet",
+          choices: [{
+            index: 0,
+            message: {
+              role: "assistant",
+              content: userErrMsg
+            },
+            finish_reason: "stop"
+          }]
+        });
       }
       return res.status(500).json({ error: "Failed to read response body from upstream." });
     } catch (error: any) {
@@ -317,6 +368,11 @@ CRITICAL RULES:
           maskedValue: stats.info?.maskedValue || `${info.value.slice(0, 6)}...${info.value.slice(-4)}`,
           totalCalls: stats.total_calls || 0,
           todayCalls: (stats.daily && stats.daily[today]) || 0,
+          successCalls: stats.success_calls || 0,
+          errorCalls: stats.error_calls || 0,
+          totalTokens: stats.total_tokens || 0,
+          status: stats.info?.status || 'Active',
+          lastStatusCode: stats.info?.lastStatusCode || 200,
           lastUsed: stats.info?.lastUsed || null,
           lastModel: stats.info?.lastModel || 'N/A',
           models: stats.models || {}

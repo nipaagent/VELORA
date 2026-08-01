@@ -936,79 +936,151 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                 </div>
               </div>
 
-              <div className="p-5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              <div className="p-5 max-h-[65vh] overflow-y-auto custom-scrollbar space-y-4">
                 {apiKeysDetails.length === 0 ? (
                   <div className="py-12 text-center text-slate-400">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 opacity-20" />
                     <p className="text-xs font-bold uppercase tracking-widest">Loading API Statistics...</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {apiKeysDetails.map((key, idx) => (
-                      <motion.div 
-                        key={key.name}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                        className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:shadow-md transition-all group"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="space-y-1.5 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-black text-slate-500 uppercase tracking-tighter bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                                {key.name}
-                              </span>
-                              <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                                {key.maskedValue}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                              <span className="flex items-center gap-1">
-                                <RefreshCw className="w-2.5 h-2.5" />
-                                Last: {key.lastUsed ? new Date(key.lastUsed).toLocaleTimeString() : 'Never'}
-                              </span>
-                              <span className="flex items-center gap-1 text-slate-500">
-                                <Sparkles className="w-2.5 h-2.5" />
-                                Last Model: <span className="text-indigo-500">{key.lastModel}</span>
-                              </span>
-                            </div>
+                  <>
+                    {/* SUMMARY CARDS GRID */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3">
+                        <div className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">মোট Key (Total Keys)</div>
+                        <div className="text-xl font-black text-indigo-950 mt-0.5">{apiKeysDetails.length} টি Active Key</div>
+                      </div>
 
-                            {/* Model Breakdown */}
-                            {key.models && Object.keys(key.models).length > 0 && (
-                              <div className="mt-3 flex flex-wrap gap-1.5">
-                                {Object.entries(key.models).map(([modelName, count]: [string, any]) => (
-                                  <div 
-                                    key={modelName}
-                                    className="px-2 py-1 bg-slate-100 rounded-md border border-slate-200 flex items-center gap-2 group/model"
-                                  >
-                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-tight">{modelName.replace(/_/g, ' ')}</span>
-                                    <span className="text-[10px] font-bold text-indigo-600 bg-white px-1.5 rounded border border-slate-200 shadow-3xs">{count}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Calls</div>
-                              <div className="text-lg font-black text-slate-900 tabular-nums">
-                                {key.totalCalls.toLocaleString()}
-                              </div>
-                            </div>
-                            <div className="w-px h-8 bg-slate-200" />
-                            <div className="text-right">
-                              <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Calls Today</div>
-                              <div className="text-lg font-black text-emerald-600 tabular-nums flex items-center justify-end gap-1.5">
-                                {key.todayCalls.toLocaleString()}
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              </div>
-                            </div>
-                          </div>
+                      <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
+                        <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">আজকের রিকোয়েস্ট (Today Calls)</div>
+                        <div className="text-xl font-black text-emerald-950 mt-0.5 flex items-center gap-1.5">
+                          {apiKeysDetails.reduce((acc, k) => acc + (k.todayCalls || 0), 0).toLocaleString()}
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         </div>
-                      </motion.div>
-                    ))}
-                  </div>
+                      </div>
+
+                      <div className="bg-sky-50/70 border border-sky-100 rounded-xl p-3">
+                        <div className="text-[10px] font-black text-sky-600 uppercase tracking-wider">সর্বমোট রিকোয়েস্ট (Total Calls)</div>
+                        <div className="text-xl font-black text-sky-950 mt-0.5">
+                          {apiKeysDetails.reduce((acc, k) => acc + (k.totalCalls || 0), 0).toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div className="bg-purple-50/70 border border-purple-100 rounded-xl p-3">
+                        <div className="text-[10px] font-black text-purple-600 uppercase tracking-wider">আনুমানিক টোকেন (Est. Tokens)</div>
+                        <div className="text-xl font-black text-purple-950 mt-0.5">
+                          {apiKeysDetails.reduce((acc, k) => acc + (k.totalTokens || 0), 0).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* API KEY LIST CARDS */}
+                    <div className="space-y-3">
+                      {apiKeysDetails.map((key, idx) => {
+                        const isRateLimited = key.status && key.status.includes('Rate Limited');
+                        const isError = key.status && key.status.includes('Error');
+
+                        return (
+                          <motion.div 
+                            key={key.name + idx}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.04 }}
+                            className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 hover:shadow-md transition-all group"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                              <div className="space-y-2 flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-tighter bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs">
+                                    {key.name}
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                                    {key.maskedValue}
+                                  </span>
+
+                                  {/* Status Badge */}
+                                  <span className={cn(
+                                    "text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1",
+                                    isRateLimited 
+                                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                      : isError 
+                                        ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                  )}>
+                                    <span className={cn(
+                                      "w-1.5 h-1.5 rounded-full",
+                                      isRateLimited ? "bg-amber-500 animate-ping" : isError ? "bg-rose-500" : "bg-emerald-500 animate-pulse"
+                                    )} />
+                                    {key.status || 'Active (Ready)'}
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                  <span className="flex items-center gap-1">
+                                    <RefreshCw className="w-2.5 h-2.5 text-slate-400" />
+                                    সর্বশেষ ব্যবহার: <span className="text-slate-800">{key.lastUsed ? new Date(key.lastUsed).toLocaleTimeString() : 'Never'}</span>
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Sparkles className="w-2.5 h-2.5 text-indigo-500" />
+                                    মডেল: <span className="text-indigo-600 font-extrabold">{key.lastModel || 'N/A'}</span>
+                                  </span>
+                                  {key.totalTokens ? (
+                                    <span className="text-purple-600 font-mono">
+                                      ~{(key.totalTokens || 0).toLocaleString()} tokens used
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {/* Success vs Error breakdown */}
+                                {(key.successCalls > 0 || key.errorCalls > 0) && (
+                                  <div className="flex items-center gap-3 text-[10px] font-bold">
+                                    <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                      ✓ Success: {key.successCalls || 0}
+                                    </span>
+                                    <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                                      ✕ Rate Limit / Errors: {key.errorCalls || 0}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Model Breakdown */}
+                                {key.models && Object.keys(key.models).length > 0 && (
+                                  <div className="pt-1 flex flex-wrap gap-1.5">
+                                    {Object.entries(key.models).map(([modelName, count]: [string, any]) => (
+                                      <div 
+                                        key={modelName}
+                                        className="px-2 py-0.5 bg-white rounded-md border border-slate-200/80 flex items-center gap-1.5 shadow-3xs"
+                                      >
+                                        <span className="text-[9px] font-extrabold text-slate-600 uppercase tracking-tight">{modelName.replace(/_/g, ' ')}</span>
+                                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-1 rounded border border-indigo-100">{count}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-200/60 pt-2 sm:pt-0 gap-3 shrink-0">
+                                <div className="text-left sm:text-right">
+                                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">আজকের রিকোয়েস্ট</div>
+                                  <div className="text-base font-black text-emerald-600 tabular-nums flex items-center sm:justify-end gap-1">
+                                    {(key.todayCalls || 0).toLocaleString()}
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  </div>
+                                </div>
+
+                                <div className="text-right">
+                                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">মোট রিকোয়েস্ট</div>
+                                  <div className="text-base font-black text-slate-900 tabular-nums">
+                                    {(key.totalCalls || 0).toLocaleString()}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </div>
 
