@@ -86,7 +86,7 @@ async function startServer() {
         return res.status(400).json({ error: "Message parameter 'q' or 'message' is required." });
       }
 
-      let gatewayUrl = "https://api.naga.ac/v1/chat/completions";
+      let gatewayUrl = "https://saifu-gateway.onrender.com/v1/chat/completions";
       let requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
       let modelName = "nemotron-3-ultra-550b-a55b:free";
 
@@ -147,77 +147,30 @@ CRITICAL RULES:
       });
 
       if (response.ok && response.body) {
-        const contentType = response.headers.get("content-type") || "";
-        const isActuallyStream = contentType.includes("text/event-stream") || contentType.includes("application/x-ndjson");
+        // Proxy the response directly to ensure minimal interference
+        const contentType = response.headers.get("content-type") || "application/json";
+        res.setHeader("Content-Type", contentType);
+        
+        // Proxy other important headers
+        const proxyHeaders = ["cache-control", "connection", "transfer-encoding"];
+        proxyHeaders.forEach(h => {
+          const val = response.headers.get(h);
+          if (val) res.setHeader(h, val);
+        });
 
-        if (isActuallyStream && isStreamRequested) {
-          res.setHeader('Content-Type', 'text/event-stream');
-          res.setHeader('Cache-Control', 'no-cache');
-          res.setHeader('Connection', 'keep-alive');
-          
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder("utf-8");
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              res.write(decoder.decode(value, { stream: true }));
-            }
-          } catch (err) {
-            console.error("Stream read error:", err);
-          } finally {
-            return res.end();
+        const reader = response.body.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
           }
-        } else {
-          if (contentType.includes("application/json")) {
-            const data = await response.json();
-            return res.status(200).json(data);
-          } else {
-            const text = await response.text();
-            
-            // If it looks like a stream but we wanted JSON, try to extract the content
-            if (text.includes('data:')) {
-              const lines = text.split('\n').filter(l => l.trim().startsWith('data:'));
-              let combined = '';
-              for (const line of lines) {
-                const raw = line.replace(/^data:\s*/, '').trim();
-                if (raw === '[DONE]') continue;
-                try {
-                  const parsed = JSON.parse(raw);
-                  const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.message?.content || parsed.text || '';
-                  combined += content;
-                } catch (e) { /* skip */ }
-              }
-              
-              if (combined) {
-                return res.status(200).json({
-                  id: "chatcmpl-" + Date.now(),
-                  object: "chat.completion",
-                  created: Math.floor(Date.now() / 1000),
-                  model: modelName,
-                  choices: [{
-                    index: 0,
-                    message: { role: "assistant", content: combined },
-                    finish_reason: "stop"
-                  }]
-                });
-              }
-            }
-
-            // Fallback for plain text
-            return res.status(200).json({
-              id: "chatcmpl-" + Date.now(),
-              object: "chat.completion",
-              created: Math.floor(Date.now() / 1000),
-              model: modelName,
-              choices: [{
-                index: 0,
-                message: { role: "assistant", content: text },
-                finish_reason: "stop"
-              }]
-            });
-          }
+        } catch (err) {
+          console.error("Gateway stream proxy error:", err);
+        } finally {
+          res.end();
         }
+        return;
       } else if (!response.ok) {
         const errorText = await response.text();
         console.error("Gateway API Error Response:", errorText);

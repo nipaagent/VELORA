@@ -95,8 +95,8 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', damping: 20, stiffness: 100 }}
             >
-              <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mb-6 border border-slate-100 shadow-xl mx-auto overflow-hidden">
-                <img src="/logo.png" alt="Velora" className="w-full h-full object-cover" />
+              <div className="w-16 h-16 bg-slate-50 rounded-[24px] flex items-center justify-center mb-6 border border-slate-100 shadow-sm mx-auto">
+                <Bot className="w-8 h-8 text-slate-800" />
               </div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">How can I help you today?</h2>
               <p className="text-sm font-medium text-slate-500 max-w-md mx-auto">Velora is ready to assist you with high-speed intelligence and creative coding.</p>
@@ -117,10 +117,10 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
                   <div className="flex gap-3 max-w-full min-w-0 group">
                     {msg.role === 'model' && (
                       <motion.div 
-                        whileHover={{ scale: 1.1, rotate: 5 }}
-                        className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center shrink-0 mt-0.5 shadow-md overflow-hidden bg-white"
+                         whileHover={{ scale: 1.1, rotate: 5 }}
+                        className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-md"
                       >
-                        <img src="/logo.png" alt="V" className="w-full h-full object-cover" />
+                        <Bot className="w-3.5 h-3.5 text-white" />
                       </motion.div>
                     )}
                     
@@ -165,8 +165,8 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
               {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
                 <MessageAppear className="flex w-full justify-start">
                   <div className="flex gap-3 max-w-full">
-                    <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center shrink-0 mt-0.5 shadow-md overflow-hidden bg-white">
-                      <img src="/logo.png" alt="V" className="w-full h-full object-cover" />
+                    <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-md">
+                      <Bot className="w-3.5 h-3.5 text-white" />
                     </div>
                     <motion.div 
                       initial={{ scale: 0.9, opacity: 0 }}
