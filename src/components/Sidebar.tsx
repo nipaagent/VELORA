@@ -1,9 +1,10 @@
 import React from 'react';
 import { Plus, MessageSquare, Trash2, LogOut, User, Sparkles, Code2, ShieldCheck, BrainCircuit } from 'lucide-react';
-import { Chat, UserProfile } from '../types';
+import { Chat, UserProfile, TokenState } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import UserAvatar from './UserAvatar';
+import TokenBadge from './TokenBadge';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -15,17 +16,19 @@ interface SidebarProps {
   onDeleteChat: (id: string) => void;
   onClearAllChats?: () => void;
   userProfile: UserProfile | null;
+  tokenState?: TokenState;
+  onOpenTokenModal?: () => void;
   onSignOut: () => void;
   onOpenProfile: () => void;
   onOpenDeveloper?: () => void;
   onOpenAdmin?: () => void;
 }
 
-export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelectChat, onNewChat, onDeleteChat, onClearAllChats, userProfile, onSignOut, onOpenProfile, onOpenDeveloper, onOpenAdmin }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelectChat, onNewChat, onDeleteChat, onClearAllChats, userProfile, tokenState, onOpenTokenModal, onSignOut, onOpenProfile, onOpenDeveloper, onOpenAdmin }: SidebarProps) {
   return (
     <div className="w-full h-full bg-white text-gray-800 flex flex-col justify-between border-r border-gray-100 shadow-sm">
       <div className="flex flex-col min-h-0 flex-1">
-        <div className="h-14 flex items-center px-4 shrink-0 border-b border-gray-100 bg-white">
+        <div className="h-14 flex items-center justify-between px-4 shrink-0 border-b border-gray-100 bg-white">
           <motion.div 
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -34,6 +37,10 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
             <Sparkles className="w-4.5 h-4.5 text-indigo-600" />
             <span className="font-black text-gray-900 text-sm tracking-wider uppercase">VELORA</span>
           </motion.div>
+
+          {tokenState && onOpenTokenModal && (
+            <TokenBadge tokenState={tokenState} onClick={onOpenTokenModal} />
+          )}
         </div>
         
         <div className="p-2 shrink-0 flex items-center gap-1.5">

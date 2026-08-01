@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, UserPlus, Search, Edit3, Trash2, Eye, EyeOff, Check, X, 
   ShieldAlert, RefreshCw, KeyRound, ArrowLeft, Save, Sparkles, AlertCircle, ShieldCheck,
-  Ban, UserCheck, ShieldX, CheckCircle2, AlertTriangle, Lock, Code2, Loader2
+  Ban, UserCheck, ShieldX, CheckCircle2, AlertTriangle, Lock, Code2, Loader2, Tv, Plus, ExternalLink, Zap, Minus, Gift
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { ref, onValue, set, remove, update } from 'firebase/database';
 import { generateUniqueVeloraKey, cn } from '../lib/utils';
+import { TokenState } from '../types';
 import UserAvatar from './UserAvatar';
 
 interface AdminUser {
@@ -21,6 +22,7 @@ interface AdminUser {
   isBanned?: boolean;
   apiAccessEnabled?: boolean;
   apiKey?: string;
+  tokenState?: TokenState;
 }
 
 interface AdminPageProps {
@@ -57,12 +59,216 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [newRole, setNewRole] = useState<'admin' | 'user'>('user');
   const [newStatus, setNewStatus] = useState<'approved' | 'pending' | 'banned'>('approved');
 
+  // Ad Links Management state
+  const [isAdModalOpen, setIsAdModalOpen] = useState(false);
+  const [adLinks, setAdLinks] = useState<string[]>([
+    "https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"
+  ]);
+  const [newAdUrl, setNewAdUrl] = useState('');
+  const [isSavingAdLinks, setIsSavingAdLinks] = useState(false);
+
+  // User Token Control Modal state
+  const [tokenModalUser, setTokenModalUser] = useState<AdminUser | null>(null);
+  const [tokenAmountInput, setTokenAmountInput] = useState<string>('50000');
+  const [isSavingTokenChange, setIsSavingTokenChange] = useState(false);
+
   // Toast alert feedback
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ type, text });
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Listen to ad links in Firebase RTDB
+  useEffect(() => {
+    const adRef = ref(db, 'settings/ad_links');
+    const unsubscribeAd = onValue(adRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        if (Array.isArray(val) && val.length > 0) {
+          setAdLinks(val);
+        } else if (typeof val === 'object') {
+          const list = Object.values(val).filter(Boolean) as string[];
+          if (list.length > 0) setAdLinks(list);
+        }
+      }
+    });
+    return () => unsubscribeAd();
+  }, []);
+
+  const handleAddAdLink = async () => {
+    if (!newAdUrl.trim()) {
+      showToast("দয়া করে সঠিক অ্যাড লিংক প্রবেশ করান!", "error");
+      return;
+    }
+    const urlToAdd = newAdUrl.trim();
+    if (!urlToAdd.startsWith('http://') && !urlToAdd.startsWith('https://')) {
+      showToast("লিংকটি অবশ্যই http:// বা https:// দিয়ে শুরু হতে হবে!", "error");
+      return;
+    }
+
+    const updated = [...adLinks, urlToAdd];
+    setAdLinks(updated);
+    setNewAdUrl('');
+    setIsSavingAdLinks(true);
+    try {
+      await set(ref(db, 'settings/ad_links'), updated);
+      showToast("অ্যাড লিংক সফলভাবে যোগ করা হয়েছে!", "success");
+    } catch (e: any) {
+      showToast("অ্যাড লিংক সেভ করতে সমস্যা: " + e.message, "error");
+    } finally {
+      setIsSavingAdLinks(false);
+    }
+  };
+
+  const handleDeleteAdLink = async (indexToDelete: number) => {
+    if (adLinks.length <= 1) {
+      showToast("কমপক্ষে একটি অ্যাড লিংক থাকা আবশ্যক!", "error");
+      return;
+    }
+    const updated = adLinks.filter((_, idx) => idx !== indexToDelete);
+    setAdLinks(updated);
+    setIsSavingAdLinks(true);
+    try {
+      await set(ref(db, 'settings/ad_links'), updated);
+      showToast("অ্যাড লিংক মুছে ফেলা হয়েছে!", "success");
+    } catch (e: any) {
+      showToast("মুছতে সমস্যা হয়েছে: " + e.message, "error");
+    } finally {
+      setIsSavingAdLinks(false);
+    }
+  };
+
+  // Realtime Token Management Handlers
+  const handleOpenTokenModal = (user: AdminUser) => {
+    setTokenModalUser(user);
+    setTokenAmountInput('50000');
+  };
+
+  const handleApplyTokenAdd = async (amountToAdd: number) => {
+    if (!tokenModalUser || amountToAdd <= 0) return;
+    setIsSavingTokenChange(true);
+    try {
+      const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
+      const currentState: TokenState = tokenModalUser.tokenState || {
+        maxDailyTokens: 100000,
+        bonusTokens: 0,
+        tokensUsedToday: 0,
+        lastResetDate: new Date().toISOString().split('T')[0],
+        adsWatchedToday: 0
+      };
+
+      const updatedState: TokenState = {
+        ...currentState,
+        bonusTokens: (currentState.bonusTokens || 0) + amountToAdd
+      };
+
+      await set(userRef, updatedState);
+      showToast(`@${tokenModalUser.username} এর একাউন্টে +${amountToAdd.toLocaleString()} বোনাস টোকেন যুক্ত করা হয়েছে!`, "success");
+      setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
+    } catch (err: any) {
+      showToast("টোকেন যোগ করতে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsSavingTokenChange(false);
+    }
+  };
+
+  const handleApplyTokenSubtract = async (amountToSubtract: number) => {
+    if (!tokenModalUser || amountToSubtract <= 0) return;
+    setIsSavingTokenChange(true);
+    try {
+      const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
+      const currentState: TokenState = tokenModalUser.tokenState || {
+        maxDailyTokens: 100000,
+        bonusTokens: 0,
+        tokensUsedToday: 0,
+        lastResetDate: new Date().toISOString().split('T')[0],
+        adsWatchedToday: 0
+      };
+
+      let remainingDeduct = amountToSubtract;
+      let currentBonus = currentState.bonusTokens || 0;
+      let currentUsed = currentState.tokensUsedToday || 0;
+
+      if (currentBonus >= remainingDeduct) {
+        currentBonus -= remainingDeduct;
+      } else {
+        remainingDeduct -= currentBonus;
+        currentBonus = 0;
+        currentUsed += remainingDeduct;
+      }
+
+      const updatedState: TokenState = {
+        ...currentState,
+        bonusTokens: currentBonus,
+        tokensUsedToday: currentUsed
+      };
+
+      await set(userRef, updatedState);
+      showToast(`@${tokenModalUser.username} এর একাউন্ট থেকে -${amountToSubtract.toLocaleString()} টোকেন মাইনাস করা হয়েছে!`, "success");
+      setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
+    } catch (err: any) {
+      showToast("টোকেন মাইনাস করতে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsSavingTokenChange(false);
+    }
+  };
+
+  const handleApplyTokenResetUsed = async () => {
+    if (!tokenModalUser) return;
+    setIsSavingTokenChange(true);
+    try {
+      const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
+      const currentState: TokenState = tokenModalUser.tokenState || {
+        maxDailyTokens: 100000,
+        bonusTokens: 0,
+        tokensUsedToday: 0,
+        lastResetDate: new Date().toISOString().split('T')[0],
+        adsWatchedToday: 0
+      };
+
+      const updatedState: TokenState = {
+        ...currentState,
+        tokensUsedToday: 0
+      };
+
+      await set(userRef, updatedState);
+      showToast(`@${tokenModalUser.username} এর ব্যবহৃত টোকেন ০ করা হয়েছে!`, "success");
+      setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
+    } catch (err: any) {
+      showToast("টোকেন রিসেট করতে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsSavingTokenChange(false);
+    }
+  };
+
+  const handleApplyMaxDailyLimit = async (newLimit: number) => {
+    if (!tokenModalUser || newLimit < 0) return;
+    setIsSavingTokenChange(true);
+    try {
+      const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
+      const currentState: TokenState = tokenModalUser.tokenState || {
+        maxDailyTokens: 100000,
+        bonusTokens: 0,
+        tokensUsedToday: 0,
+        lastResetDate: new Date().toISOString().split('T')[0],
+        adsWatchedToday: 0
+      };
+
+      const updatedState: TokenState = {
+        ...currentState,
+        maxDailyTokens: newLimit
+      };
+
+      await set(userRef, updatedState);
+      showToast(`@${tokenModalUser.username} এর দৈনিক ফ্রি লিমিট ${newLimit.toLocaleString()} সেট করা হয়েছে!`, "success");
+      setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
+    } catch (err: any) {
+      showToast("লিমিট সেটে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsSavingTokenChange(false);
+    }
   };
 
   // 100% Pure Real-time & API synchronization with Firebase Database `users/`
@@ -96,7 +302,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               createdAt: val[key].createdAt || Date.now(),
               role: val[key].role || (val[key].username === 'admin' ? 'admin' : 'user'),
               status: val[key].status || (val[key].isBanned ? 'banned' : 'approved'),
-              isBanned: !!val[key].isBanned || val[key].status === 'banned'
+              isBanned: !!val[key].isBanned || val[key].status === 'banned',
+              tokenState: val[key].tokenState
             }));
             firebaseList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
             setUsers(firebaseList);
@@ -150,10 +357,18 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             createdAt: val[key].createdAt || Date.now(),
             role: val[key].role || (val[key].username === 'admin' ? 'admin' : 'user'),
             status: val[key].status || (val[key].isBanned ? 'banned' : 'approved'),
-            isBanned: !!val[key].isBanned || val[key].status === 'banned'
+            isBanned: !!val[key].isBanned || val[key].status === 'banned',
+            tokenState: val[key].tokenState
           }));
           firebaseList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
           setUsers(firebaseList);
+
+          // Update active token modal user in real-time
+          setTokenModalUser((prev) => {
+            if (!prev) return null;
+            const liveUser = firebaseList.find(u => u.uid === prev.uid);
+            return liveUser || prev;
+          });
         }
       }, (error) => {
         console.warn("RTDB WebSocket Notice (handled via API):", error.message);
@@ -543,6 +758,17 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             <motion.button
               whileHover={{ y: -2, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => setIsAdModalOpen(true)}
+              className="px-3 py-1.5 bg-purple-50 border border-purple-100 text-purple-700 text-[10px] font-black rounded-lg flex items-center gap-1.5 shadow-2xs uppercase transition-all hover:bg-purple-100 hover:shadow-sm group cursor-pointer"
+            >
+              <Tv className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-purple-600" />
+              <span>অ্যাড লিংক সেটিংস ({adLinks.length})</span>
+              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+            </motion.button>
+
+            <motion.button
+              whileHover={{ y: -2, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => setIsApiKeyModalOpen(true)}
               className="px-3 py-1.5 bg-sky-50 border border-sky-100 text-sky-700 text-[10px] font-black rounded-lg flex items-center gap-1.5 shadow-2xs uppercase transition-all hover:bg-sky-100 hover:shadow-sm group"
             >
@@ -700,12 +926,30 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                         <div className="text-[10px] text-slate-400 font-sans">
                           UID: <span className="font-mono text-slate-600">{user.uid}</span>
                         </div>
+
+                        {/* Token Badge */}
+                        <div className="flex items-center gap-1.5 bg-indigo-50/80 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-100 font-extrabold text-[10px]">
+                          <Zap className="w-3 h-3 text-indigo-600 fill-indigo-600" />
+                          <span>টোকেন: {Math.max(0, ((user.tokenState?.maxDailyTokens ?? 100000) + (user.tokenState?.bonusTokens ?? 0)) - (user.tokenState?.tokensUsedToday ?? 0)).toLocaleString()}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      
+                      {/* Token Control Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleOpenTokenModal(user)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-[10px] shadow-2xs transition-all cursor-pointer"
+                        title="ইউজারের টোকেন যোগ/মাইনাস করুন"
+                      >
+                        <Zap className="w-3 h-3 fill-white" />
+                        <span>টোকেন কন্ট্রোল</span>
+                      </motion.button>
                       
                       {/* API Access Toggle Button */}
                       <motion.button
@@ -1215,6 +1459,325 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                   {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                   <span>ইউজার সেভ করুন</span>
                 </motion.button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* AD LINKS MANAGEMENT MODAL */}
+      <AnimatePresence>
+        {isAdModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAdModalOpen(false)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-xs" 
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col text-slate-800"
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-purple-50 via-white to-indigo-50">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shrink-0">
+                    <Tv className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base leading-snug">অ্যাড লিংক ম্যানেজমেন্ট (Ad Settings)</h3>
+                    <p className="text-[11px] font-semibold text-slate-500">স্পন্সর নেটওয়ার্কের এড লিংক রিয়েলটাইমে যুক্ত ও পরিচালনা করুন</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsAdModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                {/* Add New Ad Link Box */}
+                <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-4 space-y-3">
+                  <label className="text-xs font-black text-purple-900 uppercase tracking-wider block">
+                    + নতুন অ্যাড লিংক যুক্ত করুন (Add New Ad Link)
+                  </label>
+                  
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newAdUrl}
+                      onChange={(e) => setNewAdUrl(e.target.value)}
+                      placeholder="https://www.effectivecpmnetwork.com/..."
+                      className="flex-1 px-3.5 py-2 bg-white border border-purple-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 shadow-2xs"
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleAddAdLink}
+                      disabled={isSavingAdLinks}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1 shrink-0 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingAdLinks ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      <span>যোগ করুন</span>
+                    </motion.button>
+                  </div>
+
+                  <p className="text-[10px] text-purple-700/80 font-semibold">
+                    💡 লিংক যোগ করার পর সাথে সাথে ব্যবহারকারীরা ৩০ সেকেন্ডের এড ভিউতে লিংকটি দেখতে পারবে।
+                  </p>
+                </div>
+
+                {/* Default Sponsor Link Quick Button */}
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs">
+                  <div>
+                    <span className="font-extrabold text-slate-800 block">ডিফল্ট নেটওয়ার্ক লিংক</span>
+                    <span className="text-[10px] text-slate-500 font-mono">effectivecpmnetwork (Direct Key)</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setNewAdUrl("https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170");
+                    }}
+                    className="px-3 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-indigo-600 font-black text-[11px] rounded-lg transition-all"
+                  >
+                    ইনপুটে আনুন
+                  </button>
+                </div>
+
+                {/* Active Ad Links List */}
+                <div className="space-y-2.5">
+                  <div className="text-[11px] font-black uppercase text-slate-400 tracking-wider flex items-center justify-between">
+                    <span>সক্রিয় অ্যাড লিংক সমূহ ({adLinks.length} টি)</span>
+                    <span className="text-emerald-600 font-mono text-[10px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                      ● Realtime Synced
+                    </span>
+                  </div>
+
+                  {adLinks.map((url, index) => (
+                    <motion.div 
+                      key={url + index}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xs hover:border-purple-200 transition-all flex items-center justify-between gap-3 group"
+                    >
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-black text-[10px] flex items-center justify-center shrink-0">
+                            {index + 1}
+                          </span>
+                          <span className="text-xs font-mono font-bold text-slate-800 truncate block">
+                            {url}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="লিংক টেস্ট করুন"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+
+                        <button
+                          onClick={() => handleDeleteAdLink(index)}
+                          disabled={adLinks.length <= 1}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-30 cursor-pointer"
+                          title={adLinks.length <= 1 ? "কমপক্ষে একটি লিংক রাখতে হবে" : "ডিলিট করুন"}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
+                <button
+                  onClick={() => setIsAdModalOpen(false)}
+                  className="px-5 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all"
+                >
+                  সম্পন্ন (Close)
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* USER TOKEN CONTROL MODAL */}
+      <AnimatePresence>
+        {tokenModalUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setTokenModalUser(null)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-xs" 
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col text-slate-800"
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 via-white to-purple-50">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-md shrink-0">
+                    <Zap className="w-5 h-5 fill-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base leading-snug">ইউজার টোকেন কন্ট্রোল (Token Management)</h3>
+                    <p className="text-[11px] font-semibold text-slate-500">@{tokenModalUser.username} ({tokenModalUser.fullName})</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setTokenModalUser(null)}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+                {/* Current Balance Overview */}
+                <div className="bg-slate-900 text-white p-4 rounded-2xl space-y-3 relative overflow-hidden shadow-lg">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="text-[10px] font-black uppercase text-indigo-300 tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> রিয়েলটাইম টোকেন স্ট্যাটাস
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded-md">
+                      ● Live Realtime
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                      <span className="text-slate-400 text-[10px] block">ডেইলি ফ্রি লিমিট:</span>
+                      <span className="text-sm font-black text-white">
+                        {(tokenModalUser.tokenState?.maxDailyTokens ?? 100000).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                      <span className="text-slate-400 text-[10px] block">বোনাস টোকেন:</span>
+                      <span className="text-sm font-black text-emerald-400">
+                        +{(tokenModalUser.tokenState?.bonusTokens ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                      <span className="text-slate-400 text-[10px] block">আজকে ব্যবহৃত:</span>
+                      <span className="text-sm font-black text-rose-400">
+                        -{(tokenModalUser.tokenState?.tokensUsedToday ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="bg-indigo-950/80 p-2.5 rounded-xl border border-indigo-700/80">
+                      <span className="text-indigo-300 text-[10px] block font-bold">মোট অবশিষ্ট টোকেন:</span>
+                      <span className="text-base font-black text-amber-300">
+                        {Math.max(0, ((tokenModalUser.tokenState?.maxDailyTokens ?? 100000) + (tokenModalUser.tokenState?.bonusTokens ?? 0)) - (tokenModalUser.tokenState?.tokensUsedToday ?? 0)).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Amount Input */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                    টোকেন পরিমাণ (Token Amount)
+                  </label>
+                  <input 
+                    type="number"
+                    value={tokenAmountInput}
+                    onChange={(e) => setTokenAmountInput(e.target.value)}
+                    placeholder="উদাহরণ: 50000"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+
+                  {/* Preset quick buttons */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {[10000, 50000, 100000, 500000, 1000000].map(amt => (
+                      <button
+                        key={amt}
+                        onClick={() => setTokenAmountInput(amt.toString())}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      >
+                        +{amt >= 1000000 ? `${amt / 1000000}M` : `${amt / 1000}K`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Main Action Buttons */}
+                <div className="grid grid-cols-2 gap-2.5 pt-2">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={isSavingTokenChange}
+                    onClick={() => handleApplyTokenAdd(Number(tokenAmountInput) || 0)}
+                    className="py-3 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold text-xs shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSavingTokenChange ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    <span>+ টোকেন যোগ করুন</span>
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={isSavingTokenChange}
+                    onClick={() => handleApplyTokenSubtract(Number(tokenAmountInput) || 0)}
+                    className="py-3 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-xs shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSavingTokenChange ? <Loader2 className="w-4 h-4 animate-spin" /> : <Minus className="w-4 h-4" />}
+                    <span>- টোকেন মাইনাস করুন</span>
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={isSavingTokenChange}
+                    onClick={() => handleApplyMaxDailyLimit(Number(tokenAmountInput) || 100000)}
+                    className="py-2.5 px-3 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer"
+                  >
+                    <span>⚙️ ডেলি ফ্রি লিমিট সেট</span>
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={isSavingTokenChange}
+                    onClick={handleApplyTokenResetUsed}
+                    className="py-2.5 px-3 bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer"
+                  >
+                    <span>🔄 ব্যবহৃত টোকেন রিসেট (0)</span>
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[10px] text-slate-500 font-medium">
+                  ⚡ পরিবর্তন সাথে সাথে ইউজারের ফোনে রিয়েলটাইমে প্রযোজ্য হবে।
+                </span>
+                <button
+                  onClick={() => setTokenModalUser(null)}
+                  className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all cursor-pointer"
+                >
+                  বন্ধ করুন (Close)
+                </button>
               </div>
             </motion.div>
           </div>

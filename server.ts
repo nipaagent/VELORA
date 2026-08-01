@@ -140,11 +140,16 @@ async function startServer() {
       const systemPrompt = `You are VELORA v2.7.
 Identity: High-speed technical entity. You are a unified 100% powerful brain.
 CRITICAL RULES:
-1. LANGUAGE: Respond in the SAME LANGUAGE used by the user.
-2. AESTHETICS: Use Markdown heavily to make your answers BEAUTIFUL. Use headings (##), bold text, lists, and tables where appropriate.
-3. STRUCTURE: Organize your thoughts clearly. Use emojis sparingly but effectively to highlight key points.
-4. MANDATORY THINKING: You MUST ALWAYS wrap your internal thought process inside <thinking>...</thinking> tags. Keep thinking BRIEF.
-5. FINAL ANSWER: Provide a comprehensive, professional, and elegant response after the thinking block.`;
+1. PROPORTIONAL & CONCISE RESPONSE (STRICT MANDATE):
+   - Answer ONLY as much as requested by the user.
+   - For simple greetings or casual queries (e.g., "হাই", "hello", "কি কর", "কেমন আছো", "তুমি কি করতে পারো"), reply directly in 1 to 2 short sentences without unnecessary wall of text, long introductions, or complex markdown formatting.
+   - Do NOT overthink or waste time on simple questions.
+   - For complex or technical prompts, provide well-structured, accurate, and helpful answers without fluff.
+2. MANDATORY THINKING TAGS:
+   - Wrap internal thought process inside <thinking>...</thinking> tags.
+   - For simple greetings/short questions, keep internal thinking extremely brief (1 short sentence) so responses return instantly.
+3. LANGUAGE: Respond in the exact SAME LANGUAGE used by the user (e.g., Bengali for Bengali, English for English).
+4. AESTHETICS: Use Markdown (headings, bold, lists) ONLY when helpful for technical/complex content. Keep simple answers clean and plain.`;
 
       const formattedMessages = [
         { role: "system", content: systemPrompt },
@@ -419,7 +424,8 @@ CRITICAL RULES:
           status: data[uid].status || (data[uid].isBanned ? "banned" : "approved"),
           isBanned: !!data[uid].isBanned || data[uid].status === "banned",
           apiAccessEnabled: data[uid].apiAccessEnabled ?? (data[uid].username === "admin" || data[uid].role === "admin"),
-          apiKey: data[uid].apiKey || ""
+          apiKey: data[uid].apiKey || "",
+          tokenState: data[uid].tokenState
         }));
         userList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         return res.json({ status: "success", users: userList });
@@ -440,7 +446,8 @@ CRITICAL RULES:
           status: data[uid].status || (data[uid].isBanned ? "banned" : "approved"),
           isBanned: !!data[uid].isBanned || data[uid].status === "banned",
           apiAccessEnabled: data[uid].apiAccessEnabled ?? (data[uid].username === "admin" || data[uid].role === "admin"),
-          apiKey: data[uid].apiKey || ""
+          apiKey: data[uid].apiKey || "",
+          tokenState: data[uid].tokenState
         }));
         userList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         return res.json({ status: "success", users: userList });
@@ -467,7 +474,8 @@ CRITICAL RULES:
                 status: uData.status || (uData.isBanned ? "banned" : "approved"),
                 isBanned: !!uData.isBanned || uData.status === "banned",
                 apiAccessEnabled: uData.apiAccessEnabled ?? (uData.username === "admin" || uData.role === "admin"),
-                apiKey: uData.apiKey || ""
+                apiKey: uData.apiKey || "",
+                tokenState: uData.tokenState
               };
             }
           } catch (e) {

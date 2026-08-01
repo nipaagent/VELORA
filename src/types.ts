@@ -13,6 +13,14 @@ export interface Chat {
   updatedAt: number;
 }
 
+export interface TokenState {
+  maxDailyTokens: number;
+  bonusTokens: number;
+  tokensUsedToday: number;
+  lastResetDate: string;
+  adsWatchedToday: number;
+}
+
 export interface UserProfile {
   uid: string;
   fullName: string;
@@ -24,4 +32,5 @@ export interface UserProfile {
   apiAccessEnabled?: boolean;
   apiKey?: string;
   createdAt: number;
+  tokenState?: TokenState;
 }

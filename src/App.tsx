@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, LogOut, User, Sparkles, BrainCircuit } from 'lucide-react';
-import { Chat, Message, UserProfile } from './types';
+import { Chat, Message, UserProfile, TokenState } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import UserAvatar from './components/UserAvatar';
+import TokenBadge from './components/TokenBadge';
+import TokenModal from './components/TokenModal';
 import MenuSlide from './animations/MenuSlide';
 import AuthModal from './components/AuthModal';
 import ProfilePage from './components/ProfilePage';
@@ -14,17 +16,62 @@ import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { ref, onValue, set, remove, get } from 'firebase/database';
 
+const getTodayStr = () => new Date().toISOString().split('T')[0];
+
+const defaultTokenState: TokenState = {
+  maxDailyTokens: 100000,
+  bonusTokens: 0,
+  tokensUsedToday: 0,
+  lastResetDate: getTodayStr(),
+  adsWatchedToday: 0
+};
+
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDeveloperOpen, setIsDeveloperOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+  const [tokenState, setTokenState] = useState<TokenState>(defaultTokenState);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [adLinks, setAdLinks] = useState<string[]>([
+    "https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"
+  ]);
+
+  // Sync ad links from Firebase RTDB in Realtime
+  useEffect(() => {
+    const adRef = ref(db, 'settings/ad_links');
+    const unsubscribeAd = onValue(adRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        if (Array.isArray(val) && val.length > 0) {
+          setAdLinks(val);
+        } else if (typeof val === 'object') {
+          const list = Object.values(val).filter(Boolean) as string[];
+          if (list.length > 0) setAdLinks(list);
+        }
+      }
+    });
+    return () => unsubscribeAd();
+  }, []);
+
+  const updateTokenState = async (newState: TokenState) => {
+    setTokenState(newState);
+    if (user) {
+      const localTokensKey = `velora-tokens-${user.uid}`;
+      localStorage.setItem(localTokensKey, JSON.stringify(newState));
+      try {
+        await set(ref(db, `users/${user.uid}/tokenState`), newState);
+      } catch (e) {
+        console.warn("Failed to update tokenState in RTDB:", e);
+      }
+    }
+  };
 
   // Monitor Firebase Authentication state
   useEffect(() => {
@@ -34,8 +81,37 @@ export default function App() {
         // Local storage cache keys per user
         const localProfileKey = `velora-profile-${currentUser.uid}`;
         const localChatsKey = `velora-chats-${currentUser.uid}`;
+        const localTokensKey = `velora-tokens-${currentUser.uid}`;
+        const todayStr = getTodayStr();
 
-        // Load local fallback data first
+        // Load local fallback tokens
+        const cachedTokens = localStorage.getItem(localTokensKey);
+        if (cachedTokens) {
+          try {
+            const parsed = JSON.parse(cachedTokens);
+            if (parsed.lastResetDate === todayStr) {
+              setTokenState(parsed);
+            } else {
+              setTokenState({
+                maxDailyTokens: 100000,
+                bonusTokens: 0,
+                tokensUsedToday: 0,
+                lastResetDate: todayStr,
+                adsWatchedToday: 0
+              });
+            }
+          } catch (e) {}
+        } else {
+          setTokenState({
+            maxDailyTokens: 100000,
+            bonusTokens: 0,
+            tokensUsedToday: 0,
+            lastResetDate: todayStr,
+            adsWatchedToday: 0
+          });
+        }
+
+        // Load local fallback profile data
         const cachedProfile = localStorage.getItem(localProfileKey);
         const fallbackName = currentUser.email ? currentUser.email.split('@')[0] : 'User';
         const defaultProfile: UserProfile = cachedProfile ? JSON.parse(cachedProfile) : {
@@ -71,6 +147,25 @@ export default function App() {
               }
               setUserProfile(prof);
               localStorage.setItem(localProfileKey, JSON.stringify(prof));
+
+              if (prof.tokenState) {
+                const todayStr = getTodayStr();
+                if (prof.tokenState.lastResetDate === todayStr) {
+                  setTokenState(prof.tokenState);
+                  localStorage.setItem(localTokensKey, JSON.stringify(prof.tokenState));
+                } else {
+                  const resetTokens: TokenState = {
+                    maxDailyTokens: 100000,
+                    bonusTokens: 0,
+                    tokensUsedToday: 0,
+                    lastResetDate: todayStr,
+                    adsWatchedToday: 0
+                  };
+                  setTokenState(resetTokens);
+                  localStorage.setItem(localTokensKey, JSON.stringify(resetTokens));
+                  set(ref(db, `users/${currentUser.uid}/tokenState`), resetTokens).catch(() => {});
+                }
+              }
             } else {
               // Ensure user profile exists in Firebase RTDB
               const cleanUsername = currentUser.email ? currentUser.email.split('@')[0] : currentUser.uid;
@@ -196,6 +291,25 @@ export default function App() {
 
   const processMessage = async (chatId: string, text: string, currentChatState: Chat) => {
     if (!user) return;
+
+    // Check token balance
+    const totalAvailable = (tokenState.maxDailyTokens || 100000) + (tokenState.bonusTokens || 0);
+    const remaining = Math.max(0, totalAvailable - (tokenState.tokensUsedToday || 0));
+
+    if (remaining <= 0) {
+      setIsTokenModalOpen(true);
+      alert("আপনার আজকের ১,০০,০০০ ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! ৫০,০০০ ফ্রি টোকেন পেতে একটি অ্যাড দেখুন।");
+      return;
+    }
+
+    // Deduct estimated token cost
+    const cost = Math.max(250, Math.round(text.length * 1.5));
+    const newUsed = (tokenState.tokensUsedToday || 0) + cost;
+    const updatedTokens: TokenState = {
+      ...tokenState,
+      tokensUsedToday: newUsed
+    };
+    updateTokenState(updatedTokens);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -561,6 +675,8 @@ export default function App() {
                 onDeleteChat={handleDeleteChat}
                 onClearAllChats={handleClearAllChats}
                 userProfile={userProfile}
+                tokenState={tokenState}
+                onOpenTokenModal={() => setIsTokenModalOpen(true)}
                 onSignOut={handleSignOut}
                 onOpenProfile={() => {
                   setIsProfileOpen(true);
@@ -598,6 +714,8 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 flex justify-end items-center gap-2">
+                  <TokenBadge tokenState={tokenState} onClick={() => setIsTokenModalOpen(true)} />
+
                   {userProfile && (
                     <button 
                       onClick={() => setIsProfileOpen(true)}
@@ -662,6 +780,22 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Token & Ad Modal */}
+      <TokenModal 
+        isOpen={isTokenModalOpen}
+        onClose={() => setIsTokenModalOpen(false)}
+        tokenState={tokenState}
+        adLinks={adLinks}
+        onRewardClaimed={(bonusAmount) => {
+          const updated: TokenState = {
+            ...tokenState,
+            bonusTokens: (tokenState.bonusTokens || 0) + bonusAmount,
+            adsWatchedToday: (tokenState.adsWatchedToday || 0) + 1
+          };
+          updateTokenState(updated);
+        }}
+      />
     </div>
   );
 }
