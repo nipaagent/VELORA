@@ -3,6 +3,7 @@ import { Plus, MessageSquare, Trash2, LogOut, User, Sparkles, Code2, ShieldCheck
 import { Chat, UserProfile } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import UserAvatar from './UserAvatar';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -146,9 +147,7 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
                 className="flex items-center gap-2 overflow-hidden text-left hover:bg-white p-1.5 -ml-1 rounded-xl transition-colors flex-1 group border border-transparent hover:border-slate-200/60"
                 title="Profile Settings"
               >
-                <div className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center shrink-0 font-bold text-xs shadow-2xs">
-                  {userProfile.fullName ? userProfile.fullName.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
-                </div>
+                <UserAvatar name={userProfile.fullName || userProfile.username} size="sm" />
                 <div className="overflow-hidden leading-tight flex-1">
                   <div className="text-[11px] font-black text-slate-900 truncate">{userProfile.fullName || userProfile.username}</div>
                   <div className="text-[9px] text-slate-500 truncate font-bold uppercase tracking-wider">@{userProfile.username}</div>

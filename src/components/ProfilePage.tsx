@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu } from 'lucide-react';
 import { UserProfile } from '../types';
 import { auth, db } from '../lib/firebase';
+import UserAvatar from './UserAvatar';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { ref, set } from 'firebase/database';
 import { motion } from 'motion/react';
@@ -191,12 +192,7 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
           }}
           className="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-100 flex items-center gap-4"
         >
-          <motion.div 
-            whileHover={{ scale: 1.05, rotate: 2 }}
-            className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xl sm:text-2xl shadow-sm shrink-0"
-          >
-            {userProfile.fullName ? userProfile.fullName.charAt(0).toUpperCase() : 'V'}
-          </motion.div>
+          <UserAvatar name={userProfile.fullName || userProfile.username} size="lg" />
 
           <div className="space-y-0.5 flex-1 min-w-0">
             <div className="flex items-center gap-2">

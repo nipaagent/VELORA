@@ -260,7 +260,7 @@ const openai = new OpenAI({
 
 async function main() {
   const completion = await openai.chat.completions.create({
-    model: 'claude run',
+    model: 'claude-3-5-sonnet',
     messages: [
       { role: 'user', content: 'হ্যালো, Velora Cloud Gateway!' }
     ]
@@ -280,7 +280,7 @@ headers = {
     "x-api-key": "${apiKey || 'YOUR_VELORA_API_KEY'}"
 }
 payload = {
-    "model": "claude run",
+    "model": "claude-3-5-sonnet",
     "messages": [
         {"role": "user", "content": "হ্যালো, Velora Cloud Gateway!"}
     ]
@@ -293,7 +293,7 @@ print(response.json())`,
 curl -X POST "${gwCompletionsUrl}" \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${apiKey || 'YOUR_VELORA_API_KEY'}" \\
-  -d '{"model": "claude run", "messages": [{"role": "user", "content": "হ্যালো, Velora Cloud Gateway!"}]}'`
+  -d '{"model": "claude-3-5-sonnet", "messages": [{"role": "user", "content": "হ্যালো, Velora Cloud Gateway!"}]}'`
   };
 
   // Determine API Access status from live profile or role
@@ -763,11 +763,11 @@ curl -X POST "${domain}/api/v1/chat" \\
                     </span>
                   </div>
                   <div className="flex items-center justify-between bg-slate-950 border border-emerald-500/30 rounded-xl p-3 font-mono text-sm text-emerald-400 ring-1 ring-emerald-500/10 shadow-lg">
-                    <span className="font-black tracking-wider">claude run</span>
+                    <span className="font-black tracking-wider">claude-3-5-sonnet</span>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => copyText('claude run', setCopiedCode)}
+                      onClick={() => copyText('claude-3-5-sonnet', setCopiedCode)}
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-md"
                     >
                       {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}

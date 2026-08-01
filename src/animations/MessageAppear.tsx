@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'motion/react';
 
 interface Props {
   children: React.ReactNode;
@@ -7,19 +6,10 @@ interface Props {
   className?: string;
 }
 
-export default function MessageAppear({ children, isUser = false, className }: Props) {
+export default function MessageAppear({ children, className }: Props) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ 
-        duration: 0.5, 
-        ease: [0.16, 1, 0.3, 1],
-        scale: { type: 'spring', stiffness: 200, damping: 20 }
-      }}
-      className={className}
-    >
+    <div className={`transition-all duration-200 ease-out ${className || ''}`}>
       {children}
-    </motion.div>
+    </div>
   );
 }

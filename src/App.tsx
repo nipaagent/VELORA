@@ -4,6 +4,7 @@ import { Chat, Message, UserProfile } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
+import UserAvatar from './components/UserAvatar';
 import MenuSlide from './animations/MenuSlide';
 import AuthModal from './components/AuthModal';
 import ProfilePage from './components/ProfilePage';
@@ -580,12 +581,12 @@ export default function App() {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 bg-white">
-              {/* Main Header (Single Header across the App) */}
-              <header className="h-16 flex items-center px-6 bg-white border-b border-slate-100 shadow-sm shrink-0 z-10 relative">
+              {/* Main Header */}
+              <header className="h-14 border-b border-slate-200/80 bg-white px-5 flex items-center shrink-0 z-10 relative shadow-xs">
                 <div className="flex-1 flex justify-start items-center gap-2">
                   <button 
                     onClick={() => setIsSidebarOpen(true)}
-                    className="p-2.5 -ml-2 rounded-xl hover:bg-slate-50 text-slate-600 transition-all border border-transparent hover:border-slate-200 active:scale-95 outline-none"
+                    className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-700 transition-all active:scale-95 outline-none"
                     aria-label="Open menu"
                   >
                     <Menu className="w-5 h-5" />
@@ -593,19 +594,17 @@ export default function App() {
                 </div>
                 
                 <div className="flex items-center justify-center gap-2 flex-1">
-                  <h1 className="text-base font-black text-slate-900 tracking-[0.2em] uppercase">VELORA</h1>
+                  <h1 className="text-sm font-black text-slate-900 tracking-[0.2em] uppercase">VELORA</h1>
                 </div>
 
                 <div className="flex-1 flex justify-end items-center gap-2">
                   {userProfile && (
                     <button 
                       onClick={() => setIsProfileOpen(true)}
-                      className="p-1 pl-1 pr-3 bg-white hover:bg-slate-100 transition-all rounded-full border border-slate-200/80 text-xs font-semibold text-slate-800 outline-none shadow-2xs group shrink-0 flex items-center gap-2"
+                      className="p-1 pl-1 pr-3 bg-white hover:bg-slate-50 transition-all rounded-full border border-slate-200/90 text-xs font-semibold text-slate-800 outline-none shadow-2xs group shrink-0 flex items-center gap-2"
                       title="Profile Settings"
                     >
-                      <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 aspect-square overflow-hidden shadow-2xs">
-                        {userProfile.fullName ? userProfile.fullName.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
-                      </div>
+                      <UserAvatar name={userProfile.fullName || userProfile.username} size="sm" />
                       <span className="hidden sm:inline text-xs font-semibold text-slate-800 truncate max-w-[120px]">
                         {userProfile.fullName || userProfile.username}
                       </span>
@@ -653,6 +652,7 @@ export default function App() {
                         onSendMessage={sendMessage} 
                         onNewChat={createNewChat}
                         isLoading={isLoading}
+                        userProfile={userProfile}
                       />
                     </motion.div>
                   )}

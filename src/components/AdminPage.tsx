@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { ref, onValue, set, remove, update } from 'firebase/database';
 import { generateUniqueVeloraKey, cn } from '../lib/utils';
+import UserAvatar from './UserAvatar';
 
 interface AdminUser {
   uid: string;
@@ -646,11 +647,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                     >
                       
                       {/* User Details */}
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-extrabold text-xs text-slate-900 truncate">
-                            {user.fullName}
-                          </span>
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <UserAvatar name={user.fullName || user.username} size="md" />
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-xs text-slate-900 truncate">
+                              {user.fullName}
+                            </span>
                           <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md font-mono">
                             @{user.username}
                           </span>
@@ -699,6 +702,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                         </div>
                       </div>
                     </div>
+                  </div>
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 shrink-0 flex-wrap">

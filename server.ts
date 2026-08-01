@@ -88,12 +88,8 @@ async function startServer() {
 
       let gatewayUrl = process.env.GATEWAY_URL || "https://api.naga.ac/v1/chat/completions";
       let requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
-      let modelName = "gpt-3.5-turbo";
-
-      // If client explicitly sent "claude run", we map it to a high-quality model
-      if (modelFromClient === "claude run" || modelFromClient?.includes("claude")) {
-        modelName = "claude-3-5-sonnet"; 
-      }
+      
+      let modelName = "nemotron-3-ultra-550b-a55b:free";
 
       const availableKeys = getApiKeys();
       if (availableKeys.length === 0) {
@@ -104,14 +100,10 @@ async function startServer() {
       const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
       requestHeaders["Authorization"] = `Bearer ${apiKey}`;
       
-      // Final internal model mapping if still "claude run"
-      let finalModel = modelName;
-      if (finalModel === "claude run" || finalModel?.includes("claude")) {
-        finalModel = "claude-3-5-sonnet";
-      }
+      console.log(`[Gateway] Processing: ${req.method} ${req.path} | Client Model: ${modelFromClient || 'default'} -> Upstream Model: ${modelName}`);
 
       // Track usage asynchronously with model info
-      trackApiUsage(apiKey, finalModel).catch(e => console.error("Async track error:", e));
+      trackApiUsage(apiKey, modelFromClient || modelName).catch(e => console.error("Async track error:", e));
 
       // Determine if streaming is requested
       const isStreamRequested = req.body?.stream === true || req.query?.stream === 'true';
@@ -171,12 +163,54 @@ CRITICAL RULES:
           res.end();
         }
         return;
-      } else if (!response.ok) {
+      } else {
         const errorText = await response.text();
         console.error("Gateway API Error Response:", errorText);
-        return res.status(response.status).json({ 
-          error: `Gateway API Error: ${errorText}` 
-        });
+        
+        if (isStreamRequested) {
+          res.setHeader("Content-Type", "text/event-stream");
+          res.setHeader("Cache-Control", "no-cache");
+          res.setHeader("Connection", "keep-alive");
+          
+          let userErrMsg = "**ত্রুটি:** গেটওয়ে সার্ভিস সাময়িকভাবে ব্যস্ত। দয়া করে আবার চেষ্টা করুন।";
+          if (errorText.includes("rate_limit_exceeded")) {
+            userErrMsg = "**সীমা অতিক্রম (Rate Limit Reached):** এআই সার্ভিস প্রোভাইডারের দৈনিক সীমা পূর্ণ হয়েছে। দয়া করে কিছু সময় পর আবার চেষ্টা করুন।";
+          }
+
+          const errData = JSON.stringify({
+            id: `chatcmpl-err-${Date.now()}`,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: modelFromClient || "claude-3-5-sonnet",
+            choices: [{
+              index: 0,
+              delta: { content: `\n\n${userErrMsg}` },
+              finish_reason: "stop"
+            }]
+          });
+          res.write(`data: ${errData}\n\ndata: [DONE]\n\n`);
+          return res.end();
+        } else {
+          let userErrMsg = "**ত্রুটি:** গেটওয়ে সার্ভিস সাময়িকভাবে ব্যস্ত। দয়া করে আবার চেষ্টা করুন।";
+          if (errorText.includes("rate_limit_exceeded")) {
+            userErrMsg = "**সীমা অতিক্রম (Rate Limit Reached):** এআই সার্ভিস প্রোভাইডারের দৈনিক সীমা পূর্ণ হয়েছে। দয়া করে কিছু সময় পর আবার চেষ্টা করুন।";
+          }
+
+          return res.status(200).json({ 
+            id: `chatcmpl-err-${Date.now()}`,
+            object: "chat.completion",
+            created: Math.floor(Date.now() / 1000),
+            model: modelFromClient || "claude-3-5-sonnet",
+            choices: [{
+              index: 0,
+              message: {
+                role: "assistant",
+                content: userErrMsg
+              },
+              finish_reason: "stop"
+            }]
+          });
+        }
       }
       return res.status(500).json({ error: "Failed to read response body from upstream." });
     } catch (error: any) {
@@ -187,29 +221,32 @@ CRITICAL RULES:
 
   const handleModelsRequest = (req: express.Request, res: express.Response) => {
     console.log(`[Gateway] Discovery request: ${req.method} ${req.url}`);
+    const now = Math.floor(Date.now() / 1000);
+    const defaultPerm = [{
+      id: "modelperm-native",
+      object: "model_permission",
+      created: now,
+      allow_create_engine: true,
+      allow_sampling: true,
+      allow_logprobs: true,
+      allow_search_indices: false,
+      allow_view: true,
+      allow_fine_tuning: false,
+      organization: "*",
+      group: null,
+      is_blocking: false
+    }];
+
     res.json({
       object: "list",
       data: [
-        {
-          id: "claude run",
-          object: "model",
-          created: Math.floor(Date.now() / 1000),
-          owned_by: "velora",
-          permission: [{
-            id: "modelperm-native",
-            object: "model_permission",
-            created: Math.floor(Date.now() / 1000),
-            allow_create_engine: true,
-            allow_sampling: true,
-            allow_logprobs: true,
-            allow_search_indices: false,
-            allow_view: true,
-            allow_fine_tuning: false,
-            organization: "*",
-            group: null,
-            is_blocking: false
-          }]
-        }
+        { id: "claude-3-5-sonnet", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
+        { id: "claude-3-5-sonnet-20240620", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
+        { id: "claude run", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
+        { id: "nemotron-3-ultra-550b-a55b:free", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
+        { id: "gpt-4o", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
+        { id: "gpt-4o-mini", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
+        { id: "gpt-3.5-turbo", object: "model", created: now, owned_by: "velora", permission: defaultPerm }
       ]
     });
   };
@@ -239,9 +276,10 @@ CRITICAL RULES:
     }
 
     // Match specific model retrieval
-    if (path.includes("/models/claude")) {
+    if (path.includes("/models/")) {
+      const requestedId = path.split("/models/")[1] || "claude-3-5-sonnet";
       return res.json({
-        id: "claude run",
+        id: requestedId,
         object: "model",
         created: Math.floor(Date.now() / 1000),
         owned_by: "velora"
