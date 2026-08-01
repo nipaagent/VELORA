@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu } from 'lucide-react';
-import { UserProfile } from '../types';
+import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Globe, Activity } from 'lucide-react';
+import { UserProfile, GatewayConfig } from '../types';
 import { auth, db } from '../lib/firebase';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { ref, set } from 'firebase/database';
@@ -26,9 +26,30 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
   const [passSuccess, setPassSuccess] = useState('');
   const [passError, setPassError] = useState('');
 
+  // Gateway specific states
+  const [gwEnabled, setGwEnabled] = useState(false);
+  const [gwBaseUrl, setGwBaseUrl] = useState('');
+  const [gwApiKey, setGwApiKey] = useState('');
+  const [gwAuthScheme, setGwAuthScheme] = useState<'x-api-key' | 'Bearer' | 'x-goog-api-key'>('x-api-key');
+  const [gwModel, setGwModel] = useState('');
+  
+  const [savingGw, setSavingGw] = useState(false);
+  const [gwSuccess, setGwSuccess] = useState('');
+  const [gwError, setGwError] = useState('');
+  
+  const [testingGw, setTestingGw] = useState(false);
+  const [testStatus, setTestStatus] = useState<{ success: boolean; message: string } | null>(null);
+
   useEffect(() => {
     if (userProfile) {
       setFullName(userProfile.fullName || '');
+      if (userProfile.gatewayConfig) {
+        setGwEnabled(userProfile.gatewayConfig.enabled);
+        setGwBaseUrl(userProfile.gatewayConfig.baseUrl || '');
+        setGwApiKey(userProfile.gatewayConfig.apiKey || '');
+        setGwAuthScheme(userProfile.gatewayConfig.authScheme || 'x-api-key');
+        setGwModel(userProfile.gatewayConfig.model || '');
+      }
     }
   }, [userProfile]);
 
@@ -404,6 +425,116 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
               >
                 {updatingPass ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                 Update Password
+              </button>
+            </div>
+          </section>
+
+          {/* Gateway Settings Section */}
+          <section className="bg-white rounded-2xl p-5 border border-gray-200/90 shadow-sm space-y-4 md:col-span-2">
+            <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-gray-900 font-bold text-sm">
+                <Globe className="w-4 h-4 text-indigo-600" />
+                <span>External Gateway Configuration</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer" 
+                  checked={gwEnabled}
+                  onChange={(e) => setGwEnabled(e.target.checked)}
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {gwSuccess && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs flex items-center gap-2 font-medium">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>{gwSuccess}</span>
+              </div>
+            )}
+
+            {gwError && (
+              <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{gwError}</span>
+              </div>
+            )}
+
+            <form id="gwForm" onSubmit={handleSaveGateway} className={`space-y-4 transition-opacity ${gwEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Gateway Base URL</label>
+                  <input
+                    type="text"
+                    value={gwBaseUrl}
+                    onChange={(e) => setGwBaseUrl(e.target.value)}
+                    placeholder="https://api.openai.com/v1"
+                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">API Model</label>
+                  <input
+                    type="text"
+                    value={gwModel}
+                    onChange={(e) => setGwModel(e.target.value)}
+                    placeholder="gpt-3.5-turbo"
+                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Auth Scheme</label>
+                  <select
+                    value={gwAuthScheme}
+                    onChange={(e) => setGwAuthScheme(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 outline-none"
+                  >
+                    <option value="x-api-key">x-api-key (Naga Style)</option>
+                    <option value="Bearer">Bearer (OpenAI Style)</option>
+                    <option value="x-goog-api-key">x-goog-api-key (Gemini Style)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">API Key</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={gwApiKey}
+                      onChange={(e) => setGwApiKey(e.target.value)}
+                      placeholder="••••••••••••••••"
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {testStatus && (
+                <div className={`p-2.5 rounded-xl text-[11px] font-medium border flex items-start gap-2 ${testStatus.success ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'}`}>
+                  {testStatus.success ? <CheckCircle2 className="w-4 h-4 mt-0.5" /> : <AlertCircle className="w-4 h-4 mt-0.5" />}
+                  <div className="break-all">{testStatus.message}</div>
+                </div>
+              )}
+            </form>
+
+            <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row gap-2 justify-end">
+              <button
+                type="button"
+                onClick={handleTestGateway}
+                disabled={testingGw || !gwBaseUrl || !gwEnabled}
+                className="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {testingGw ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                Test Connection
+              </button>
+              <button
+                type="submit"
+                form="gwForm"
+                disabled={savingGw}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {savingGw ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save Gateway
               </button>
             </div>
           </section>

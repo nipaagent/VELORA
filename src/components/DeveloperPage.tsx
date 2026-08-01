@@ -239,7 +239,7 @@ const openai = new OpenAI({
 
 async function main() {
   const completion = await openai.chat.completions.create({
-    model: 'velora-v2.7',
+    model: 'claude run',
     messages: [
       { role: 'user', content: 'হ্যালো, Velora Cloud Gateway!' }
     ]
@@ -259,6 +259,7 @@ headers = {
     "x-api-key": "${apiKey || 'YOUR_VELORA_API_KEY'}"
 }
 payload = {
+    "model": "claude run",
     "messages": [
         {"role": "user", "content": "হ্যালো, Velora Cloud Gateway!"}
     ]
@@ -271,7 +272,7 @@ print(response.json())`,
 curl -X POST "${gwCompletionsUrl}" \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${apiKey || 'YOUR_VELORA_API_KEY'}" \\
-  -d '{"messages": [{"role": "user", "content": "হ্যালো, Velora Cloud Gateway!"}]}'`
+  -d '{"model": "claude run", "messages": [{"role": "user", "content": "হ্যালো, Velora Cloud Gateway!"}]}'`
   };
 
   // Determine API Access status from live profile or role

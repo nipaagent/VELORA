@@ -44,6 +44,7 @@ async function startServer() {
       let message = req.body?.message || req.query?.q || req.query?.message;
       let history = req.body?.history || [];
       let messages = req.body?.messages;
+      let modelFromClient = req.body?.model;
 
       // If developer sent 'messages' array (OpenAI format), parse it
       if (!message && Array.isArray(messages) && messages.length > 0) {
@@ -71,6 +72,11 @@ async function startServer() {
       let gatewayUrl = "https://api.naga.ac/v1/chat/completions";
       let requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
       let modelName = "nemotron-3-ultra-550b-a55b:free";
+
+      // If client explicitly sent "claude run", we map it to a high-quality model
+      if (modelFromClient === "claude run") {
+        modelName = "claude-3-5-sonnet"; 
+      }
 
       if (customGateway && customGateway.enabled !== false && customGateway.baseUrl) {
         let cleanBase = customGateway.baseUrl.trim().replace(/\/+$/, "");
@@ -107,6 +113,11 @@ async function startServer() {
         }
         const apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
         requestHeaders["Authorization"] = `Bearer ${apiKey}`;
+      }
+
+      // Final internal model mapping if still "claude run"
+      if (modelName === "claude run") {
+        modelName = "claude-3-5-sonnet";
       }
 
       const systemPrompt = `You are VELORA v2.7.
@@ -213,23 +224,37 @@ CRITICAL RULES:
     });
   };
 
-  // 1. COMPLETIONS (OpenAI Style): Catch any path ending in completions
-  app.all(/.*\/chat\/completions$/, handleChatRequest);
-  
-  // 2. MESSAGES (Anthropic Style): Catch any path ending in messages (Fix for 404 /api/v1/v1/messages)
-  app.all(/.*\/messages$/, handleChatRequest);
-  
-  // 3. MODELS: Catch any path ending in models
-  app.all(/.*\/models$/, handleModelsRequest);
+  // Resilient Path Matcher Middleware for Gateway
+  app.use((req, res, next) => {
+    const path = req.path;
+    
+    // Skip internal API routes
+    if (path.startsWith('/api/admin') || path.startsWith('/api/gateway/test')) {
+      return next();
+    }
 
-  // 4. MODEL SPECIFIC: Catch specific model IDs
-  app.get(/.*\/models\/claude\srun$/, (req, res) => {
-    res.json({
-      id: "claude run",
-      object: "model",
-      created: Math.floor(Date.now() / 1000),
-      owned_by: "velora"
-    });
+    // Match OpenAI or Anthropic style endpoints anywhere in the path
+    if (path.endsWith("/chat/completions") || path.endsWith("/messages") || path.endsWith("/chat")) {
+      console.log(`[Gateway] Intercepted Chat Request: ${req.method} ${path}`);
+      return handleChatRequest(req, res);
+    }
+
+    if (path.endsWith("/models")) {
+      console.log(`[Gateway] Intercepted Models Request: ${req.method} ${path}`);
+      return handleModelsRequest(req, res);
+    }
+
+    // Match specific model retrieval
+    if (path.includes("/models/claude") || path.includes("/models/claude%20run")) {
+      return res.json({
+        id: "claude run",
+        object: "model",
+        created: Math.floor(Date.now() / 1000),
+        owned_by: "velora"
+      });
+    }
+
+    next();
   });
 
   // Native explicit routes as fallback
