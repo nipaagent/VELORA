@@ -86,7 +86,7 @@ async function startServer() {
         return res.status(400).json({ error: "Message parameter 'q' or 'message' is required." });
       }
 
-      let gatewayUrl = "https://api.naga.ac/v1/chat/completions";
+      let gatewayUrl = process.env.GATEWAY_URL || "https://saifu-gateway.onrender.com/v1/chat/completions";
       let requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
       let modelName = "nemotron-3-ultra-550b-a55b:free";
 
@@ -97,7 +97,7 @@ async function startServer() {
 
       const availableKeys = getApiKeys();
       if (availableKeys.length === 0) {
-        return res.status(200).json({ 
+        return res.status(401).json({ 
           error: "No Naga API key found. Please set NAGA_API_KEY in environment variables." 
         });
       }
