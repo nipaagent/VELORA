@@ -232,7 +232,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: text, 
-          history: currentChatState.messages.map(h => ({ role: h.role, text: h.text }))
+          history: currentChatState.messages.map(h => ({ role: h.role, text: h.text })),
+          stream: true
         }),
       });
       
@@ -279,8 +280,10 @@ export default function App() {
               
               try {
                 const data = JSON.parse(dataStr);
-                if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
-                  fullResponse += data.choices[0].delta.content;
+                const content = data.choices?.[0]?.delta?.content || data.choices?.[0]?.message?.content || data.text || '';
+                
+                if (content) {
+                  fullResponse += content;
                   
                   let currentText = fullResponse;
                   let currentThinking = '';
@@ -337,6 +340,82 @@ export default function App() {
           return prev;
         });
 
+      } else if (response.ok) {
+        let data: any = {};
+        try {
+          if (contentType.includes('application/json')) {
+            data = await response.json();
+          } else {
+            const rawText = await response.text();
+            try {
+              data = JSON.parse(rawText);
+            } catch {
+              data = { content: rawText };
+            }
+          }
+        } catch (parseErr) {
+          data = { error: 'Failed to process response format.' };
+        }
+        
+        if (data.error) {
+          console.error("Error from API:", data.error);
+          const errorMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'model',
+            text: `**Error:** ${data.error}`,
+            timestamp: Date.now(),
+          };
+          setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...c.messages, errorMessage] } : c));
+        } else {
+          // Handle successful JSON response
+          let content = '';
+          if (data.choices && data.choices[0]?.message?.content) {
+            content = data.choices[0].message.content;
+          } else if (data.text) {
+            content = data.text;
+          } else if (data.content) {
+            content = data.content;
+          } else {
+            content = JSON.stringify(data);
+          }
+
+          let currentText = content;
+          let currentThinking = '';
+          
+          const thinkingStart = currentText.indexOf('<thinking>');
+          const thinkStart = currentText.indexOf('<think>');
+          const startIdx = thinkingStart !== -1 ? thinkingStart : (thinkStart !== -1 ? thinkStart : -1);
+          
+          if (startIdx !== -1) {
+            const endIdx = currentText.indexOf('</thinking>');
+            const endIdx2 = currentText.indexOf('</think>');
+            const actualEndIdx = endIdx !== -1 ? endIdx : (endIdx2 !== -1 ? endIdx2 : -1);
+            
+            if (actualEndIdx !== -1) {
+              const offset = endIdx !== -1 ? 11 : 8;
+              const startOffset = thinkingStart !== -1 ? 10 : 7;
+              currentThinking = currentText.substring(startIdx + startOffset, actualEndIdx).trim();
+              currentText = currentText.substring(0, startIdx) + currentText.substring(actualEndIdx + offset);
+            }
+          }
+
+          const modelMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'model',
+            text: currentText.trim(),
+            thinking: currentThinking,
+            timestamp: Date.now(),
+          };
+
+          setChats(prev => prev.map(c => {
+            if (c.id === chatId) {
+              const updatedChat = { ...c, messages: [...c.messages, modelMessage], updatedAt: Date.now() };
+              if (user) set(ref(db, `chats/${user.uid}/${chatId}`), updatedChat).catch(console.warn);
+              return updatedChat;
+            }
+            return c;
+          }));
+        }
       } else {
         let data: any = {};
         try {

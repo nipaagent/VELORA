@@ -147,6 +147,9 @@ CRITICAL RULES:
       });
 
       if (response.ok && response.body) {
+        const contentType = response.headers.get("content-type") || "";
+        const isActuallyStream = contentType.includes("text/event-stream") || contentType.includes("application/x-ndjson");
+
         if (isStreamRequested) {
           res.setHeader('Content-Type', 'text/event-stream');
           res.setHeader('Cache-Control', 'no-cache');
@@ -161,13 +164,42 @@ CRITICAL RULES:
           }
           return res.end();
         } else {
-          const contentType = response.headers.get("content-type") || "";
           if (contentType.includes("application/json")) {
             const data = await response.json();
             return res.status(200).json(data);
           } else {
             const text = await response.text();
-            // Wrap plain text in OpenAI style response for better compatibility
+            
+            // If it looks like a stream but we wanted JSON, try to extract the content
+            if (text.includes('data:')) {
+              const lines = text.split('\n').filter(l => l.trim().startsWith('data:'));
+              let combined = '';
+              for (const line of lines) {
+                const raw = line.replace(/^data:\s*/, '').trim();
+                if (raw === '[DONE]') continue;
+                try {
+                  const parsed = JSON.parse(raw);
+                  const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.message?.content || parsed.text || '';
+                  combined += content;
+                } catch (e) { /* skip */ }
+              }
+              
+              if (combined) {
+                return res.status(200).json({
+                  id: "chatcmpl-" + Date.now(),
+                  object: "chat.completion",
+                  created: Math.floor(Date.now() / 1000),
+                  model: modelName,
+                  choices: [{
+                    index: 0,
+                    message: { role: "assistant", content: combined },
+                    finish_reason: "stop"
+                  }]
+                });
+              }
+            }
+
+            // Fallback for plain text
             return res.status(200).json({
               id: "chatcmpl-" + Date.now(),
               object: "chat.completion",

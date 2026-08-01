@@ -103,7 +103,7 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
             </motion.div>
           </div>
         ) : (
-          <div className="max-w-6xl mx-auto space-y-6 w-full pb-8">
+          <div className="w-full px-4 sm:px-8 space-y-6 pb-8">
             <AnimatePresence mode="popLayout">
               {messages.map((msg, idx) => (
                 <MessageAppear 
@@ -189,7 +189,7 @@ export default function ChatArea({ chat, onSendMessage, onNewChat, isLoading }: 
         layout
         className="p-3 sm:pb-6 sm:px-8 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0"
       >
-        <div className="max-w-6xl mx-auto relative">
+        <div className="w-full px-4 sm:px-8 relative">
           <AnimatePresence>
             {isLoading && (
               <motion.div 
