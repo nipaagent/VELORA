@@ -1,7 +1,7 @@
 import React from 'react';
 import { Zap, Sparkles, AlertTriangle } from 'lucide-react';
 import { TokenState } from '../types';
-import { cn } from '../lib/utils';
+import { cn, formatTokenCount } from '../lib/utils';
 import { motion } from 'motion/react';
 
 interface TokenBadgeProps {
@@ -11,7 +11,7 @@ interface TokenBadgeProps {
 }
 
 export default function TokenBadge({ tokenState, onClick, compact = false }: TokenBadgeProps) {
-  const totalLimit = (tokenState.maxDailyTokens || 100000) + (tokenState.bonusTokens || 0);
+  const totalLimit = (tokenState.maxDailyTokens || 37000) + (tokenState.bonusTokens || 0);
   const used = tokenState.tokensUsedToday || 0;
   const remaining = Math.max(0, totalLimit - used);
   const percentage = Math.min(100, Math.max(0, Math.round((remaining / totalLimit) * 100)));
@@ -33,7 +33,7 @@ export default function TokenBadge({ tokenState, onClick, compact = false }: Tok
             ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
             : "bg-indigo-50/90 text-indigo-700 border-indigo-200/80 hover:bg-indigo-100"
       )}
-      title={`টোকেন বাকি: ${remaining.toLocaleString()} / ${totalLimit.toLocaleString()} (${percentage}%) - বিস্তারিত দেখতে ক্লিক করুন`}
+      title={`টোকেন বাকি: ${formatTokenCount(remaining)} / ${formatTokenCount(totalLimit)} (${percentage}%) - বিস্তারিত দেখতে ক্লিক করুন`}
     >
       <Zap className={cn(
         "w-3.5 h-3.5 shrink-0 transition-transform group-hover:scale-110",
@@ -47,7 +47,7 @@ export default function TokenBadge({ tokenState, onClick, compact = false }: Tok
         
         {!compact && (
           <span className="text-[10px] opacity-80 hidden sm:inline font-mono">
-            ({remaining >= 1000 ? `${Math.round(remaining / 1000)}k` : remaining})
+            ({formatTokenCount(remaining)})
           </span>
         )}
       </div>

@@ -5,6 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function formatTokenCount(num: number): string {
+  if (num === undefined || num === null || isNaN(num)) return "0";
+  if (num >= 1_000_000) {
+    const val = num / 1_000_000;
+    return val % 1 === 0 ? `${val}M` : `${val.toFixed(1).replace(/\.0$/, '')}M`;
+  }
+  if (num >= 1_000) {
+    const val = num / 1_000;
+    return val % 1 === 0 ? `${val}k` : `${val.toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  return num.toString();
+}
+
 export const getSequentialSuffix = (index: number): string => {
   let result = '';
   let n = index;

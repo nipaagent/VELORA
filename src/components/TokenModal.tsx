@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Zap, Tv, CheckCircle2, Sparkles, AlertCircle, PlayCircle, Loader2, Award, Gift, ExternalLink, RefreshCw } from 'lucide-react';
 import { TokenState } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, formatTokenCount } from '../lib/utils';
 
 interface TokenModalProps {
   isOpen: boolean;
@@ -28,7 +28,7 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
   const activeAdLinks = (adLinks && adLinks.length > 0) ? adLinks : [DEFAULT_AD_LINK];
   const activeAdUrl = activeAdLinks[currentAdIndex % activeAdLinks.length] || DEFAULT_AD_LINK;
 
-  const totalLimit = (tokenState.maxDailyTokens || 100000) + (tokenState.bonusTokens || 0);
+  const totalLimit = (tokenState.maxDailyTokens || 50000) + (tokenState.bonusTokens || 0);
   const used = tokenState.tokensUsedToday || 0;
   const remaining = Math.max(0, totalLimit - used);
   const percentage = Math.min(100, Math.max(0, Math.round((remaining / totalLimit) * 100)));
@@ -92,7 +92,7 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
       alert("অ্যাডের সমস্যা হয়েছে বা এড পুরোপুরি লোড হতে পারেনি! দয়া করে পুনরায় অ্যাড চালু করুন।");
       return;
     }
-    onRewardClaimed(50000); // Grant +50,000 bonus tokens
+    onRewardClaimed(30000); // Grant +30,000 bonus tokens
     setClaimedSuccess(true);
     setIsWatchingAd(false);
     
@@ -120,7 +120,7 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
               </div>
               <div>
                 <h3 className="font-black text-slate-900 text-base leading-snug">টোকেন ও প্রিমিয়াম ব্যালেন্স</h3>
-                <p className="text-[11px] font-semibold text-slate-500">প্রতিদিন ১,০০,০০০ ফ্রি টোকেন ও অ্যাড দেখে +৫০,০০০ ফ্রি টোকেন</p>
+                <p className="text-[11px] font-semibold text-slate-500">প্রতিদিন {formatTokenCount(50000)} ফ্রি টোকেন ও অ্যাড দেখে +{formatTokenCount(30000)} ফ্রি টোকেন</p>
               </div>
             </div>
             <button
@@ -142,7 +142,7 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                 <div>
                   <div className="font-black text-sm">অভিনন্দন! 🎉</div>
-                  <div>আপনার একাউন্টে ৫০,০০০ বোনাস টোকেন সফলভাবে যুক্ত হয়েছে!</div>
+                  <div>আপনার একাউন্টে ৩০,০০০ বোনাস টোকেন সফলভাবে যুক্ত হয়েছে!</div>
                 </div>
               </motion.div>
             )}
@@ -168,10 +168,10 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
 
               <div className="flex items-baseline gap-2 mb-2.5">
                 <span className="text-3xl font-black tabular-nums tracking-tight">
-                  {remaining.toLocaleString()}
+                  {formatTokenCount(remaining)}
                 </span>
                 <span className="text-xs text-slate-400 font-bold">
-                  / {totalLimit.toLocaleString()} টোকেন
+                  / {formatTokenCount(totalLimit)} টোকেন
                 </span>
               </div>
 
@@ -193,11 +193,11 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
               <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-800/80 text-slate-300">
                 <div>
                   <span className="text-slate-400 block text-[10px]">ফ্রি ডেইলি লিমিট:</span>
-                  <span className="font-extrabold">{tokenState.maxDailyTokens?.toLocaleString() || '100,000'}</span>
+                  <span className="font-extrabold">{formatTokenCount(tokenState.maxDailyTokens || 50000)}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px]">অ্যাড বোনাস অর্জিত:</span>
-                  <span className="font-extrabold text-emerald-400">+{tokenState.bonusTokens?.toLocaleString() || '0'}</span>
+                  <span className="font-extrabold text-emerald-400">+{formatTokenCount(tokenState.bonusTokens || 0)}</span>
                 </div>
               </div>
             </div>
@@ -211,7 +211,7 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
                   </div>
                   <div>
                     <h4 className="font-black text-slate-900 text-sm">টোকেন শেষ বা রিচার্জ প্রয়োজন?</h4>
-                    <p className="text-xs text-slate-600 font-semibold">৩০ সেকেন্ড এড দেখে প্রতিবার ৫০,০০০ টোকেন ফ্রি নিন!</p>
+                    <p className="text-xs text-slate-600 font-semibold">৩০ সেকেন্ড এড দেখে প্রতিবার {formatTokenCount(30000)} টোকেন ফ্রি নিন!</p>
                   </div>
                 </div>
 
@@ -222,7 +222,7 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
                   className="w-full py-3.5 px-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white rounded-xl font-black text-sm shadow-md hover:from-indigo-700 hover:to-purple-800 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <PlayCircle className="w-5 h-5" />
-                  <span>৩০ সে. অ্যাড দেখুন (+৫০,০০০ টোকেন)</span>
+                  <span>৩০ সে. অ্যাড দেখুন (+{formatTokenCount(30000)} টোকেন)</span>
                 </motion.button>
               </div>
             ) : (
@@ -314,7 +314,7 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
                     className="w-full py-3.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Award className="w-5 h-5 fill-slate-950" />
-                    <span>ক্লেম করুন (+৫০,০০০ টোকেন)</span>
+                    <span>ক্লেম করুন (+{formatTokenCount(30000)} টোকেন)</span>
                   </motion.button>
                 )}
               </div>
@@ -324,7 +324,7 @@ export default function TokenModal({ isOpen, onClose, tokenState, onRewardClaime
           {/* Footer Note */}
           <div className="p-3.5 bg-slate-50 border-t border-slate-100 text-center">
             <p className="text-[11px] font-semibold text-slate-500">
-              ⚡ প্রতিটি চ্যাট মেসেজে টোকেন ব্যবহৃত হয়। প্রতিদিন রাত ১২টায় ফ্রি ১,০০,০০০ টোকেন রিসেট হয়।
+              ⚡ প্রতিটি চ্যাট রিকোয়েস্টে প্রকৃত ব্যবহৃত টোকেন হিসাব করে কাটা হয়। প্রতিদিন রাত ১২টায় ফ্রি {formatTokenCount(50000)} টোকেন রিসেট হয়।
             </p>
           </div>
         </motion.div>

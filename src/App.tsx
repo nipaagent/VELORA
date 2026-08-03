@@ -19,7 +19,7 @@ import { ref, onValue, set, remove, get } from 'firebase/database';
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
 const defaultTokenState: TokenState = {
-  maxDailyTokens: 100000,
+  maxDailyTokens: 50000,
   bonusTokens: 0,
   tokensUsedToday: 0,
   lastResetDate: getTodayStr(),
@@ -93,7 +93,7 @@ export default function App() {
               setTokenState(parsed);
             } else {
               setTokenState({
-                maxDailyTokens: 100000,
+                maxDailyTokens: 50000,
                 bonusTokens: 0,
                 tokensUsedToday: 0,
                 lastResetDate: todayStr,
@@ -103,7 +103,7 @@ export default function App() {
           } catch (e) {}
         } else {
           setTokenState({
-            maxDailyTokens: 100000,
+            maxDailyTokens: 50000,
             bonusTokens: 0,
             tokensUsedToday: 0,
             lastResetDate: todayStr,
@@ -155,7 +155,7 @@ export default function App() {
                   localStorage.setItem(localTokensKey, JSON.stringify(prof.tokenState));
                 } else {
                   const resetTokens: TokenState = {
-                    maxDailyTokens: 100000,
+                    maxDailyTokens: 50000,
                     bonusTokens: 0,
                     tokensUsedToday: 0,
                     lastResetDate: todayStr,
@@ -293,23 +293,14 @@ export default function App() {
     if (!user) return;
 
     // Check token balance
-    const totalAvailable = (tokenState.maxDailyTokens || 100000) + (tokenState.bonusTokens || 0);
+    const totalAvailable = (tokenState.maxDailyTokens || 50000) + (tokenState.bonusTokens || 0);
     const remaining = Math.max(0, totalAvailable - (tokenState.tokensUsedToday || 0));
 
     if (remaining <= 0) {
       setIsTokenModalOpen(true);
-      alert("আপনার আজকের ১,০০,০০০ ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! ৫০,০০০ ফ্রি টোকেন পেতে একটি অ্যাড দেখুন।");
+      alert("আপনার আজকের ৫০,০০০ ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! ৩০,০০০ ফ্রি টোকেন পেতে একটি অ্যাড দেখুন।");
       return;
     }
-
-    // Deduct estimated token cost
-    const cost = Math.max(250, Math.round(text.length * 1.5));
-    const newUsed = (tokenState.tokensUsedToday || 0) + cost;
-    const updatedTokens: TokenState = {
-      ...tokenState,
-      tokensUsedToday: newUsed
-    };
-    updateTokenState(updatedTokens);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -448,6 +439,24 @@ export default function App() {
           }
         }
         
+        // Calculate exact token consumption based on prompt & output character length
+        const promptCharCount = text.length + (currentChatState.messages ? currentChatState.messages.reduce((acc, m) => acc + (m.text ? m.text.length : 0), 0) : 0);
+        const responseCharCount = fullResponse.length;
+        const requestTokensSpent = Math.max(10, Math.round((promptCharCount + responseCharCount) / 3.5));
+
+        setTokenState(prev => {
+          const updatedState = {
+            ...prev,
+            tokensUsedToday: (prev.tokensUsedToday || 0) + requestTokensSpent
+          };
+          if (user) {
+            const localTokensKey = `velora-tokens-${user.uid}`;
+            localStorage.setItem(localTokensKey, JSON.stringify(updatedState));
+            set(ref(db, `users/${user.uid}/tokenState`), updatedState).catch(console.warn);
+          }
+          return updatedState;
+        });
+
         setChats(prev => {
           const finalChat = prev.find(c => c.id === chatId);
           if (finalChat && user) {
@@ -522,6 +531,24 @@ export default function App() {
             thinking: currentThinking,
             timestamp: Date.now(),
           };
+
+          // Calculate exact token consumption based on prompt & output character length
+          const promptCharCount = text.length + (currentChatState.messages ? currentChatState.messages.reduce((acc, m) => acc + (m.text ? m.text.length : 0), 0) : 0);
+          const responseCharCount = currentText.length;
+          const requestTokensSpent = Math.max(10, Math.round((promptCharCount + responseCharCount) / 3.5));
+
+          setTokenState(prev => {
+            const updatedState = {
+              ...prev,
+              tokensUsedToday: (prev.tokensUsedToday || 0) + requestTokensSpent
+            };
+            if (user) {
+              const localTokensKey = `velora-tokens-${user.uid}`;
+              localStorage.setItem(localTokensKey, JSON.stringify(updatedState));
+              set(ref(db, `users/${user.uid}/tokenState`), updatedState).catch(console.warn);
+            }
+            return updatedState;
+          });
 
           setChats(prev => prev.map(c => {
             if (c.id === chatId) {

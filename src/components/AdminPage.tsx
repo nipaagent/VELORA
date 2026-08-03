@@ -7,7 +7,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { ref, onValue, set, remove, update } from 'firebase/database';
-import { generateUniqueVeloraKey, cn } from '../lib/utils';
+import { generateUniqueVeloraKey, cn, formatTokenCount } from '../lib/utils';
 import { TokenState } from '../types';
 import UserAvatar from './UserAvatar';
 
@@ -152,7 +152,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     try {
       const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
       const currentState: TokenState = tokenModalUser.tokenState || {
-        maxDailyTokens: 100000,
+        maxDailyTokens: 37000,
         bonusTokens: 0,
         tokensUsedToday: 0,
         lastResetDate: new Date().toISOString().split('T')[0],
@@ -165,7 +165,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       };
 
       await set(userRef, updatedState);
-      showToast(`@${tokenModalUser.username} এর একাউন্টে +${amountToAdd.toLocaleString()} বোনাস টোকেন যুক্ত করা হয়েছে!`, "success");
+      showToast(`@${tokenModalUser.username} এর একাউন্টে +${formatTokenCount(amountToAdd)} বোনাস টোকেন যুক্ত করা হয়েছে!`, "success");
       setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
     } catch (err: any) {
       showToast("টোকেন যোগ করতে সমস্যা: " + err.message, "error");
@@ -180,7 +180,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     try {
       const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
       const currentState: TokenState = tokenModalUser.tokenState || {
-        maxDailyTokens: 100000,
+        maxDailyTokens: 37000,
         bonusTokens: 0,
         tokensUsedToday: 0,
         lastResetDate: new Date().toISOString().split('T')[0],
@@ -206,7 +206,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       };
 
       await set(userRef, updatedState);
-      showToast(`@${tokenModalUser.username} এর একাউন্ট থেকে -${amountToSubtract.toLocaleString()} টোকেন মাইনাস করা হয়েছে!`, "success");
+      showToast(`@${tokenModalUser.username} এর একাউন্ট থেকে -${formatTokenCount(amountToSubtract)} টোকেন মাইনাস করা হয়েছে!`, "success");
       setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
     } catch (err: any) {
       showToast("টোকেন মাইনাস করতে সমস্যা: " + err.message, "error");
@@ -221,7 +221,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     try {
       const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
       const currentState: TokenState = tokenModalUser.tokenState || {
-        maxDailyTokens: 100000,
+        maxDailyTokens: 37000,
         bonusTokens: 0,
         tokensUsedToday: 0,
         lastResetDate: new Date().toISOString().split('T')[0],
@@ -262,7 +262,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       };
 
       await set(userRef, updatedState);
-      showToast(`@${tokenModalUser.username} এর দৈনিক ফ্রি লিমিট ${newLimit.toLocaleString()} সেট করা হয়েছে!`, "success");
+      showToast(`@${tokenModalUser.username} এর দৈনিক ফ্রি লিমিট ${formatTokenCount(newLimit)} সেট করা হয়েছে!`, "success");
       setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
     } catch (err: any) {
       showToast("লিমিট সেটে সমস্যা: " + err.message, "error");
@@ -930,7 +930,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                         {/* Token Badge */}
                         <div className="flex items-center gap-1.5 bg-indigo-50/80 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-100 font-extrabold text-[10px]">
                           <Zap className="w-3 h-3 text-indigo-600 fill-indigo-600" />
-                          <span>টোকেন: {Math.max(0, ((user.tokenState?.maxDailyTokens ?? 100000) + (user.tokenState?.bonusTokens ?? 0)) - (user.tokenState?.tokensUsedToday ?? 0)).toLocaleString()}</span>
+                          <span>টোকেন: {formatTokenCount(Math.max(0, ((user.tokenState?.maxDailyTokens ?? 37000) + (user.tokenState?.bonusTokens ?? 0)) - (user.tokenState?.tokensUsedToday ?? 0)))}</span>
                         </div>
                       </div>
                     </div>
@@ -1667,28 +1667,28 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                     <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
                       <span className="text-slate-400 text-[10px] block">ডেইলি ফ্রি লিমিট:</span>
                       <span className="text-sm font-black text-white">
-                        {(tokenModalUser.tokenState?.maxDailyTokens ?? 100000).toLocaleString()}
+                        {formatTokenCount(tokenModalUser.tokenState?.maxDailyTokens ?? 37000)}
                       </span>
                     </div>
 
                     <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
                       <span className="text-slate-400 text-[10px] block">বোনাস টোকেন:</span>
                       <span className="text-sm font-black text-emerald-400">
-                        +{(tokenModalUser.tokenState?.bonusTokens ?? 0).toLocaleString()}
+                        +{formatTokenCount(tokenModalUser.tokenState?.bonusTokens ?? 0)}
                       </span>
                     </div>
 
                     <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
                       <span className="text-slate-400 text-[10px] block">আজকে ব্যবহৃত:</span>
                       <span className="text-sm font-black text-rose-400">
-                        -{(tokenModalUser.tokenState?.tokensUsedToday ?? 0).toLocaleString()}
+                        -{formatTokenCount(tokenModalUser.tokenState?.tokensUsedToday ?? 0)}
                       </span>
                     </div>
 
                     <div className="bg-indigo-950/80 p-2.5 rounded-xl border border-indigo-700/80">
                       <span className="text-indigo-300 text-[10px] block font-bold">মোট অবশিষ্ট টোকেন:</span>
                       <span className="text-base font-black text-amber-300">
-                        {Math.max(0, ((tokenModalUser.tokenState?.maxDailyTokens ?? 100000) + (tokenModalUser.tokenState?.bonusTokens ?? 0)) - (tokenModalUser.tokenState?.tokensUsedToday ?? 0)).toLocaleString()}
+                        {formatTokenCount(Math.max(0, ((tokenModalUser.tokenState?.maxDailyTokens ?? 37000) + (tokenModalUser.tokenState?.bonusTokens ?? 0)) - (tokenModalUser.tokenState?.tokensUsedToday ?? 0)))}
                       </span>
                     </div>
                   </div>
@@ -1709,13 +1709,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
                   {/* Preset quick buttons */}
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {[10000, 50000, 100000, 500000, 1000000].map(amt => (
+                    {[10000, 30000, 50000, 100000, 500000, 1000000].map(amt => (
                       <button
                         key={amt}
                         onClick={() => setTokenAmountInput(amt.toString())}
                         className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
                       >
-                        +{amt >= 1000000 ? `${amt / 1000000}M` : `${amt / 1000}K`}
+                        +{formatTokenCount(amt)}
                       </button>
                     ))}
                   </div>
@@ -1749,7 +1749,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     disabled={isSavingTokenChange}
-                    onClick={() => handleApplyMaxDailyLimit(Number(tokenAmountInput) || 100000)}
+                    onClick={() => handleApplyMaxDailyLimit(Number(tokenAmountInput) || 50000)}
                     className="py-2.5 px-3 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer"
                   >
                     <span>⚙️ ডেলি ফ্রি লিমিট সেট</span>
