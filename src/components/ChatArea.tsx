@@ -83,7 +83,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-2 sm:px-4 lg:px-4 py-4 sm:py-6 custom-scrollbar"
+        className="flex-1 overflow-y-auto px-1 sm:px-2 md:px-3 py-4 sm:py-6 custom-scrollbar"
       >
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-4">
@@ -103,10 +103,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                   msg.role === 'user' ? 'justify-end' : 'justify-start'
                 )}
               >
-                <div className={cn(
-                  "flex gap-3 w-full sm:max-w-[95%] lg:max-w-full",
-                  msg.role === 'user' ? "flex-row-reverse" : "flex-row"
-                )}>
+                <div className="flex gap-3 max-w-[95%] xl:max-w-[85%]">
                   {msg.role === 'model' && (
                     <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                       <Bot className="w-3.5 h-3.5 text-white" />
@@ -146,7 +143,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
 
             {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
               <div className="flex w-full justify-start">
-                <div className="flex gap-2.5 max-w-full">
+                <div className="flex gap-3 max-w-full">
                   <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                     <Bot className="w-3.5 h-3.5 text-white" />
                   </div>

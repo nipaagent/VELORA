@@ -39,7 +39,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [loading, setLoading] = useState(true);
   const [apiKeyCount, setApiKeyCount] = useState<number>(0);
   const [apiKeysDetails, setApiKeysDetails] = useState<any[]>([]);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -65,7 +64,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [newStatus, setNewStatus] = useState<'approved' | 'pending' | 'banned'>('approved');
 
   // Ad Links Management state
-  const [isAdModalOpen, setIsAdModalOpen] = useState(false);
   const [adLinks, setAdLinks] = useState<string[]>([
     "https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"
   ]);
@@ -78,7 +76,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [isSavingGlobalConfig, setIsSavingGlobalConfig] = useState(false);
 
   // Redeem Codes Management State
-  const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
   const [redeemCodes, setRedeemCodes] = useState<RedeemCode[]>([]);
   const [newRedeemCodeText, setNewRedeemCodeText] = useState('');
   const [newRedeemRewardType, setNewRedeemRewardType] = useState<RedeemRewardType>('tokens');
@@ -98,6 +95,9 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   // VIP / Premium Control Modal State
   const [vipModalUser, setVipModalUser] = useState<AdminUser | null>(null);
   const [isSavingVipChange, setIsSavingVipChange] = useState(false);
+
+  // Dashboard Tab State
+  const [activeTab, setActiveTab] = useState<'users' | 'tokens' | 'ads' | 'redeem' | 'apikeys'>('users');
 
   // Toast alert feedback
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -598,7 +598,12 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const fetchStats = async () => {
     setIsStatsLoading(true);
     try {
-      const res = await fetch('/api/admin/stats');
+      const res = await fetch('/api/admin/stats', {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       const data = await res.json();
       if (data.status === 'success') {
         setApiKeyCount(data.apiKeyCount);
@@ -617,7 +622,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
     // Stats auto-refresh for "100% Realtime" feel when modal is open
     let statsInterval: NodeJS.Timeout;
-    if (isApiKeyModalOpen) {
+    if (activeTab === 'apikeys') {
       statsInterval = setInterval(fetchStats, 5000);
     }
 
@@ -660,7 +665,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         if (statsInterval) clearInterval(statsInterval);
       };
     }
-  }, [isApiKeyModalOpen]);
+  }, [activeTab]);
 
   const togglePasswordVisibility = (uid: string) => {
     setVisiblePasswords(prev => ({ ...prev, [uid]: !prev[uid] }));
@@ -1006,91 +1011,93 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
       <div className="w-full space-y-3 px-2 sm:px-6 md:px-8">
 
-        {/* Top Header Bar */}
+        {/* Top Header & Tabs Bar */}
         <motion.div 
           variants={{
             hidden: { y: -20, opacity: 0 },
             visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
           }}
-          className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200/80 bg-white/50 backdrop-blur-md p-3 rounded-lg shadow-2xs"
+          className="flex flex-col gap-4 pb-2 border-b border-slate-200/80 bg-white/50 backdrop-blur-md p-4 rounded-xl shadow-sm"
         >
-          <div className="flex items-center gap-3">
-            <motion.div 
-              whileHover={{ rotate: 10, scale: 1.1 }}
-              className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-md shrink-0"
-            >
-              <ShieldCheck className="w-5 h-5" />
-            </motion.div>
-            <div>
-              <div className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
-                সিস্টেম অ্যাডমিনিস্ট্রেটর প্যানেল / ADMIN PORTAL
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <motion.div 
+                whileHover={{ rotate: 10, scale: 1.1 }}
+                className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-md shrink-0"
+              >
+                <ShieldCheck className="w-5 h-5" />
+              </motion.div>
+              <div>
+                <div className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
+                  সিস্টেম অ্যাডমিনিস্ট্রেটর প্যানেল
+                </div>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase flex items-center gap-2 mt-0.5">
+                  VELORA REALTIME ADMIN
+                </h2>
               </div>
-              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase flex items-center gap-2 mt-0.5">
-                VELORA REALTIME ADMIN CONTROL
-              </h2>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <motion.span 
+                className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-extrabold rounded-xl flex items-center gap-1.5 shadow-2xs"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>মোট ইউজার: {users.length} জন</span>
+              </motion.span>
+
+              {onBackToChat && (
+                <motion.button
+                  whileHover={{ x: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={onBackToChat}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs transition-all shadow-2xs"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>চ্যাটে ফিরুন</span>
+                </motion.button>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <motion.button
-              whileHover={{ y: -2, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setIsAdModalOpen(true)}
-              className="px-3 py-1.5 bg-purple-50 border border-purple-100 text-purple-700 text-[10px] font-black rounded-lg flex items-center gap-1.5 shadow-2xs uppercase transition-all hover:bg-purple-100 hover:shadow-sm group cursor-pointer"
-            >
-              <Tv className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-purple-600" />
-              <span>অ্যাড লিংক সেটিংস ({adLinks.length})</span>
-              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-            </motion.button>
-
-                    <motion.button
-                      whileHover={{ y: -2, scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        if (!newRedeemCodeText) handleGenerateRandomCode();
-                        setIsRedeemModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-black rounded-lg flex items-center gap-1.5 shadow-2xs uppercase transition-all hover:bg-amber-100 hover:shadow-sm group cursor-pointer"
-                    >
-              <Ticket className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform text-amber-600" />
-              <span>🎟️ রিডিম কোড ({redeemCodes.length})</span>
-              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            </motion.button>
-
-            <motion.button
-              whileHover={{ y: -2, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setIsApiKeyModalOpen(true)}
-              className="px-3 py-1.5 bg-sky-50 border border-sky-100 text-sky-700 text-[10px] font-black rounded-lg flex items-center gap-1.5 shadow-2xs uppercase transition-all hover:bg-sky-100 hover:shadow-sm group"
-            >
-              <KeyRound className="w-3 h-3 group-hover:rotate-12 transition-transform" />
-              <span>API Keys: {apiKeyCount}</span>
-              <span className="ml-1 w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
-            </motion.button>
-
-            <motion.span 
-              whileHover={{ y: -2 }}
-              className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-extrabold rounded-xl flex items-center gap-1.5 shadow-2xs"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>মোট ইউজার: {users.length} জন</span>
-            </motion.span>
-
-            {onBackToChat && (
-              <motion.button
-                whileHover={{ x: -2 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onBackToChat}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs transition-all shadow-2xs"
+          {/* Tab Navigation Menu */}
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            {[
+              { id: 'users', label: 'Users Management', icon: Users, count: users.length, activeCls: 'bg-indigo-600 text-white border-indigo-700 shadow-md transform scale-105' },
+              { id: 'ads', label: 'Ad Links Config', icon: Tv, count: adLinks.length, activeCls: 'bg-purple-600 text-white border-purple-700 shadow-md transform scale-105' },
+              { id: 'redeem', label: 'Redeem Codes', icon: Ticket, count: redeemCodes.length, activeCls: 'bg-amber-500 text-white border-amber-600 shadow-md transform scale-105' },
+              { id: 'apikeys', label: 'API Keys Status', icon: KeyRound, count: apiKeyCount, activeCls: 'bg-sky-500 text-white border-sky-600 shadow-md transform scale-105' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  if (tab.id === 'apikeys') fetchStats();
+                }}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-2xs border",
+                  activeTab === tab.id 
+                    ? tab.activeCls
+                    : `bg-white hover:bg-slate-50 text-slate-600 border-slate-200`
+                )}
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>চ্যাটে ফিরুন</span>
-              </motion.button>
-            )}
+                <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "animate-pulse" : "")} />
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-md text-[10px]",
+                    activeTab === tab.id ? `bg-white/20 text-white` : `bg-slate-100 text-slate-500`
+                  )}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </motion.div>
 
-        {/* Search & Actions Bar */}
+        {activeTab === 'users' && (
+          <div className="space-y-3">
+            {/* Search & Actions Bar */}
         <motion.div 
           variants={{
             hidden: { y: 10, opacity: 0 },
@@ -1345,8 +1352,10 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
           </div>
         )}
       </motion.div>
+    </div>
+  )}
 
-      {/* Seed Button - ONLY SHOWN IF LIST IS EMPTY */}
+  {/* Seed Button - ONLY SHOWN IF LIST IS EMPTY */}
       {users.length === 0 && !loading && (
         <motion.div 
           initial={{ opacity: 0 }}
@@ -1449,23 +1458,16 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         )}
       </AnimatePresence>
 
-      {/* API KEY DETAILS MODAL */}
+      {/* API KEY DETAILS TAB */}
       <AnimatePresence>
-        {isApiKeyModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsApiKeyModalOpen(false)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
-            />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl p-0 space-y-0 text-slate-800 overflow-hidden"
-            >
+        {activeTab === 'apikeys' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full"
+          >
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden w-full">
               <div className="bg-slate-900 p-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center border border-sky-500/30">
@@ -1485,15 +1487,10 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                   <button 
                     onClick={() => fetchStats()}
                     disabled={isStatsLoading}
-                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
+                    className="px-4 py-2 flex items-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors"
                   >
                     <RefreshCw className={cn("w-4 h-4", isStatsLoading && "animate-spin")} />
-                  </button>
-                  <button 
-                    onClick={() => setIsApiKeyModalOpen(false)}
-                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
+                    Refresh Stats
                   </button>
                 </div>
               </div>
@@ -1654,16 +1651,10 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                       100% Real-time synchronization active
                     </span>
                   </div>
-                  <button
-                    onClick={() => setIsApiKeyModalOpen(false)}
-                    className="px-6 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all"
-                  >
-                    Close Modal
-                  </button>
                 </div>
               </div>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -1783,23 +1774,16 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         )}
       </AnimatePresence>
 
-      {/* AD LINKS MANAGEMENT MODAL */}
+      {/* AD LINKS & GLOBAL SETTINGS TAB */}
       <AnimatePresence>
-        {isAdModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsAdModalOpen(false)}
-              className="absolute inset-0 bg-black/50 backdrop-blur-xs" 
-            />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="relative bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col text-slate-800"
-            >
+        {activeTab === 'ads' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full"
+          >
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden w-full text-slate-800">
               {/* Header */}
               <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-purple-50 via-white to-indigo-50">
                 <div className="flex items-center gap-2.5">
@@ -1811,12 +1795,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                     <p className="text-[11px] font-semibold text-slate-500">সকল ইউজারের ডেলি লিমিট, এড রিওয়ার্ড ও লিংক ম্যানেজমেন্ট</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setIsAdModalOpen(false)}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
               </div>
 
               <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto">
@@ -2013,17 +1991,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                 </div>
               </div>
 
-              {/* Footer */}
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
-                <button
-                  onClick={() => setIsAdModalOpen(false)}
-                  className="px-5 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all"
-                >
-                  সম্পন্ন (Close)
-                </button>
-              </div>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -2204,17 +2173,17 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         )}
       </AnimatePresence>
 
-      {/* Redeem Code Generator & Management Modal */}
+      {/* Redeem Code Generator & Management TAB */}
       <AnimatePresence>
-        {isRedeemModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]"
-            >
-              {/* Modal Header */}
+        {activeTab === 'redeem' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full"
+          >
+            <div className="bg-white border border-slate-200 rounded-3xl shadow-sm w-full overflow-hidden flex flex-col">
+              {/* Header */}
               <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-amber-50 to-purple-50">
                 <div className="flex items-center gap-3">
                   <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-md shrink-0 font-black">
@@ -2228,12 +2197,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                     <p className="text-xs text-slate-600 font-semibold">নির্দিষ্ট পরিমাণ টোকেন বা ভিআইপি অ্যাক্সেসের প্রমোশনাল রিডিম কোড তৈরি ও পরিচালনা করুন</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setIsRedeemModalOpen(false)}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
               </div>
 
               {/* Modal Body */}
@@ -2540,20 +2503,14 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
               </div>
 
-              {/* Modal Footer */}
+              {/* Footer */}
               <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-[10px] text-slate-500 font-medium">
                   ⚡ যেকোনো ইউজার কোড রিডিম করা মাত্রই তাদের ফোনে তৎক্ষণাৎ টোকেন বা ভিআইপি অ্যাক্টিভেট হবে।
                 </span>
-                <button
-                  onClick={() => setIsRedeemModalOpen(false)}
-                  className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all cursor-pointer"
-                >
-                  বন্ধ করুন (Close)
-                </button>
               </div>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
