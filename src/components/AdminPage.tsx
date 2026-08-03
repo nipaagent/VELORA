@@ -11,8 +11,9 @@ import { ref, onValue, set, remove, update } from 'firebase/database';
 import { generateUniqueVeloraKey, cn, formatTokenCount } from '../lib/utils';
 import { TokenState, RedeemCode, RedeemRewardType } from '../types';
 import UserAvatar from './UserAvatar';
+import { VipUserModal } from './VipUserModal';
 
-interface AdminUser {
+export interface AdminUser {
   uid: string;
   fullName: string;
   username: string;
@@ -22,6 +23,8 @@ interface AdminUser {
   role?: string;
   status?: 'approved' | 'pending' | 'banned';
   isBanned?: boolean;
+  isVip?: boolean;
+  vipExpiresAt?: number;
   apiAccessEnabled?: boolean;
   apiKey?: string;
   tokenState?: TokenState;
@@ -91,6 +94,10 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [tokenModalUser, setTokenModalUser] = useState<AdminUser | null>(null);
   const [tokenAmountInput, setTokenAmountInput] = useState<string>('50000');
   const [isSavingTokenChange, setIsSavingTokenChange] = useState(false);
+
+  // VIP / Premium Control Modal State
+  const [vipModalUser, setVipModalUser] = useState<AdminUser | null>(null);
+  const [isSavingVipChange, setIsSavingVipChange] = useState(false);
 
   // Toast alert feedback
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -490,6 +497,54 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       showToast("লিমিট সেটে সমস্যা: " + err.message, "error");
     } finally {
       setIsSavingTokenChange(false);
+    }
+  };
+
+  // Realtime VIP / Premium Management Handlers
+  const handleOpenVipModal = (user: AdminUser) => {
+    setVipModalUser(user);
+  };
+
+  const handleSetVipDuration = async (days: number | 'lifetime' | 0) => {
+    if (!vipModalUser) return;
+    setIsSavingVipChange(true);
+    try {
+      let isVip = false;
+      let vipExpiresAt = 0;
+
+      if (days === 'lifetime') {
+        isVip = true;
+        vipExpiresAt = 253402300799000; // Lifetime (Year 9999)
+      } else if (typeof days === 'number' && days > 0) {
+        isVip = true;
+        const currentExpiry = (vipModalUser.vipExpiresAt && vipModalUser.vipExpiresAt > Date.now())
+          ? vipModalUser.vipExpiresAt
+          : Date.now();
+        vipExpiresAt = currentExpiry + (days * 24 * 60 * 60 * 1000);
+      } else {
+        isVip = false;
+        vipExpiresAt = 0;
+      }
+
+      await update(ref(db, `users/${vipModalUser.uid}`), {
+        isVip,
+        vipExpiresAt
+      });
+
+      const text = days === 'lifetime' 
+        ? 'সারা জীবনের (লাইফটাইম) জন্য প্রিমিয়াম' 
+        : days > 0 
+          ? `${days} দিনের জন্য প্রিমিয়াম` 
+          : 'প্রিমিয়াম বাতিল';
+
+      showToast(`@${vipModalUser.username} এর প্রিমিয়াম স্ট্যাটাস (${text}) সফলভাবে সেভ করা হয়েছে!`, "success");
+
+      setUsers(prev => prev.map(u => u.uid === vipModalUser.uid ? { ...u, isVip, vipExpiresAt } : u));
+      setVipModalUser(prev => prev ? { ...prev, isVip, vipExpiresAt } : null);
+    } catch (err: any) {
+      showToast("প্রিমিয়াম আপডেট করতে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsSavingVipChange(false);
     }
   };
 
@@ -1095,6 +1150,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               <AnimatePresence initial={false}>
                 {filteredUsers.map((user, idx) => {
                   const isBanned = user.status === 'banned' || user.isBanned;
+                  const isVipActive = Boolean(user.isVip || (user.vipExpiresAt && user.vipExpiresAt > Date.now()));
 
                   return (
                     <motion.div 
@@ -1123,6 +1179,16 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                         {user.role === 'admin' && (
                           <span className="text-[10px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3" /> ADMIN
+                          </span>
+                        )}
+
+                        {/* Premium VIP Badge */}
+                        {isVipActive && (
+                          <span className="text-[10px] font-black text-amber-950 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-400 border border-amber-400 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-[0_0_10px_rgba(251,191,36,0.4)] animate-pulse">
+                            <Crown className="w-3 h-3 text-amber-950 fill-amber-950" />
+                            {user.vipExpiresAt && user.vipExpiresAt > Date.now() && user.vipExpiresAt < 2000000000000
+                              ? `VIP (${Math.max(1, Math.ceil((user.vipExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)))}দিন)`
+                              : 'VIP (লাইফটাইম)'}
                           </span>
                         )}
 
@@ -1173,8 +1239,24 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                   </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap mt-2 sm:mt-0 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                       
+                      {/* Premium / VIP Control Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleOpenVipModal(user)}
+                        className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-black text-[11px] shadow-xs transition-all cursor-pointer ${
+                          isVipActive
+                            ? 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 border border-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.5)] hover:brightness-105'
+                            : 'bg-amber-100/80 hover:bg-amber-200/80 border border-amber-300 text-amber-900 font-extrabold'
+                        }`}
+                        title="ইউজারের প্রিমিয়াম/VIP অ্যাকসেস ম্যানেজ করুন"
+                      >
+                        <Crown className={`w-3.5 h-3.5 ${isVipActive ? 'fill-slate-950 text-slate-950' : 'text-amber-700 fill-amber-700'}`} />
+                        <span>{isVipActive ? 'প্রিমিয়াম (সক্রিয়)' : '👑 প্রিমিয়াম'}</span>
+                      </motion.button>
+
                       {/* Token Control Button */}
                       <motion.button
                         whileHover={{ scale: 1.05 }}
@@ -1944,6 +2026,14 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* USER VIP / PREMIUM CONTROL MODAL (EXTRACTED SEPARATE COMPONENT) */}
+      <VipUserModal
+        user={vipModalUser}
+        onClose={() => setVipModalUser(null)}
+        onSetVipDuration={handleSetVipDuration}
+        isSaving={isSavingVipChange}
+      />
 
       {/* USER TOKEN CONTROL MODAL */}
       <AnimatePresence>
