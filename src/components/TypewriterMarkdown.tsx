@@ -64,15 +64,15 @@ export default function TypewriterMarkdown({ text, isLatest }: TypewriterMarkdow
       <ReactMarkdown
         components={{
           code: CodeBlock,
-          p: ({ children }: any) => <p className="mb-3 last:mb-0 leading-relaxed text-slate-800 font-normal">{children}</p>,
+          p: ({ children }: any) => <p className="mb-3.5 last:mb-0 leading-[1.7] text-slate-700 font-medium text-[15px]">{children}</p>,
           h1: ({ children }: any) => <h1 className="text-xl font-bold text-slate-900 mb-4 mt-2 tracking-tight">{children}</h1>,
-          h2: ({ children }: any) => <h2 className="text-lg font-bold text-slate-900 mb-3 mt-3 tracking-tight border-b border-slate-100 pb-1">{children}</h2>,
-          h3: ({ children }: any) => <h3 className="text-base font-semibold text-slate-900 mb-2 mt-2 tracking-tight">{children}</h3>,
-          ul: ({ children }: any) => <ul className="list-disc pl-5 space-y-1.5 mb-3 text-slate-800">{children}</ul>,
-          ol: ({ children }: any) => <ol className="list-decimal pl-5 space-y-1.5 mb-3 text-slate-800">{children}</ol>,
-          li: ({ children }: any) => <li className="pl-1">{children}</li>,
+          h2: ({ children }: any) => <h2 className="text-[17px] font-bold text-slate-900 mb-3 mt-4 tracking-tight border-b border-slate-100 pb-2">{children}</h2>,
+          h3: ({ children }: any) => <h3 className="text-base font-bold text-slate-800 mb-2 mt-3 tracking-tight">{children}</h3>,
+          ul: ({ children }: any) => <ul className="list-disc pl-5 space-y-2 mb-4 text-slate-700 font-medium marker:text-indigo-400">{children}</ul>,
+          ol: ({ children }: any) => <ol className="list-decimal pl-5 space-y-2 mb-4 text-slate-700 font-medium marker:text-indigo-500 marker:font-bold">{children}</ol>,
+          li: ({ children }: any) => <li className="pl-1 leading-[1.7] text-[15px]">{children}</li>,
           blockquote: ({ children }: any) => (
-            <blockquote className="border-l-4 border-indigo-500 bg-indigo-50/40 px-4 py-2.5 rounded-r-lg my-3 text-slate-700 italic">
+            <blockquote className="border-l-4 border-indigo-500 bg-indigo-50/40 px-4 py-2.5 rounded-r-lg my-3 text-slate-700 italic font-medium">
               {children}
             </blockquote>
           ),

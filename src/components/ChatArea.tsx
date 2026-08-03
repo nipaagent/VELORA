@@ -83,7 +83,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar"
+        className="flex-1 overflow-y-auto px-2 sm:px-4 lg:px-4 py-4 sm:py-6 custom-scrollbar"
       >
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-4">
@@ -94,7 +94,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
             <p className="text-xs font-medium text-slate-500 max-w-sm mx-auto">High-performance AI assistant ready to write code, answer questions, and solve problems.</p>
           </div>
         ) : (
-          <div className="w-full max-w-3xl mx-auto space-y-5 pb-6">
+          <div className="w-full max-w-full space-y-5 pb-6">
             {messages.map((msg, idx) => (
               <div 
                 key={msg.id} 
@@ -103,7 +103,10 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                   msg.role === 'user' ? 'justify-end' : 'justify-start'
                 )}
               >
-                <div className="flex gap-2.5 max-w-full min-w-0">
+                <div className={cn(
+                  "flex gap-3 w-full sm:max-w-[95%] lg:max-w-full",
+                  msg.role === 'user' ? "flex-row-reverse" : "flex-row"
+                )}>
                   {msg.role === 'model' && (
                     <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                       <Bot className="w-3.5 h-3.5 text-white" />
@@ -126,7 +129,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                     )}
                     
                     {msg.role === 'model' ? (
-                      <div className="prose prose-sm max-w-none prose-p:leading-relaxed">
+                      <div className="w-full text-slate-800">
                         <TypewriterMarkdown text={msg.text} isLatest={idx === messages.length - 1} />
                       </div>
                     ) : (
