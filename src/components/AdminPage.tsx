@@ -2,19 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, UserPlus, Search, Edit3, Trash2, Eye, EyeOff, Check, X, 
   ShieldAlert, RefreshCw, KeyRound, ArrowLeft, Save, Sparkles, AlertCircle, ShieldCheck,
-  Ban, UserCheck, ShieldX, CheckCircle2, AlertTriangle, Lock, Code2, Loader2, Tv, Plus, ExternalLink, Zap, Minus, Gift
+  Ban, UserCheck, ShieldX, CheckCircle2, AlertTriangle, Lock, Code2, Loader2, Tv, Plus, ExternalLink, Zap, Minus, Gift,
+  Ticket, Crown, Clock, Tag, Copy, Send
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { ref, onValue, set, remove, update } from 'firebase/database';
 import { generateUniqueVeloraKey, cn, formatTokenCount } from '../lib/utils';
-import { TokenState } from '../types';
+import { TokenState, RedeemCode, RedeemRewardType } from '../types';
 import UserAvatar from './UserAvatar';
 
 interface AdminUser {
   uid: string;
   fullName: string;
   username: string;
+  avatarUrl?: string;
   password?: string;
   createdAt?: number;
   role?: string;
@@ -67,6 +69,24 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [newAdUrl, setNewAdUrl] = useState('');
   const [isSavingAdLinks, setIsSavingAdLinks] = useState(false);
 
+  // System Token Configuration State (Global Daily Limit & Ad Reward per watch)
+  const [globalDailyLimitInput, setGlobalDailyLimitInput] = useState<string>('50000');
+  const [globalAdRewardInput, setGlobalAdRewardInput] = useState<string>('30000');
+  const [isSavingGlobalConfig, setIsSavingGlobalConfig] = useState(false);
+
+  // Redeem Codes Management State
+  const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
+  const [redeemCodes, setRedeemCodes] = useState<RedeemCode[]>([]);
+  const [newRedeemCodeText, setNewRedeemCodeText] = useState('');
+  const [newRedeemRewardType, setNewRedeemRewardType] = useState<RedeemRewardType>('tokens');
+  const [newRedeemTokenAmount, setNewRedeemTokenAmount] = useState('50000');
+  const [newRedeemVipDays, setNewRedeemVipDays] = useState('7');
+  const [newRedeemMaxUses, setNewRedeemMaxUses] = useState('10');
+  const [newRedeemExpireHours, setNewRedeemExpireHours] = useState('0'); // 0 = no expiry
+  const [isSavingRedeemCode, setIsSavingRedeemCode] = useState(false);
+  const [redeemSearchTerm, setRedeemSearchTerm] = useState('');
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+
   // User Token Control Modal state
   const [tokenModalUser, setTokenModalUser] = useState<AdminUser | null>(null);
   const [tokenAmountInput, setTokenAmountInput] = useState<string>('50000');
@@ -80,7 +100,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Listen to ad links in Firebase RTDB
+  // Listen to ad links, global token_config and redeem_codes in Firebase RTDB
   useEffect(() => {
     const adRef = ref(db, 'settings/ad_links');
     const unsubscribeAd = onValue(adRef, (snapshot) => {
@@ -94,8 +114,210 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         }
       }
     });
-    return () => unsubscribeAd();
+
+    const tokenConfigRef = ref(db, 'settings/token_config');
+    const unsubscribeConfig = onValue(tokenConfigRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        if (val) {
+          if (typeof val.defaultMaxDailyTokens === 'number') {
+            setGlobalDailyLimitInput(val.defaultMaxDailyTokens.toString());
+          }
+          if (typeof val.adRewardTokenAmount === 'number') {
+            setGlobalAdRewardInput(val.adRewardTokenAmount.toString());
+          }
+        }
+      }
+    });
+
+    const redeemRef = ref(db, 'redeem_codes');
+    const unsubscribeRedeem = onValue(redeemRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        if (val) {
+          const list: RedeemCode[] = Object.keys(val).map(key => ({
+            id: key,
+            ...val[key]
+          }));
+          setRedeemCodes(list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+        } else {
+          setRedeemCodes([]);
+        }
+      } else {
+        setRedeemCodes([]);
+      }
+    });
+
+    return () => {
+      unsubscribeAd();
+      unsubscribeConfig();
+      unsubscribeRedeem();
+    };
   }, []);
+
+  const handleGenerateRandomCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let rand = '';
+    for (let i = 0; i < 6; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const generated = `VELORA-${rand}`;
+    setNewRedeemCodeText(generated);
+    return generated;
+  };
+
+  const handleCreateRedeemCode = async () => {
+    let cleanCode = newRedeemCodeText.trim().toUpperCase();
+    if (!cleanCode) {
+      cleanCode = handleGenerateRandomCode();
+    }
+
+    const maxUsesNum = Number(newRedeemMaxUses) || 1;
+    if (maxUsesNum <= 0) {
+      showToast("ব্যবহারকারীর সীমা অবশ্যই ১ বা তার বেশি হতে হবে!", "error");
+      return;
+    }
+
+    let tokenAmt: number | undefined;
+    let vipDaysNum: number | undefined;
+
+    if (newRedeemRewardType === 'tokens') {
+      tokenAmt = Number(newRedeemTokenAmount);
+      if (!tokenAmt || tokenAmt <= 0) {
+        showToast("দয়া করে সঠিক টোকেন সংখ্যা প্রদান করুন!", "error");
+        return;
+      }
+    } else {
+      vipDaysNum = Number(newRedeemVipDays);
+      if (!vipDaysNum || vipDaysNum <= 0) {
+        showToast("দয়া করে সঠিক ভিআইপি দিনের সংখ্যা প্রদান করুন!", "error");
+        return;
+      }
+    }
+
+    setIsSavingRedeemCode(true);
+    try {
+      const cleanCodeData: Record<string, any> = {
+        id: cleanCode,
+        code: cleanCode,
+        rewardType: newRedeemRewardType,
+        maxUses: maxUsesNum,
+        usedCount: 0,
+        createdAt: Date.now(),
+        isActive: true
+      };
+
+      if (newRedeemRewardType === 'tokens' && tokenAmt) {
+        cleanCodeData.tokenAmount = tokenAmt;
+      } else if (newRedeemRewardType === 'vip_days' && vipDaysNum) {
+        cleanCodeData.vipDays = vipDaysNum;
+      }
+
+      await set(ref(db, `redeem_codes/${cleanCode}`), cleanCodeData);
+      showToast(`🎟️ রিডিম কোড '${cleanCode}' সফলভাবে তৈরি হয়েছে!`, "success");
+
+      handleGenerateRandomCode();
+    } catch (err: any) {
+      showToast("রিডিম কোড তৈরি করতে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsSavingRedeemCode(false);
+    }
+  };
+
+  const handleToggleRedeemActive = async (codeObj: RedeemCode) => {
+    try {
+      await update(ref(db, `redeem_codes/${codeObj.id}`), {
+        isActive: !codeObj.isActive
+      });
+      showToast(`কোড '${codeObj.code}' ${!codeObj.isActive ? 'সক্রিয়' : 'নিষ্ক্রিয়'} করা হয়েছে।`);
+    } catch (err: any) {
+      showToast("স্ট্যাটাস আপডেট করতে সমস্যা: " + err.message, "error");
+    }
+  };
+
+  const handleDeleteRedeemCode = async (codeId: string) => {
+    if (!window.confirm(`আপনি কি নিশ্চিত যে রিডিম কোড '${codeId}' ডিলিট করতে চান?`)) return;
+    try {
+      await remove(ref(db, `redeem_codes/${codeId}`));
+      showToast(`রিডিম কোড '${codeId}' ডিলিট হয়েছে।`);
+    } catch (err: any) {
+      showToast("ডিলিট করতে সমস্যা: " + err.message, "error");
+    }
+  };
+
+  const handleCopyCode = (codeText: string) => {
+    navigator.clipboard.writeText(codeText);
+    setCopiedCodeId(codeText);
+    showToast(`কোড '${codeText}' ক্লিপবোর্ডে কপি হয়েছে!`);
+    setTimeout(() => setCopiedCodeId(null), 2000);
+  };
+
+  const handleSaveGlobalTokenConfig = async () => {
+    const dailyNum = Number(globalDailyLimitInput);
+    const rewardNum = Number(globalAdRewardInput);
+
+    if (!dailyNum || dailyNum <= 0 || !rewardNum || rewardNum <= 0) {
+      showToast("দয়া করে সঠিক সংখ্যা প্রদান করুন!", "error");
+      return;
+    }
+
+    setIsSavingGlobalConfig(true);
+    try {
+      await set(ref(db, 'settings/token_config'), {
+        defaultMaxDailyTokens: dailyNum,
+        adRewardTokenAmount: rewardNum,
+        updatedAt: Date.now()
+      });
+      showToast(`গ্লোবাল টোকেন সেটিংস রিয়েলটাইমে সেভ হয়েছে! ডেইলি লিমিট: ${formatTokenCount(dailyNum)} | এড রিওয়ার্ড: ${formatTokenCount(rewardNum)}`, "success");
+    } catch (err: any) {
+      showToast("গ্লোবাল সেটিংস সেভ করতে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsSavingGlobalConfig(false);
+    }
+  };
+
+  const handleApplyGlobalLimitToAllUsers = async () => {
+    const dailyNum = Number(globalDailyLimitInput);
+    const rewardNum = Number(globalAdRewardInput);
+
+    if (!dailyNum || dailyNum <= 0) {
+      showToast("দয়া করে সঠিক ডেইলি লিমিট টাইপ করুন!", "error");
+      return;
+    }
+
+    if (users.length === 0) {
+      showToast("কোন ইউজার পাওয়া যায়নি!", "error");
+      return;
+    }
+
+    if (!window.confirm(`আপনি কি নিশ্চিত যে রেজিস্টার্ড সকল ${users.length} জন ইউজারের ডেলি ফ্রি লিমিট ${formatTokenCount(dailyNum)} টোকেন এ সেট ও আপডেট করতে চান?`)) {
+      return;
+    }
+
+    setIsSavingGlobalConfig(true);
+    try {
+      // 1. Save global token_config
+      await set(ref(db, 'settings/token_config'), {
+        defaultMaxDailyTokens: dailyNum,
+        adRewardTokenAmount: rewardNum || 30000,
+        updatedAt: Date.now()
+      });
+
+      // 2. Batch update maxDailyTokens for all registered users in RTDB
+      const updates: { [path: string]: any } = {};
+      users.forEach(u => {
+        updates[`users/${u.uid}/tokenState/maxDailyTokens`] = dailyNum;
+      });
+      await update(ref(db), updates);
+
+      showToast(`সকল ${users.length} জন ইউজারের ডেলি লিমিট ${formatTokenCount(dailyNum)} টোকেনে রিয়েলটাইমে আপডেট হয়েছে!`, "success");
+      await fetchUsers();
+    } catch (err: any) {
+      showToast("ইউজারদের ডেলি লিমিট আপডেট করতে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsSavingGlobalConfig(false);
+    }
+  };
 
   const handleAddAdLink = async () => {
     if (!newAdUrl.trim()) {
@@ -766,6 +988,20 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
             </motion.button>
 
+                    <motion.button
+                      whileHover={{ y: -2, scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        if (!newRedeemCodeText) handleGenerateRandomCode();
+                        setIsRedeemModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-black rounded-lg flex items-center gap-1.5 shadow-2xs uppercase transition-all hover:bg-amber-100 hover:shadow-sm group cursor-pointer"
+                    >
+              <Ticket className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform text-amber-600" />
+              <span>🎟️ রিডিম কোড ({redeemCodes.length})</span>
+              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            </motion.button>
+
             <motion.button
               whileHover={{ y: -2, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -874,7 +1110,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                       
                       {/* User Details */}
                       <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <UserAvatar name={user.fullName || user.username} size="md" />
+                        <UserAvatar name={user.fullName || user.username} avatarUrl={user.avatarUrl} size="md" />
                         <div className="space-y-1 min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-extrabold text-xs text-slate-900 truncate">
@@ -1489,8 +1725,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                     <Tv className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-black text-slate-900 text-base leading-snug">অ্যাড লিংক ম্যানেজমেন্ট (Ad Settings)</h3>
-                    <p className="text-[11px] font-semibold text-slate-500">স্পন্সর নেটওয়ার্কের এড লিংক রিয়েলটাইমে যুক্ত ও পরিচালনা করুন</p>
+                    <h3 className="font-black text-slate-900 text-base leading-snug">এড সেটিংস ও গ্লোবাল টোকেন লিমিট</h3>
+                    <p className="text-[11px] font-semibold text-slate-500">সকল ইউজারের ডেলি লিমিট, এড রিওয়ার্ড ও লিংক ম্যানেজমেন্ট</p>
                   </div>
                 </div>
                 <button 
@@ -1501,7 +1737,101 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                 </button>
               </div>
 
-              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto">
+                {/* GLOBAL TOKEN & AD REWARD SETTINGS CARD */}
+                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl border border-indigo-500/30">
+                  <div className="flex items-center justify-between border-b border-indigo-500/30 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-amber-400 fill-amber-400" />
+                      <h4 className="font-black text-sm text-white">গ্লোবাল টোকেন ও এড রিওয়ার্ড কনফিগ</h4>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold bg-indigo-900/80 text-indigo-200 border border-indigo-700 px-2 py-0.5 rounded-full">
+                      ● Realtime Synced
+                    </span>
+                  </div>
+
+                  {/* 1. Daily Free Limit for All Users */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                      <span>১. প্রতিদিন ডেইলি ফ্রি লিমিট (সকল ইউজার):</span>
+                      <span className="text-amber-300 font-extrabold">{formatTokenCount(Number(globalDailyLimitInput) || 0)}</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={globalDailyLimitInput}
+                      onChange={(e) => setGlobalDailyLimitInput(e.target.value)}
+                      placeholder="50000"
+                      className="w-full px-3.5 py-2 bg-slate-800/90 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
+                    />
+                    {/* Quick Presets */}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {[10000, 30000, 50000, 100000, 200000, 500000, 1000000].map(amt => (
+                        <button
+                          key={'dl_' + amt}
+                          type="button"
+                          onClick={() => setGlobalDailyLimitInput(amt.toString())}
+                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-indigo-300 rounded-md text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          {formatTokenCount(amt)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Token Reward Per Ad Watch for All Users */}
+                  <div className="space-y-2 pt-1 border-t border-slate-800">
+                    <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                      <span>২. প্রতিবার এড দেখে রিওয়ার্ড টোকেন (সকল ইউজার):</span>
+                      <span className="text-emerald-400 font-extrabold">+{formatTokenCount(Number(globalAdRewardInput) || 0)}</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={globalAdRewardInput}
+                      onChange={(e) => setGlobalAdRewardInput(e.target.value)}
+                      placeholder="30000"
+                      className="w-full px-3.5 py-2 bg-slate-800/90 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
+                    />
+                    {/* Quick Presets */}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {[5000, 10000, 20000, 30000, 50000, 100000].map(amt => (
+                        <button
+                          key={'ar_' + amt}
+                          type="button"
+                          onClick={() => setGlobalAdRewardInput(amt.toString())}
+                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-300 rounded-md text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          +{formatTokenCount(amt)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Save buttons */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={isSavingGlobalConfig}
+                      onClick={handleSaveGlobalTokenConfig}
+                      className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingGlobalConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      <span>💾 গ্লোবাল সেটিং সেভ করুন</span>
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={isSavingGlobalConfig}
+                      onClick={handleApplyGlobalLimitToAllUsers}
+                      className="py-2.5 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingGlobalConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      <span>⚡ সব ইউজারের লিমিট আপডেট</span>
+                    </motion.button>
+                  </div>
+                </div>
+
                 {/* Add New Ad Link Box */}
                 <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-4 space-y-3">
                   <label className="text-xs font-black text-purple-900 uppercase tracking-wider block">
@@ -1774,6 +2104,359 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                 </span>
                 <button
                   onClick={() => setTokenModalUser(null)}
+                  className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all cursor-pointer"
+                >
+                  বন্ধ করুন (Close)
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Redeem Code Generator & Management Modal */}
+      <AnimatePresence>
+        {isRedeemModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              {/* Modal Header */}
+              <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-amber-50 to-purple-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-md shrink-0 font-black">
+                    <Ticket className="w-6 h-6 text-slate-950" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base sm:text-lg leading-snug flex items-center gap-2">
+                      <span>রিডিম কোড জেনারেটর ও পোর্টাল</span>
+                      <span className="text-[10px] bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase">PROMO ENGINE</span>
+                    </h3>
+                    <p className="text-xs text-slate-600 font-semibold">নির্দিষ্ট পরিমাণ টোকেন বা ভিআইপি অ্যাক্সেসের প্রমোশনাল রিডিম কোড তৈরি ও পরিচালনা করুন</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsRedeemModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 sm:p-6 space-y-6 overflow-y-auto flex-1">
+                
+                {/* 1. Generator Form Box */}
+                <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl space-y-4 border border-amber-500/30 shadow-lg relative overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      নতুন রিডিম কোড তৈরি করুন
+                    </span>
+                    <button
+                      onClick={handleGenerateRandomCode}
+                      className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      <span>র‍্যান্ডম কোড জেনারেট</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Code String Input */}
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                        <span>মূল রিডিম কোড (Code Text)</span>
+                        <span className="text-rose-400">*</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newRedeemCodeText}
+                          onChange={(e) => setNewRedeemCodeText(e.target.value.toUpperCase())}
+                          placeholder="উদাহরণ: VELORA100K, RAMADAN2026"
+                          className="flex-1 px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono font-black text-amber-300 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase tracking-widest"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleGenerateRandomCode}
+                          className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-all shrink-0 cursor-pointer"
+                        >
+                          অটো জেনারেট
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Reward Type Option */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 block">
+                        পুরস্কারের ধরন (Reward Type)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewRedeemRewardType('tokens')}
+                          className={cn(
+                            "py-2.5 px-3 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                            newRedeemRewardType === 'tokens'
+                              ? "bg-amber-500 text-slate-950 border-amber-400 shadow-md"
+                              : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750"
+                          )}
+                        >
+                          <Gift className="w-4 h-4" />
+                          <span>টোকেন বোনাস</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setNewRedeemRewardType('vip_days')}
+                          className={cn(
+                            "py-2.5 px-3 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                            newRedeemRewardType === 'vip_days'
+                              ? "bg-purple-500 text-white border-purple-400 shadow-md"
+                              : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750"
+                          )}
+                        >
+                          <Crown className="w-4 h-4" />
+                          <span>ভিআইপি অ্যাক্সেস</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dynamic Reward Value Input */}
+                    {newRedeemRewardType === 'tokens' ? (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300 block">
+                          টোকেনের পরিমাণ (Token Amount)
+                        </label>
+                        <input
+                          type="number"
+                          value={newRedeemTokenAmount}
+                          onChange={(e) => setNewRedeemTokenAmount(e.target.value)}
+                          placeholder="৫০,০০০"
+                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {[10000, 30000, 50000, 100000, 500000].map(amt => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() => setNewRedeemTokenAmount(amt.toString())}
+                              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-[10px] text-amber-300 font-bold rounded border border-slate-700 cursor-pointer"
+                            >
+                              +{formatTokenCount(amt)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300 block">
+                          ভিআইপি মেয়াদ (VIP Duration - Days)
+                        </label>
+                        <input
+                          type="number"
+                          value={newRedeemVipDays}
+                          onChange={(e) => setNewRedeemVipDays(e.target.value)}
+                          placeholder="৭ দিন"
+                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono font-bold text-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {[1, 3, 7, 15, 30, 90].map(d => (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => setNewRedeemVipDays(d.toString())}
+                              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-[10px] text-purple-300 font-bold rounded border border-slate-700 cursor-pointer"
+                            >
+                              {d} দিন
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Usage Limit Field */}
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-bold text-slate-300 block">
+                        সর্বোচ্চ ইউজার ব্যবহার সীমা (Max Uses)
+                      </label>
+                      <input
+                        type="number"
+                        value={newRedeemMaxUses}
+                        onChange={(e) => setNewRedeemMaxUses(e.target.value)}
+                        placeholder="১০ জন ব্যবহার করতে পারবে"
+                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                      <p className="text-[10px] text-slate-400">সর্বমোট কতজন আলাদা ইউজার এই প্রমো কোডটি ক্লেইম করতে পারবে</p>
+                    </div>
+                  </div>
+
+                  {/* Create Submit Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    disabled={isSavingRedeemCode}
+                    onClick={handleCreateRedeemCode}
+                    className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+                  >
+                    {isSavingRedeemCode ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                    ) : (
+                      <>
+                        <Ticket className="w-4 h-4 text-slate-950" />
+                        <span>🎟️ রিডিম কোড জেনারেট করুন</span>
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+
+                {/* 2. Active Redeem Codes List */}
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                      <span>তৈরিকৃত রিডিম কোডের তালিকা ({redeemCodes.length})</span>
+                    </h4>
+
+                    {/* Filter Input */}
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={redeemSearchTerm}
+                        onChange={(e) => setRedeemSearchTerm(e.target.value)}
+                        placeholder="কোড খুঁজুন..."
+                        className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  {redeemCodes.length === 0 ? (
+                    <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500 text-xs font-semibold">
+                      এখনো কোনো রিডিম কোড তৈরি করা হয়নি। উপরের ফরম পূরণ করে রিডিম কোড তৈরি করুন।
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {redeemCodes
+                        .filter(c => c.code.toLowerCase().includes(redeemSearchTerm.toLowerCase()))
+                        .map((c) => {
+                          const isExpired = c.expiresAt ? c.expiresAt < Date.now() : false;
+                          const isLimitReached = (c.usedCount || 0) >= (c.maxUses || 1);
+
+                          return (
+                            <div 
+                              key={c.id}
+                              className={cn(
+                                "p-3.5 rounded-2xl border transition-all space-y-2 relative overflow-hidden",
+                                c.isActive && !isExpired && !isLimitReached
+                                  ? "bg-white border-amber-200 shadow-xs hover:border-amber-300"
+                                  : "bg-slate-50 border-slate-200 opacity-75"
+                              )}
+                            >
+                              {/* Top row: Code & Badges */}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-black text-sm text-slate-900 bg-amber-500/15 border border-amber-300 px-2.5 py-1 rounded-lg tracking-wider">
+                                    {c.code}
+                                  </span>
+                                  <button
+                                    onClick={() => handleCopyCode(c.code)}
+                                    title="কোড কপি করুন"
+                                    className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors cursor-pointer"
+                                  >
+                                    {copiedCodeId === c.code ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                                  </button>
+                                </div>
+
+                                {/* Reward Badge */}
+                                {c.rewardType === 'tokens' ? (
+                                  <span className="text-[10px] font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <Gift className="w-3 h-3" />
+                                    +{formatTokenCount(c.tokenAmount || 0)} টোকেন
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-black bg-purple-600 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <Crown className="w-3 h-3 text-amber-300" />
+                                    {c.vipDays} দিন VIP
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Usage & Expiration Stats */}
+                              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-100">
+                                <div>
+                                  <span className="text-slate-400 block text-[10px]">ব্যবহার করা হয়েছে:</span>
+                                  <span className="font-bold text-slate-700">
+                                    {c.usedCount || 0} / {c.maxUses} জন
+                                  </span>
+                                </div>
+
+                                <div>
+                                  <span className="text-slate-400 block text-[10px]">স্ট্যাটাস:</span>
+                                  {isExpired ? (
+                                    <span className="font-bold text-rose-600 flex items-center gap-1">
+                                      <Clock className="w-3 h-3" /> সময় শেষ
+                                    </span>
+                                  ) : isLimitReached ? (
+                                    <span className="font-bold text-amber-600">লিমিট পূর্ণ</span>
+                                  ) : c.isActive ? (
+                                    <span className="font-bold text-emerald-600">● সক্রিয় (Active)</span>
+                                  ) : (
+                                    <span className="font-bold text-slate-400">নিষ্ক্রিয় (Inactive)</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Created Date & Expiration info */}
+                              <div className="text-[10px] text-slate-400 flex items-center justify-between pt-0.5">
+                                <span>তৈরি: {new Date(c.createdAt).toLocaleDateString()}</span>
+                                {c.expiresAt ? (
+                                  <span>মেয়াদ: {new Date(c.expiresAt).toLocaleString()}</span>
+                                ) : (
+                                  <span className="text-emerald-600 font-bold">মেয়াদহীন (Lifetime)</span>
+                                )}
+                              </div>
+
+                              {/* Action controls */}
+                              <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
+                                <button
+                                  onClick={() => handleToggleRedeemActive(c)}
+                                  className={cn(
+                                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer",
+                                    c.isActive
+                                      ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                      : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                                  )}
+                                >
+                                  {c.isActive ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'}
+                                </button>
+
+                                <button
+                                  onClick={() => handleDeleteRedeemCode(c.id)}
+                                  className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                >
+                                  ডিলিট
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[10px] text-slate-500 font-medium">
+                  ⚡ যেকোনো ইউজার কোড রিডিম করা মাত্রই তাদের ফোনে তৎক্ষণাৎ টোকেন বা ভিআইপি অ্যাক্টিভেট হবে।
+                </span>
+                <button
+                  onClick={() => setIsRedeemModalOpen(false)}
                   className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all cursor-pointer"
                 >
                   বন্ধ করুন (Close)

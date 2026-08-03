@@ -15,6 +15,7 @@ import AdminPage from './components/AdminPage';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { ref, onValue, set, remove, get } from 'firebase/database';
+import { formatTokenCount, cn } from './lib/utils';
 
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
@@ -42,8 +43,10 @@ export default function App() {
   const [adLinks, setAdLinks] = useState<string[]>([
     "https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"
   ]);
+  const [adRewardTokenAmount, setAdRewardTokenAmount] = useState<number>(30000);
+  const [defaultMaxDailyTokens, setDefaultMaxDailyTokens] = useState<number>(50000);
 
-  // Sync ad links from Firebase RTDB in Realtime
+  // Sync ad links and system token config from Firebase RTDB in Realtime
   useEffect(() => {
     const adRef = ref(db, 'settings/ad_links');
     const unsubscribeAd = onValue(adRef, (snapshot) => {
@@ -57,7 +60,26 @@ export default function App() {
         }
       }
     });
-    return () => unsubscribeAd();
+
+    const tokenConfigRef = ref(db, 'settings/token_config');
+    const unsubscribeConfig = onValue(tokenConfigRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        if (val) {
+          if (typeof val.adRewardTokenAmount === 'number' && val.adRewardTokenAmount > 0) {
+            setAdRewardTokenAmount(val.adRewardTokenAmount);
+          }
+          if (typeof val.defaultMaxDailyTokens === 'number' && val.defaultMaxDailyTokens > 0) {
+            setDefaultMaxDailyTokens(val.defaultMaxDailyTokens);
+          }
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeAd();
+      unsubscribeConfig();
+    };
   }, []);
 
   const updateTokenState = async (newState: TokenState) => {
@@ -92,9 +114,15 @@ export default function App() {
             if (parsed.lastResetDate === todayStr) {
               setTokenState(parsed);
             } else {
+              const maxDaily = parsed.maxDailyTokens || 50000;
+              const curBonus = parsed.bonusTokens || 0;
+              const usedToday = parsed.tokensUsedToday || 0;
+              const bonusSpent = Math.max(0, usedToday - maxDaily);
+              const remainingBonus = Math.max(0, curBonus - bonusSpent);
+
               setTokenState({
-                maxDailyTokens: 50000,
-                bonusTokens: 0,
+                maxDailyTokens: maxDaily,
+                bonusTokens: remainingBonus,
                 tokensUsedToday: 0,
                 lastResetDate: todayStr,
                 adsWatchedToday: 0
@@ -154,9 +182,15 @@ export default function App() {
                   setTokenState(prof.tokenState);
                   localStorage.setItem(localTokensKey, JSON.stringify(prof.tokenState));
                 } else {
+                  const maxDaily = prof.tokenState.maxDailyTokens || defaultMaxDailyTokens || 50000;
+                  const curBonus = prof.tokenState.bonusTokens || 0;
+                  const usedToday = prof.tokenState.tokensUsedToday || 0;
+                  const bonusSpent = Math.max(0, usedToday - maxDaily);
+                  const remainingBonus = Math.max(0, curBonus - bonusSpent);
+
                   const resetTokens: TokenState = {
-                    maxDailyTokens: 50000,
-                    bonusTokens: 0,
+                    maxDailyTokens: maxDaily,
+                    bonusTokens: remainingBonus,
                     tokensUsedToday: 0,
                     lastResetDate: todayStr,
                     adsWatchedToday: 0
@@ -292,13 +326,14 @@ export default function App() {
   const processMessage = async (chatId: string, text: string, currentChatState: Chat) => {
     if (!user) return;
 
-    // Check token balance
-    const totalAvailable = (tokenState.maxDailyTokens || 50000) + (tokenState.bonusTokens || 0);
-    const remaining = Math.max(0, totalAvailable - (tokenState.tokensUsedToday || 0));
+    // Check token balance & VIP status
+    const isVipActive = Boolean(userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now());
+    const totalAvailable = (tokenState.maxDailyTokens || defaultMaxDailyTokens) + (tokenState.bonusTokens || 0);
+    const remaining = isVipActive ? 999999999 : Math.max(0, totalAvailable - (tokenState.tokensUsedToday || 0));
 
-    if (remaining <= 0) {
+    if (!isVipActive && remaining <= 0) {
       setIsTokenModalOpen(true);
-      alert("আপনার আজকের ৫০,০০০ ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! ৩০,০০০ ফ্রি টোকেন পেতে একটি অ্যাড দেখুন।");
+      alert(`আপনার আজকের ${formatTokenCount(tokenState.maxDailyTokens || defaultMaxDailyTokens)} ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! ${formatTokenCount(adRewardTokenAmount)} ফ্রি টোকেন পেতে একটি অ্যাড দেখুন অথবা রিডিম কোড ব্যবহার করুন।`);
       return;
     }
 
@@ -725,36 +760,51 @@ export default function App() {
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 bg-white">
               {/* Main Header */}
-              <header className="h-14 border-b border-slate-200/80 bg-white px-5 flex items-center shrink-0 z-10 relative shadow-xs">
+              <header className="h-14 border-b border-slate-200/80 bg-white px-2 sm:px-3 flex items-center shrink-0 z-10 relative shadow-xs">
                 <div className="flex-1 flex justify-start items-center gap-2">
                   <button 
                     onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-700 transition-all active:scale-95 outline-none"
+                    className="p-2 -ml-1 rounded-xl hover:bg-slate-100 text-slate-700 transition-all active:scale-95 outline-none"
                     aria-label="Open menu"
                   >
                     <Menu className="w-5 h-5" />
                   </button>
                 </div>
                 
-                <div className="flex items-center justify-center gap-2 flex-1">
+                <div className="flex items-center justify-center gap-2 shrink-0">
                   <h1 className="text-sm font-black text-slate-900 tracking-[0.2em] uppercase">VELORA</h1>
                 </div>
 
-                <div className="flex-1 flex justify-end items-center gap-2">
-                  <TokenBadge tokenState={tokenState} onClick={() => setIsTokenModalOpen(true)} />
+                <div className="flex-1 flex justify-end items-center gap-1.5 sm:gap-2.5 ml-auto">
+                  <TokenBadge tokenState={tokenState} userProfile={userProfile} onClick={() => setIsTokenModalOpen(true)} />
 
-                  {userProfile && (
-                    <button 
-                      onClick={() => setIsProfileOpen(true)}
-                      className="p-1 pl-1 pr-3 bg-white hover:bg-slate-50 transition-all rounded-full border border-slate-200/90 text-xs font-semibold text-slate-800 outline-none shadow-2xs group shrink-0 flex items-center gap-2"
-                      title="Profile Settings"
-                    >
-                      <UserAvatar name={userProfile.fullName || userProfile.username} size="sm" />
-                      <span className="hidden sm:inline text-xs font-semibold text-slate-800 truncate max-w-[120px]">
-                        {userProfile.fullName || userProfile.username}
-                      </span>
-                    </button>
-                  )}
+                  {userProfile && (() => {
+                    const isVipActive = Boolean(userProfile.isVip || (userProfile.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+                    return (
+                      <button 
+                        onClick={() => setIsProfileOpen(true)}
+                        className={cn(
+                          "p-1 pl-1 pr-2.5 transition-all rounded-full border text-xs font-semibold outline-none shadow-2xs group shrink-0 flex items-center gap-2",
+                          isVipActive
+                            ? "bg-amber-500/10 border-amber-400/90 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]"
+                            : "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800"
+                        )}
+                        title="Profile Settings"
+                      >
+                        <div className={cn("rounded-full transition-all flex items-center justify-center", isVipActive ? "ring-2 ring-amber-400 ring-offset-1 shadow-[0_0_12px_rgba(251,191,36,0.7)] animate-pulse" : "")}>
+                          <UserAvatar name={userProfile.fullName || userProfile.username} avatarUrl={userProfile.avatarUrl} size="sm" />
+                        </div>
+                        <span className={cn(
+                          "hidden sm:inline text-xs font-black truncate max-w-[120px]",
+                          isVipActive 
+                            ? "bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-600 bg-clip-text text-transparent animate-pulse drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]" 
+                            : "text-slate-800"
+                        )}>
+                          {userProfile.fullName || userProfile.username}
+                        </span>
+                      </button>
+                    );
+                  })()}
                 </div>
               </header>
 
@@ -814,6 +864,10 @@ export default function App() {
         onClose={() => setIsTokenModalOpen(false)}
         tokenState={tokenState}
         adLinks={adLinks}
+        adRewardTokenAmount={adRewardTokenAmount}
+        defaultMaxDailyTokens={defaultMaxDailyTokens}
+        userId={user?.uid}
+        userProfile={userProfile}
         onRewardClaimed={(bonusAmount) => {
           const updated: TokenState = {
             ...tokenState,
@@ -821,6 +875,15 @@ export default function App() {
             adsWatchedToday: (tokenState.adsWatchedToday || 0) + 1
           };
           updateTokenState(updated);
+        }}
+        onVipClaimed={(vipDays, expiresAt) => {
+          if (userProfile) {
+            setUserProfile({
+              ...userProfile,
+              isVip: true,
+              vipExpiresAt: expiresAt
+            });
+          }
         }}
       />
     </div>

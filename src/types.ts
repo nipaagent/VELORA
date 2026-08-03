@@ -29,8 +29,27 @@ export interface UserProfile {
   role?: 'admin' | 'user';
   status?: 'approved' | 'pending' | 'banned';
   isBanned?: boolean;
+  isVip?: boolean;
+  vipExpiresAt?: number;
   apiAccessEnabled?: boolean;
   apiKey?: string;
   createdAt: number;
+  avatarUrl?: string;
   tokenState?: TokenState;
+}
+
+export type RedeemRewardType = 'tokens' | 'vip_days';
+
+export interface RedeemCode {
+  id: string;
+  code: string;
+  rewardType: RedeemRewardType;
+  tokenAmount?: number; // e.g., 50000
+  vipDays?: number; // e.g., 1, 7, 30
+  maxUses: number; // e.g. 100
+  usedCount: number; // usages so far
+  usedBy?: { [uid: string]: number }; // uid -> timestamp
+  createdAt: number;
+  isActive: boolean;
+  expiresAt?: number; // optional timestamp expiration
 }

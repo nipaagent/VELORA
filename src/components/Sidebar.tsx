@@ -39,7 +39,7 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
           </motion.div>
 
           {tokenState && onOpenTokenModal && (
-            <TokenBadge tokenState={tokenState} onClick={onOpenTokenModal} />
+            <TokenBadge tokenState={tokenState} userProfile={userProfile} onClick={onOpenTokenModal} />
           )}
         </div>
         
@@ -154,7 +154,7 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
                 className="flex items-center gap-2 overflow-hidden text-left hover:bg-white p-1.5 -ml-1 rounded-xl transition-colors flex-1 group border border-transparent hover:border-slate-200/60"
                 title="Profile Settings"
               >
-                <UserAvatar name={userProfile.fullName || userProfile.username} size="sm" />
+                <UserAvatar name={userProfile.fullName || userProfile.username} avatarUrl={userProfile.avatarUrl} size="sm" />
                 <div className="overflow-hidden leading-tight flex-1">
                   <div className="text-[11px] font-black text-slate-900 truncate">{userProfile.fullName || userProfile.username}</div>
                   <div className="text-[9px] text-slate-500 truncate font-bold uppercase tracking-wider">@{userProfile.username}</div>

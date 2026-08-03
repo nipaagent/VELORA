@@ -1,16 +1,43 @@
 import React from 'react';
-import { Zap, Sparkles, AlertTriangle } from 'lucide-react';
-import { TokenState } from '../types';
+import { Zap, Crown, Sparkles } from 'lucide-react';
+import { TokenState, UserProfile } from '../types';
 import { cn, formatTokenCount } from '../lib/utils';
 import { motion } from 'motion/react';
 
 interface TokenBadgeProps {
   tokenState: TokenState;
+  userProfile?: UserProfile | null;
   onClick: () => void;
   compact?: boolean;
 }
 
-export default function TokenBadge({ tokenState, onClick, compact = false }: TokenBadgeProps) {
+export default function TokenBadge({ tokenState, userProfile, onClick, compact = false }: TokenBadgeProps) {
+  const isVipActive = Boolean((userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now())));
+
+  if (isVipActive) {
+    return (
+      <motion.button
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.96 }}
+        onClick={onClick}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black transition-all border border-amber-300/80 bg-gradient-to-r from-amber-100 via-amber-50 to-purple-100 text-amber-900 shadow-2xs group cursor-pointer shrink-0 select-none"
+        title="ভিআইপি আনলিমিটেড অ্যাক্সেস সক্রিয় (Unlimited Access Active) - বিস্তারিত দেখতে ক্লিক করুন"
+      >
+        <Crown className="w-3.5 h-3.5 shrink-0 text-amber-600 fill-amber-500 animate-pulse" />
+
+        <div className="flex items-center gap-1 font-black">
+          <span className="text-sm font-black text-amber-950 leading-none">∞</span>
+          
+          {!compact && (
+            <span className="text-[10px] font-black text-purple-700 bg-purple-100/80 px-1.5 py-0.2 rounded-full hidden sm:inline">
+              VIP
+            </span>
+          )}
+        </div>
+      </motion.button>
+    );
+  }
+
   const totalLimit = (tokenState.maxDailyTokens || 37000) + (tokenState.bonusTokens || 0);
   const used = tokenState.tokensUsedToday || 0;
   const remaining = Math.max(0, totalLimit - used);

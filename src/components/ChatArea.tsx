@@ -53,6 +53,8 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
 
+  const isVipActive = Boolean(userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
@@ -170,7 +172,12 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
           
           <form 
             onSubmit={handleSubmit}
-            className="flex items-center gap-2 bg-white rounded-2xl px-3.5 py-2 border border-slate-200 shadow-md focus-within:border-indigo-500/80 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all"
+            className={cn(
+              "flex items-center gap-2 bg-white rounded-2xl px-3.5 py-2 transition-all",
+              isVipActive
+                ? "border-2 border-amber-400/90 shadow-[0_0_22px_rgba(251,191,36,0.45)] focus-within:border-amber-400 focus-within:ring-4 focus-within:ring-amber-400/20"
+                : "border border-slate-200 shadow-md focus-within:border-indigo-500/80 focus-within:ring-2 focus-within:ring-indigo-500/10"
+            )}
           >
             <textarea
               value={input}
