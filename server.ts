@@ -423,6 +423,8 @@ CRITICAL RULES:
           role: data[uid].role || (data[uid].username === "admin" ? "admin" : "user"),
           status: data[uid].status || (data[uid].isBanned ? "banned" : "approved"),
           isBanned: !!data[uid].isBanned || data[uid].status === "banned",
+          isVip: !!data[uid].isVip,
+          vipExpiresAt: data[uid].vipExpiresAt || 0,
           apiAccessEnabled: data[uid].apiAccessEnabled ?? (data[uid].username === "admin" || data[uid].role === "admin"),
           apiKey: data[uid].apiKey || "",
           tokenState: data[uid].tokenState
@@ -445,6 +447,8 @@ CRITICAL RULES:
           role: data[uid].role || (data[uid].username === "admin" ? "admin" : "user"),
           status: data[uid].status || (data[uid].isBanned ? "banned" : "approved"),
           isBanned: !!data[uid].isBanned || data[uid].status === "banned",
+          isVip: !!data[uid].isVip,
+          vipExpiresAt: data[uid].vipExpiresAt || 0,
           apiAccessEnabled: data[uid].apiAccessEnabled ?? (data[uid].username === "admin" || data[uid].role === "admin"),
           apiKey: data[uid].apiKey || "",
           tokenState: data[uid].tokenState
@@ -473,6 +477,8 @@ CRITICAL RULES:
                 role: uData.role || (uData.username === "admin" ? "admin" : "user"),
                 status: uData.status || (uData.isBanned ? "banned" : "approved"),
                 isBanned: !!uData.isBanned || uData.status === "banned",
+                isVip: !!uData.isVip,
+                vipExpiresAt: uData.vipExpiresAt || 0,
                 apiAccessEnabled: uData.apiAccessEnabled ?? (uData.username === "admin" || uData.role === "admin"),
                 apiKey: uData.apiKey || "",
                 tokenState: uData.tokenState

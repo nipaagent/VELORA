@@ -164,8 +164,16 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
           {isLoading && (
             <div className="flex items-center justify-end mb-1.5 px-2">
               <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
-                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Generating</span>
+                <div 
+                  className={cn("w-1.5 h-1.5 rounded-full animate-pulse", !isVipActive && "bg-indigo-600")}
+                  style={isVipActive ? { backgroundColor: 'var(--user-theme-color)' } : {}}
+                />
+                <span 
+                  className={cn("text-[10px] font-bold uppercase tracking-wider", !isVipActive && "text-indigo-600")}
+                  style={isVipActive ? { color: 'var(--user-theme-color)' } : {}}
+                >
+                  Generating
+                </span>
               </div>
             </div>
           )}
@@ -175,9 +183,14 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
             className={cn(
               "flex items-center gap-2 bg-white rounded-2xl px-3.5 py-2 transition-all",
               isVipActive
-                ? "border-2 border-amber-400/90 shadow-[0_0_22px_rgba(251,191,36,0.45)] focus-within:border-amber-400 focus-within:ring-4 focus-within:ring-amber-400/20"
+                ? "border-2 shadow-lg focus-within:ring-4"
                 : "border border-slate-200 shadow-md focus-within:border-indigo-500/80 focus-within:ring-2 focus-within:ring-indigo-500/10"
             )}
+            style={isVipActive ? { 
+              borderColor: 'var(--user-theme-color)',
+              boxShadow: `0 0 calc(22px * var(--user-theme-glow)) rgba(var(--user-theme-color-rgb), 0.35)`,
+              outlineColor: 'var(--user-theme-color)'
+            } : {}}
           >
             <textarea
               value={input}
@@ -197,8 +210,14 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
               disabled={!input.trim() || isLoading}
               className={cn(
                 "p-2 rounded-xl shrink-0 transition-all outline-none",
-                input.trim() && !isLoading ? "bg-slate-900 text-white hover:bg-slate-800 shadow-xs" : "bg-slate-100 text-slate-300 cursor-not-allowed"
+                input.trim() && !isLoading 
+                  ? (isVipActive ? "text-white shadow-md" : "bg-slate-900 text-white hover:bg-slate-800 shadow-xs")
+                  : "bg-slate-100 text-slate-300 cursor-not-allowed"
               )}
+              style={isVipActive && input.trim() && !isLoading ? { 
+                backgroundColor: 'var(--user-theme-color)',
+                boxShadow: `0 4px 12px rgba(var(--user-theme-color-rgb), 0.3)`
+              } : {}}
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-slate-500" />

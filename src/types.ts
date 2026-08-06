@@ -35,6 +35,8 @@ export interface UserProfile {
   apiKey?: string;
   createdAt: number;
   avatarUrl?: string;
+  themeColor?: string;
+  themeGlow?: number;
   tokenState?: TokenState;
 }
 

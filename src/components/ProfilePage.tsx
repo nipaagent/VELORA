@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu } from 'lucide-react';
+import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock } from 'lucide-react';
 import { UserProfile } from '../types';
 import { auth, db } from '../lib/firebase';
 import UserAvatar from './UserAvatar';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { ref, set } from 'firebase/database';
+import { ref, update } from 'firebase/database';
 import { motion } from 'motion/react';
+import { cn } from '../lib/utils';
+import { Crown } from 'lucide-react';
 
 interface ProfilePageProps {
   onBack: () => void;
@@ -49,17 +51,16 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
     if (!currentUser) return;
 
     setSavingName(true);
-    const updatedProfile: UserProfile = {
-      ...userProfile,
-      fullName: fullName.trim(),
-    };
-
+    
     try {
-      try {
-        await set(ref(db, `users/${currentUser.uid}`), updatedProfile);
-      } catch (dbErr) {
-        console.warn("Profile update notice:", dbErr);
-      }
+      await update(ref(db, `users/${currentUser.uid}`), {
+        fullName: fullName.trim()
+      });
+
+      const updatedProfile: UserProfile = {
+        ...userProfile,
+        fullName: fullName.trim(),
+      };
 
       localStorage.setItem(`velora-profile-${currentUser.uid}`, JSON.stringify(updatedProfile));
       onUpdateProfile(updatedProfile);
@@ -105,8 +106,7 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
 
       // Realtime DB update so Admin Panel reflects changed password instantly
       try {
-        await set(ref(db, `users/${user.uid}`), {
-          ...userProfile,
+        await update(ref(db, `users/${user.uid}`), {
           fullName: fullName.trim() || userProfile.fullName,
           password: newPassword,
           updatedAt: Date.now()
@@ -166,7 +166,7 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
         </div>
         
         <div className="flex items-center justify-center gap-1.5 flex-1">
-          <Sparkles className="w-4 h-4 text-indigo-600" />
+          <Sparkles className="w-4 h-4" style={{ color: 'var(--user-theme-color)' }} />
           <h1 className="text-base font-bold text-gray-900 tracking-wider uppercase">VELORA</h1>
         </div>
 
@@ -190,20 +190,54 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
             hidden: { y: 20, opacity: 0 },
             visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
           }}
-          className="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-100 flex items-center gap-4"
+          className="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-100 flex items-center gap-4 relative overflow-hidden"
         >
-          <UserAvatar name={userProfile.fullName || userProfile.username} size="lg" />
+          {(() => {
+            const isVipActive = Boolean(userProfile.isVip || (userProfile.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+            return (
+              <>
+                <div className="relative">
+                  <UserAvatar name={userProfile.fullName || userProfile.username} size="lg" />
+                  {isVipActive && (
+                    <motion.div 
+                      animate={{ scale: [1, 1.1, 1], rotate: [0, 5, 0] }}
+                      transition={{ duration: 3, repeat: Infinity }}
+                      className="absolute -top-1 -right-1 bg-amber-400 p-1 rounded-full shadow-lg border-2 border-white"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-amber-900 fill-amber-900" />
+                    </motion.div>
+                  )}
+                </div>
 
-          <div className="space-y-0.5 flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">{userProfile.fullName || 'User'}</h2>
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 shrink-0">
-                <BadgeCheck className="w-3 h-3 text-indigo-600" />
-                Verified
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 font-mono">@{userProfile.username}</p>
-          </div>
+                <div className="space-y-0.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">{userProfile.fullName || 'User'}</h2>
+                    {isVipActive ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 text-amber-950 border border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)] uppercase tracking-wider animate-pulse">
+                        <Crown className="w-3 h-3 fill-amber-950" />
+                        VIP Premium
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wider">
+                        <BadgeCheck className="w-3 h-3" />
+                        Verified User
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 font-mono">@{userProfile.username}</p>
+                  
+                  {isVipActive && (
+                    <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1 mt-1">
+                      <Clock className="w-3 h-3" />
+                      {userProfile.vipExpiresAt && userProfile.vipExpiresAt < 2000000000000
+                        ? `মেয়াদ: ${new Date(userProfile.vipExpiresAt).toLocaleDateString()} পর্যন্ত`
+                        : 'লাইফটাইম মেম্বারশিপ সক্রিয়'}
+                    </p>
+                  )}
+                </div>
+              </>
+            );
+          })()}
         </motion.div>
 
 
@@ -221,7 +255,7 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
           >
             <div className="space-y-3.5">
               <div className="flex items-center gap-2 text-gray-900 font-bold text-sm pb-2.5 border-b border-gray-100">
-                <User className="w-4 h-4 text-indigo-600" />
+                <User className="w-4 h-4" style={{ color: 'var(--user-theme-color)' }} />
                 <span>Change Name</span>
               </div>
 
@@ -301,7 +335,7 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
           >
             <div className="space-y-3.5">
               <div className="flex items-center gap-2 text-gray-900 font-bold text-sm pb-2.5 border-b border-gray-100">
-                <Key className="w-4 h-4 text-indigo-600" />
+                <Key className="w-4 h-4" style={{ color: 'var(--user-theme-color)' }} />
                 <span>Change Password</span>
               </div>
 

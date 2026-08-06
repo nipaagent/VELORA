@@ -580,6 +580,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               role: val[key].role || (val[key].username === 'admin' ? 'admin' : 'user'),
               status: val[key].status || (val[key].isBanned ? 'banned' : 'approved'),
               isBanned: !!val[key].isBanned || val[key].status === 'banned',
+              isVip: val[key].isVip,
+              vipExpiresAt: val[key].vipExpiresAt,
               tokenState: val[key].tokenState
             }));
             firebaseList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -640,6 +642,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             role: val[key].role || (val[key].username === 'admin' ? 'admin' : 'user'),
             status: val[key].status || (val[key].isBanned ? 'banned' : 'approved'),
             isBanned: !!val[key].isBanned || val[key].status === 'banned',
+            isVip: val[key].isVip,
+            vipExpiresAt: val[key].vipExpiresAt,
             tokenState: val[key].tokenState
           }));
           firebaseList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));

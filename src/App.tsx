@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, LogOut, User, Sparkles, BrainCircuit } from 'lucide-react';
+import { Menu, LogOut, User, Sparkles, BrainCircuit, Crown } from 'lucide-react';
 import { Chat, Message, UserProfile, TokenState } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
@@ -45,6 +45,24 @@ export default function App() {
   ]);
   const [adRewardTokenAmount, setAdRewardTokenAmount] = useState<number>(30000);
   const [defaultMaxDailyTokens, setDefaultMaxDailyTokens] = useState<number>(50000);
+
+  // Inject dynamic theme color CSS variable based on user profile
+  useEffect(() => {
+    const themeColor = userProfile?.themeColor || '#4f46e5';
+    const themeGlow = userProfile?.themeGlow ?? 0.5;
+    
+    document.documentElement.style.setProperty('--user-theme-color', themeColor);
+    document.documentElement.style.setProperty('--user-theme-glow', themeGlow.toString());
+    
+    // Calculate RGB for transparency variations
+    const r = parseInt(themeColor.slice(1, 3), 16);
+    const g = parseInt(themeColor.slice(3, 5), 16);
+    const b = parseInt(themeColor.slice(5, 7), 16);
+    
+    document.documentElement.style.setProperty('--user-theme-color-rgb', `${r}, ${g}, ${b}`);
+    document.documentElement.style.setProperty('--user-theme-color-soft', `rgba(${r}, ${g}, ${b}, 0.1)`);
+    document.documentElement.style.setProperty('--user-theme-color-border', `rgba(${r}, ${g}, ${b}, 0.2)`);
+  }, [userProfile?.themeColor, userProfile?.themeGlow]);
 
   // Sync ad links and system token config from Firebase RTDB in Realtime
   useEffect(() => {
@@ -327,7 +345,7 @@ export default function App() {
     if (!user) return;
 
     // Check token balance & VIP status
-    const isVipActive = Boolean(userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now());
+    const isVipActive = Boolean(userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
     const totalAvailable = (tokenState.maxDailyTokens || defaultMaxDailyTokens) + (tokenState.bonusTokens || 0);
     const remaining = isVipActive ? 999999999 : Math.max(0, totalAvailable - (tokenState.tokensUsedToday || 0));
 
@@ -771,8 +789,70 @@ export default function App() {
                   </button>
                 </div>
                 
-                <div className="flex items-center justify-center gap-2 shrink-0">
-                  <h1 className="text-sm font-black text-slate-900 tracking-[0.2em] uppercase">VELORA</h1>
+                <div className="flex flex-col items-center justify-center shrink-0 relative px-4 pt-1">
+                  {(() => {
+                    const isVipActive = Boolean(userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+                    return (
+                      <>
+                        {isVipActive && (
+                          <motion.div 
+                            initial={{ scale: 0.8, opacity: 0, y: 5 }}
+                            animate={{ 
+                              scale: [1, 1.1, 1],
+                              y: [0, -2, 0],
+                              rotate: [-1, 1, -1],
+                              opacity: 1
+                            }}
+                            transition={{
+                              scale: { duration: 3.5, repeat: Infinity, ease: "easeInOut" },
+                              y: { duration: 3.5, repeat: Infinity, ease: "easeInOut" },
+                              rotate: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                              opacity: { duration: 0.3 }
+                            }}
+                            className="absolute -top-3.5 z-10"
+                          >
+                            <div className="relative flex items-center justify-center">
+                              {/* Glowing background ring */}
+                              <motion.div 
+                                animate={{ 
+                                  opacity: [0.15, 0.35, 0.15],
+                                  scale: [0.8, 1.05, 0.8]
+                                }}
+                                transition={{ duration: 3, repeat: Infinity }}
+                                className="absolute inset-0 blur-md rounded-full -z-10"
+                                style={{ backgroundColor: 'var(--user-theme-color)' }}
+                              />
+                              
+                              <Crown 
+                                className="w-3.5 h-3.5 drop-shadow-[0_0_6px_var(--user-theme-color)]" 
+                                style={{ color: 'var(--user-theme-color)' }}
+                                fill="currentColor"
+                              />
+                              
+                              {/* Sparkle on the crown */}
+                              <motion.div
+                                animate={{ opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
+                                transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
+                                className="absolute -top-0.5 -right-0.5 w-0.5 h-0.5 bg-white rounded-full blur-[0.3px]"
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+                        <h1 
+                          className={cn(
+                            "relative text-sm font-black tracking-[0.2em] uppercase transition-all duration-500",
+                            !isVipActive && "text-slate-900"
+                          )}
+                          style={isVipActive ? { 
+                            color: 'var(--user-theme-color)',
+                            filter: `drop-shadow(0 0 1px var(--user-theme-color-border))`
+                          } : {}}
+                        >
+                          VELORA
+                        </h1>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex-1 flex justify-end items-center gap-1.5 sm:gap-2.5 ml-auto">
@@ -783,25 +863,39 @@ export default function App() {
                     return (
                       <button 
                         onClick={() => setIsProfileOpen(true)}
-                        className={cn(
-                          "p-1 pl-1 pr-2.5 transition-all rounded-full border text-xs font-semibold outline-none shadow-2xs group shrink-0 flex items-center gap-2",
-                          isVipActive
-                            ? "bg-amber-500/10 border-amber-400/90 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]"
-                            : "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800"
-                        )}
+                        className="transition-all rounded-full border-0 outline-none group shrink-0 flex items-center justify-center"
                         title="Profile Settings"
                       >
-                        <div className={cn("rounded-full transition-all flex items-center justify-center", isVipActive ? "ring-2 ring-amber-400 ring-offset-1 shadow-[0_0_12px_rgba(251,191,36,0.7)] animate-pulse" : "")}>
+                        <div 
+                          className={cn("relative rounded-full transition-all flex items-center justify-center p-[2px]", isVipActive ? "ring-2 ring-offset-2 ring-offset-white" : "")}
+                          style={isVipActive ? { 
+                            background: `linear-gradient(45deg, var(--user-theme-color), var(--user-theme-color-border), var(--user-theme-color))`,
+                            boxShadow: `0 0 10px rgba(var(--user-theme-color-rgb), 0.2)`
+                          } : {}}
+                        >
+                          {isVipActive && (
+                            <>
+                              <motion.div 
+                                animate={{ 
+                                  opacity: [0.2, 0.5, 0.2],
+                                  scale: [1, 1.1, 1]
+                                }}
+                                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute inset-[-4px] rounded-full border-2 pointer-events-none blur-[1px]"
+                                style={{ borderColor: 'var(--user-theme-color)', opacity: 0.4 }}
+                              />
+                              <motion.div 
+                                animate={{ 
+                                  rotate: 360
+                                }}
+                                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                                className="absolute inset-[-6px] rounded-full border border-dashed pointer-events-none"
+                                style={{ borderColor: 'var(--user-theme-color)', opacity: 0.3 }}
+                              />
+                            </>
+                          )}
                           <UserAvatar name={userProfile.fullName || userProfile.username} avatarUrl={userProfile.avatarUrl} size="sm" />
                         </div>
-                        <span className={cn(
-                          "hidden sm:inline text-xs font-black truncate max-w-[120px]",
-                          isVipActive 
-                            ? "bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-600 bg-clip-text text-transparent animate-pulse drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]" 
-                            : "text-slate-800"
-                        )}>
-                          {userProfile.fullName || userProfile.username}
-                        </span>
                       </button>
                     );
                   })()}
@@ -868,6 +962,7 @@ export default function App() {
         defaultMaxDailyTokens={defaultMaxDailyTokens}
         userId={user?.uid}
         userProfile={userProfile}
+        onUpdateProfile={(updated) => setUserProfile(updated)}
         onRewardClaimed={(bonusAmount) => {
           const updated: TokenState = {
             ...tokenState,
