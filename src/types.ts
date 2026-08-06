@@ -38,6 +38,12 @@ export interface UserProfile {
   themeColor?: string;
   themeGlow?: number;
   tokenState?: TokenState;
+  referralCode?: string;
+  referredBy?: string;
+  referredByCode?: string;
+  referredByName?: string;
+  referralCount?: number;
+  adsWatchedCount?: number;
 }
 
 export type RedeemRewardType = 'tokens' | 'vip_days';

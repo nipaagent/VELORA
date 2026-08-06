@@ -18,6 +18,7 @@ interface TokenModalProps {
   userId?: string;
   userProfile?: UserProfile | null;
   onUpdateProfile?: (updated: UserProfile) => void;
+  onOpenReferral?: () => void;
 }
 
 const DEFAULT_AD_LINK = "https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170";
@@ -44,7 +45,8 @@ export default function TokenModal({
   defaultMaxDailyTokens = 50000,
   userId,
   userProfile,
-  onUpdateProfile
+  onUpdateProfile,
+  onOpenReferral
 }: TokenModalProps) {
   const [isWatchingAd, setIsWatchingAd] = useState(false);
   const [adTimer, setAdTimer] = useState(30);
@@ -253,14 +255,40 @@ export default function TokenModal({
     setAdIframeLoaded(false);
   };
 
-  const handleClaimReward = () => {
+  const handleClaimReward = async () => {
     if (adLoadFailed) {
       alert("অ্যাডের সমস্যা হয়েছে বা এড পুরোপুরি লোড হতে পারেনি! দয়া করে পুনরায় অ্যাড চালু করুন।");
       return;
     }
-    onRewardClaimed(adRewardTokenAmount); // Grant bonus tokens
+
+    // Grant bonus tokens via App.tsx callback
+    onRewardClaimed(adRewardTokenAmount);
     setClaimedSuccess(true);
     setIsWatchingAd(false);
+
+    // Track ad milestone (100 ads = 12h VIP)
+    if (userId && userProfile && onUpdateProfile) {
+      try {
+        const currentAdsCount = (userProfile.adsWatchedCount || 0) + 1;
+        const updates: any = {
+          adsWatchedCount: currentAdsCount
+        };
+
+        if (currentAdsCount >= 100) {
+          const currentVipExp = userProfile.vipExpiresAt || 0;
+          const baseTime = Math.max(currentVipExp, Date.now());
+          updates.vipExpiresAt = baseTime + (12 * 60 * 60 * 1000); // 12 hours
+          updates.isVip = true;
+          updates.adsWatchedCount = 0; // Reset milestone
+          alert("🎉 অভিনন্দন! আপনি ১০০টি অ্যাড দেখেছেন! আপনাকে ১২ ঘন্টার জন্য ভিআইপি মেম্বারশিপ দেওয়া হয়েছে।");
+        }
+
+        await update(ref(db, `users/${userId}`), updates);
+        onUpdateProfile({ ...userProfile, ...updates });
+      } catch (err) {
+        console.error("Ad milestone update error:", err);
+      }
+    }
     
     setTimeout(() => {
       setClaimedSuccess(false);
@@ -382,7 +410,7 @@ export default function TokenModal({
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10px]">
-                          {isVipActive ? "মেয়াদ উত্তীর্ণের সময়:" : "অ্যাড/বোনাস টোকেন:"}
+                          {isVipActive ? "মেয়াদ উত্তীর্ণের সময়:" : "বোনাস টোকেন (Referral):"}
                         </span>
                         <span className="font-extrabold text-emerald-400">
                           {isVipActive 
@@ -393,24 +421,43 @@ export default function TokenModal({
                     </div>
                   </div>
 
-                  <div className="text-[11px] font-semibold text-slate-600 bg-amber-50/80 border border-amber-200/80 rounded-xl p-2.5 flex items-start gap-2">
-                    <span className="text-amber-600 shrink-0 mt-0.5 font-bold">💡</span>
-                    <span>
-                      <strong>গুরুত্বপূর্ণ তথ্য:</strong> রিডিম কোড থেকে পাওয়া বোনাস টোকেন ২৪ ঘণ্টা পর মুছে যায় না (মেয়াদহীন)। আর ভিআইপি রিডিম করলে মেয়াদের সময়সূচী অনুযায়ী সম্পূর্ণ আনলিমিটেড টোকেন ব্যবহার করতে পারবেন।
-                    </span>
+                  {/* Referral Navigation Button */}
+                  <div className="bg-gradient-to-r from-emerald-500/10 to-indigo-500/10 border border-indigo-200/50 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white rounded-xl shadow-sm">
+                        <Gift className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div className="text-left">
+                        <h4 className="text-sm font-black text-slate-800">বন্ধুদের রেফার করে VIP নিন!</h4>
+                        <p className="text-[10px] text-slate-500 font-bold">১০ জন রেফার করলে পাবেন ৩ দিন ভিআইপি ফ্রি।</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={onOpenReferral}
+                      className="w-full sm:w-auto px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-800 transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+                    >
+                      <span>রেফার করুন</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
                   </div>
 
             {/* Watch Ad Action Section */}
             {!isVipActive && (
               !isWatchingAd ? (
                 <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600/10 text-indigo-700 flex items-center justify-center shrink-0">
-                      <Tv className="w-5 h-5" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-600/10 text-indigo-700 flex items-center justify-center shrink-0">
+                        <Tv className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-900 text-sm">টোকেন রিচার্জ প্রয়োজন?</h4>
+                        <p className="text-xs text-slate-600 font-semibold">প্রতিবার অ্যাড দেখলে {formatTokenCount(adRewardTokenAmount)} টোকেন ফ্রি নিন!</p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-black text-slate-900 text-sm">টোকেন শেষ বা রিচার্জ প্রয়োজন?</h4>
-                      <p className="text-xs text-slate-600 font-semibold">৩০ সেকেন্ড এড দেখে প্রতিবার {formatTokenCount(adRewardTokenAmount)} টোকেন ফ্রি নিন!</p>
+                    <div className="text-right">
+                      <span className="text-[10px] font-black text-indigo-600 block uppercase opacity-70">অ্যাড কাউন্ট</span>
+                      <span className="text-xs font-black text-slate-900">{userProfile?.adsWatchedCount || 0} / ১০০</span>
                     </div>
                   </div>
 

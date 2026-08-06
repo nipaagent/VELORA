@@ -876,6 +876,22 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     const generatedUid = `user_${Date.now()}_${Math.floor(Math.random()*1000)}`;
     setIsSaving(true);
 
+    // Generate unique referral code (Pattern: I + 4 chars + M)
+    const generateReferral = () => {
+      const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+      return `I${rand}M`;
+    };
+    
+    let newReferral = generateReferral();
+    // Check uniqueness among existing users
+    if (users && users.length > 0) {
+      let attempts = 0;
+      while (users.some(u => (u as any).referralCode === newReferral) && attempts < 10) {
+        newReferral = generateReferral();
+        attempts++;
+      }
+    }
+
     const newUserObj = {
       uid: generatedUid,
       fullName: newName.trim(),
@@ -884,7 +900,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       createdAt: Date.now(),
       role: newRole,
       status: newStatus,
-      isBanned: newStatus === 'banned'
+      isBanned: newStatus === 'banned',
+      referralCode: newReferral
     };
 
     try {

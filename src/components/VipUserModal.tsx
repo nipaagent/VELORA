@@ -36,11 +36,11 @@ export const VipUserModal: React.FC<VipUserModalProps> = ({
   };
 
   const presetOptions = [
-    { label: '১ দিন', days: 1, desc: '২৪ ঘণ্টার প্রিমিয়াম' },
-    { label: '২ দিন', days: 2, desc: '৪৮ ঘণ্টার প্রিমিয়াম' },
-    { label: '৫ দিন', days: 5, desc: '৫ দিনের প্রিমিয়াম' },
-    { label: '১০ দিন', days: 10, desc: '১০ দিনের প্রিমিয়াম' },
-    { label: '৩০ দিন', days: 30, desc: '১ মাসের প্রিমিয়াম' },
+    { label: '১ দিন', days: 1 },
+    { label: '২ দিন', days: 2 },
+    { label: '৫ দিন', days: 5 },
+    { label: '১০ দিন', days: 10 },
+    { label: '৩০ দিন', days: 30 },
   ];
 
   return (
@@ -131,11 +131,7 @@ export const VipUserModal: React.FC<VipUserModalProps> = ({
                   >
                     <div className="flex items-center justify-between w-full">
                       <span className="font-extrabold text-amber-300 text-sm">{opt.label}</span>
-                      <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[9px] font-black">
-                        +{opt.days}D
-                      </span>
                     </div>
-                    <span className="text-[10px] text-slate-400 font-normal mt-1">{opt.desc}</span>
                   </motion.button>
                 ))}
 
@@ -152,11 +148,7 @@ export const VipUserModal: React.FC<VipUserModalProps> = ({
                       <Crown className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
                       লাইফটাইম
                     </span>
-                    <span className="px-1.5 py-0.5 bg-amber-400 text-slate-950 rounded text-[9px] font-black">
-                      ∞
-                    </span>
                   </div>
-                  <span className="text-[10px] text-amber-200/80 font-normal mt-1">সারা জীবনের জন্য</span>
                 </motion.button>
               </div>
             </div>
@@ -222,22 +214,12 @@ export const VipUserModal: React.FC<VipUserModalProps> = ({
           </div>
 
           {/* Modal Footer */}
-          <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
-            {isSaving ? (
-              <div className="flex items-center gap-2 text-xs text-amber-400 font-bold">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>সেভ করা হচ্ছে...</span>
-              </div>
-            ) : (
-              <span className="text-[10px] text-slate-400 font-medium">
-                ⚡ পরিবর্তন সাথে সাথে ফায়ারবেসে আপডেট হবে।
-              </span>
-            )}
+          <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-end">
             <button
               onClick={onClose}
-              className="ml-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs transition-all cursor-pointer"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs transition-all cursor-pointer"
             >
-              বন্ধ করুন (Close)
+              বন্ধ করুন
             </button>
           </div>
         </motion.div>

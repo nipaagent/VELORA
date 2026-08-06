@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock } from 'lucide-react';
+import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift } from 'lucide-react';
 import { UserProfile } from '../types';
 import { auth, db } from '../lib/firebase';
 import UserAvatar from './UserAvatar';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { ref, update } from 'firebase/database';
+import { ref, update, get } from 'firebase/database';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Crown } from 'lucide-react';
@@ -13,9 +13,10 @@ interface ProfilePageProps {
   onBack: () => void;
   userProfile: UserProfile | null;
   onUpdateProfile: (updated: UserProfile) => void;
+  scrollToReferral?: boolean;
 }
 
-export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: ProfilePageProps) {
+export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scrollToReferral }: ProfilePageProps) {
   const [fullName, setFullName] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [nameSuccess, setNameSuccess] = useState('');
@@ -28,6 +29,119 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
   const [updatingPass, setUpdatingPass] = useState(false);
   const [passSuccess, setPassSuccess] = useState('');
   const [passError, setPassError] = useState('');
+  const [copyingReferral, setCopyingReferral] = useState(false);
+  const [redeemCode, setRedeemCode] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemError, setRedeemError] = useState('');
+  const [redeemSuccess, setRedeemSuccess] = useState('');
+
+  const handleCopyReferral = () => {
+    if (!userProfile.referralCode) return;
+    navigator.clipboard.writeText(userProfile.referralCode);
+    setCopyingReferral(true);
+    setTimeout(() => setCopyingReferral(false), 2000);
+  };
+
+    const handleRedeemReferral = async () => {
+    const code = redeemCode.trim().toUpperCase();
+    if (!code) return;
+
+    if (userProfile.referredBy || userProfile.referredByCode) {
+      setRedeemError('আপনি ইতিমধ্যে একটি রেফার কোড ব্যবহার করেছেন।');
+      return;
+    }
+
+    if (code === userProfile.referralCode) {
+      setRedeemError('আপনি নিজের কোড ব্যবহার করতে পারবেন না।');
+      return;
+    }
+    
+    setRedeeming(true);
+    setRedeemError('');
+    setRedeemSuccess('');
+
+    try {
+      const usersRef = ref(db, 'users');
+      const snapshot = await get(usersRef);
+      if (!snapshot.exists()) throw new Error('Users not found');
+      
+      const allUsers = snapshot.val();
+      const referrer = Object.values(allUsers).find((u: any) => u.referralCode === code) as any;
+      
+      if (!referrer) {
+        setRedeemError('ভুল রেফার কোড। অনুগ্রহ করে সঠিক কোড দিন।');
+        setRedeeming(false);
+        return;
+      }
+
+      const currentUserRef = ref(db, `users/${userProfile.uid}`);
+      const referrerRef = ref(db, `users/${referrer.uid}`);
+
+      // 1. Update Current User: +50k tokens, set referredBy
+      const currentBonus = (userProfile.tokenState?.bonusTokens || 0);
+      const userUpdates: any = {
+        'tokenState/bonusTokens': currentBonus + 50000,
+        'referredBy': referrer.uid,
+        'referredByCode': code,
+        'referredByName': referrer.fullName || referrer.username
+      };
+      
+      await update(currentUserRef, userUpdates);
+
+      // 2. Update Referrer: +100k tokens, increment count, check milestones
+      const referrerBonus = (referrer.tokenState?.bonusTokens || 0);
+      const newReferralCount = (referrer.referralCount || 0) + 1;
+      
+      let extraVipDays = 0;
+      if (newReferralCount === 10) extraVipDays = 3;
+      else if (newReferralCount === 20) extraVipDays = 10;
+      else if (newReferralCount === 30) extraVipDays = 20;
+
+      const referrerUpdates: any = {
+        'tokenState/bonusTokens': referrerBonus + 100000,
+        'referralCount': newReferralCount
+      };
+
+      if (extraVipDays > 0) {
+        const currentVipExpiry = referrer.vipExpiresAt || 0;
+        const baseTime = Math.max(currentVipExpiry, Date.now());
+        referrerUpdates['vipExpiresAt'] = baseTime + (extraVipDays * 24 * 60 * 60 * 1000);
+        referrerUpdates['isVip'] = true;
+      }
+
+      await update(referrerRef, referrerUpdates);
+
+      setRedeemSuccess('রেফার কোড সফলভাবে ব্যবহার করা হয়েছে! আপনি ৫০,০০০ বোনাস টোকেন পেয়েছেন।');
+      setRedeemCode('');
+      
+      // Update local state
+      onUpdateProfile({
+        ...userProfile,
+        ...userUpdates,
+        tokenState: {
+          ...userProfile.tokenState!,
+          bonusTokens: currentBonus + 50000
+        }
+      });
+
+    } catch (err) {
+      console.error(err);
+      setRedeemError('কিছু সমস্যা হয়েছে। আবার চেষ্টা করুন।');
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  useEffect(() => {
+    if (scrollToReferral) {
+      setTimeout(() => {
+        const element = document.getElementById('referral-section');
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 600);
+    }
+  }, [scrollToReferral]);
 
   useEffect(() => {
     if (userProfile) {
@@ -325,7 +439,151 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
             </div>
           </motion.section>
 
-          {/* Change Password Section */}
+          {/* Referral & VIP Section */}
+        <motion.div 
+          id="referral-section"
+          variants={{
+            hidden: { y: 20, opacity: 0 },
+            visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
+          }}
+          className="space-y-4"
+        >
+          {/* Your Referral Code Card */}
+          <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl p-5 sm:p-6 text-white shadow-xl shadow-indigo-200/50 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+              <Share2 className="w-24 h-24 rotate-12" />
+            </div>
+            
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                  <Gift className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold">বন্ধুদের রেফার করুন</h3>
+              </div>
+              
+              <p className="text-indigo-100 text-xs sm:text-sm leading-relaxed mb-6 max-w-[280px]">
+                আপনার রেফার কোড ব্যবহার করে কেউ একাউন্ট খুললে আপনি পাবেন <span className="font-bold text-white">১ লক্ষ টোকেন</span> এবং তারা পাবে <span className="font-bold text-white">৫০,০০০ টোকেন</span>।
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="flex-1 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 px-4 py-3 flex items-center justify-between group/code">
+                  <span className="font-mono font-black text-lg tracking-wider">
+                    {userProfile.referralCode || 'NOT_FOUND'}
+                  </span>
+                  <button 
+                    onClick={handleCopyReferral}
+                    className="p-1.5 hover:bg-white/20 rounded-lg transition-colors text-indigo-100 hover:text-white"
+                    title="Copy Code"
+                  >
+                    {copyingReferral ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+                  </button>
+                </div>
+                
+                <button 
+                  onClick={handleCopyReferral}
+                  className="bg-white text-indigo-700 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-indigo-50 active:scale-95 transition-all shadow-lg"
+                >
+                  {copyingReferral ? 'কপি হয়েছে' : 'রেফার কোড কপি করুন'}
+                </button>
+              </div>
+
+              {/* Milestone Progress */}
+              <div className="mt-8 pt-6 border-t border-white/10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    রেফারেল মাইলস্টোন (VIP Rewards)
+                  </h4>
+                  <span className="text-xs font-black bg-white/20 px-2 py-0.5 rounded-full">
+                    {userProfile.referralCount || 0} জন রেফারড
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { target: 10, days: 3, label: '১০ জন' },
+                    { target: 20, days: 10, label: '২০ জন' },
+                    { target: 30, days: 20, label: '৩০ জন' }
+                  ].map((m) => {
+                    const isAchieved = (userProfile.referralCount || 0) >= m.target;
+                    return (
+                      <div 
+                        key={m.target}
+                        className={cn(
+                          "p-3 rounded-2xl border text-center transition-all",
+                          isAchieved 
+                            ? "bg-amber-400 border-amber-300 text-amber-950 shadow-[0_0_15px_rgba(251,191,36,0.4)]" 
+                            : "bg-white/5 border-white/10 text-indigo-100"
+                        )}
+                      >
+                        <div className="text-[10px] font-bold uppercase mb-1 opacity-80">{m.label}</div>
+                        <div className="text-xs font-black">{m.days} দিন VIP</div>
+                        {isAchieved && <CheckCircle2 className="w-3 h-3 mx-auto mt-1" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Redeem Referral Code Card */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-50 rounded-xl">
+                <Zap className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">রেফার কোড ব্যবহার করুন</h3>
+                <p className="text-xs text-gray-500">অন্য কারো কোড ব্যবহার করে ৫০,০০০ টোকেন পান</p>
+              </div>
+            </div>
+
+            {userProfile.referredBy ? (
+              <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-full">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-900">কোড ব্যবহার করা হয়েছে!</p>
+                  <p className="text-[10px] text-emerald-700">আপনি <span className="font-bold">{userProfile.referredByName}</span> এর রেফার কোড ({userProfile.referredByCode}) ব্যবহার করেছেন।</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={redeemCode}
+                    onChange={(e) => setRedeemCode(e.target.value)}
+                    placeholder="বন্ধুর রেফার কোড দিন (যেমন: ABC123)"
+                    className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 transition-all font-mono uppercase"
+                  />
+                  <button
+                    onClick={handleRedeemReferral}
+                    disabled={redeeming || !redeemCode.trim()}
+                    className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-slate-800 active:scale-95 transition-all shadow-md disabled:bg-gray-100 disabled:text-gray-400"
+                  >
+                    {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : 'অ্যাক্টিভেট'}
+                  </button>
+                </div>
+                {redeemError && (
+                  <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1 ml-1">
+                    <AlertCircle className="w-3 h-3" /> {redeemError}
+                  </p>
+                )}
+                {redeemSuccess && (
+                  <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 ml-1">
+                    <CheckCircle2 className="w-3 h-3" /> {redeemSuccess}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Change Password Section */}
           <motion.section 
             variants={{
               hidden: { y: 20, opacity: 0 },
@@ -426,81 +684,6 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile }: Pr
           </motion.section>
 
         </div>
-
-        {/* VELORA Features Section */}
-        <motion.section 
-          variants={{
-            hidden: { y: 20, opacity: 0 },
-            visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
-          }}
-          className="bg-gray-50 rounded-2xl p-5 border border-gray-200/90 space-y-4"
-        >
-          <div className="flex items-center gap-2.5 border-b border-gray-200 pb-3">
-            <motion.div 
-              whileHover={{ rotate: 15 }}
-              className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0"
-            >
-              <Sparkles className="w-4 h-4" />
-            </motion.div>
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 tracking-wide">VELORA — Intelligent Capabilities</h3>
-              <p className="text-[11px] text-gray-500">Fast, accurate, and reliable AI assistance for any task</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs transition-shadow hover:shadow-md"
-            >
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-500 shrink-0" />
-                <h4 className="font-bold text-xs text-gray-900">Instant Responses</h4>
-              </div>
-              <p className="text-[11px] text-gray-600 leading-relaxed">
-                VELORA delivers rapid, accurate answers to casual, analytical, or academic queries.
-              </p>
-            </motion.div>
-
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs transition-shadow hover:shadow-md"
-            >
-              <div className="flex items-center gap-2">
-                <Code2 className="w-4 h-4 text-indigo-600 shrink-0" />
-                <h4 className="font-bold text-xs text-gray-900">Advanced Coding</h4>
-              </div>
-              <p className="text-[11px] text-gray-600 leading-relaxed">
-                Write clean, properly formatted, fully functional code blocks with copy support.
-              </p>
-            </motion.div>
-
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="bg-white border border-gray-200/80 rounded-xl p-3.5 space-y-1.5 shadow-2xs transition-shadow hover:shadow-md"
-            >
-              <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
-                <h4 className="font-bold text-xs text-gray-900">Secure & Encrypted</h4>
-              </div>
-              <p className="text-[11px] text-gray-600 leading-relaxed">
-                Your profile credentials and chat history are safely stored with modern encryption.
-              </p>
-            </motion.div>
-          </div>
-
-          <div className="bg-white rounded-xl p-3 border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-600">
-            <span className="text-[11px] font-medium text-gray-600">VELORA AI Assistant — Version 1.0.0</span>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onBack}
-              className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold transition-colors"
-            >
-              Back to Chat
-            </motion.button>
-          </div>
-        </motion.section>
 
       </main>
     </motion.div>

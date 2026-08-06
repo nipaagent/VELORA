@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Eye, EyeOff, Lock, User, UserCheck, Sparkles, Loader2, LogIn, UserPlus, AlertCircle } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { ref, get, set } from 'firebase/database';
+import { ref, get, set, update } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
+import { Gift } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCodeInput, setReferralCodeInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -51,18 +53,101 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const uid = userCredential.user.uid;
 
-        // Now authenticated, save user profile 100% directly in Firebase Realtime Database
+        // Referral logic
+        let referrerUid = '';
+        let referrerName = '';
+        const cleanReferral = referralCodeInput.trim().toUpperCase();
+        if (cleanReferral) {
+          const usersRef = ref(db, 'users');
+          const snapshot = await get(usersRef);
+          if (snapshot.exists()) {
+            const allUsers = snapshot.val();
+            const referrer = Object.values(allUsers).find((u: any) => u.referralCode === cleanReferral) as any;
+            if (referrer) {
+              referrerUid = referrer.uid;
+              referrerName = referrer.fullName || referrer.username;
+            }
+          }
+        }
+
+        // Generate unique referral code for new user (Pattern: I + 4 chars + M)
+        let newReferralCode = '';
+        const generateCode = () => {
+          const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+          return `I${randomPart}M`;
+        };
+
+        // Ensure uniqueness (basic check)
+        newReferralCode = generateCode();
+        const usersRef = ref(db, 'users');
+        const usersSnap = await get(usersRef);
+        if (usersSnap.exists()) {
+          const allCodes = Object.values(usersSnap.val()).map((u: any) => u.referralCode);
+          let attempts = 0;
+          while (allCodes.includes(newReferralCode) && attempts < 10) {
+            newReferralCode = generateCode();
+            attempts++;
+          }
+        }
+
+        // New user gets 100,000 tokens and 1-day VIP if referred
+        const initialBonus = referrerUid ? 100000 : 0;
+        const vipExpiresAt = referrerUid ? Date.now() + (24 * 60 * 60 * 1000) : undefined;
+
+        // Now authenticated, save user profile
         const newUserProfile = {
           uid,
           fullName: fullName.trim(),
           username: cleanUsername,
           password: password,
           createdAt: Date.now(),
-          role: cleanUsername === 'admin' ? 'admin' : 'user'
+          role: cleanUsername === 'admin' ? 'admin' : 'user',
+          referralCode: newReferralCode,
+          referredBy: referrerUid || undefined,
+          referredByCode: referrerUid ? cleanReferral : undefined,
+          referredByName: referrerName || undefined,
+          isVip: referrerUid ? true : false,
+          vipExpiresAt: vipExpiresAt,
+          tokenState: {
+            tokensUsedToday: 0,
+            lastResetDate: new Date().toISOString().split('T')[0],
+            bonusTokens: initialBonus
+          }
         };
 
         await set(ref(db, `users/${uid}`), newUserProfile);
         await set(ref(db, `usernames/${cleanUsername}`), uid);
+
+        // Award referrer 100,000 tokens and update referral count/milestones
+        if (referrerUid) {
+          const referrerRef = ref(db, `users/${referrerUid}`);
+          const referrerSnap = await get(referrerRef);
+          const referrerData = referrerSnap.val();
+          
+          if (referrerData) {
+            const currentBonus = (referrerData.tokenState?.bonusTokens || 0);
+            const newReferralCount = (referrerData.referralCount || 0) + 1;
+            
+            let extraVipDays = 0;
+            if (newReferralCount === 10) extraVipDays = 3;
+            else if (newReferralCount === 20) extraVipDays = 10;
+            else if (newReferralCount === 30) extraVipDays = 20;
+
+            const updates: any = {
+              'tokenState/bonusTokens': currentBonus + 100000,
+              'referralCount': newReferralCount
+            };
+
+            if (extraVipDays > 0) {
+              const currentVipExpiry = referrerData.vipExpiresAt || 0;
+              const baseTime = Math.max(currentVipExpiry, Date.now());
+              updates['vipExpiresAt'] = baseTime + (extraVipDays * 24 * 60 * 60 * 1000);
+              updates['isVip'] = true;
+            }
+
+            await update(referrerRef, updates);
+          }
+        }
 
       } else {
         // Sign In
@@ -221,6 +306,30 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
                 </button>
               </div>
             </div>
+
+            <AnimatePresence mode="wait">
+              {isSignUp && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2"
+                >
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Referral Code (Optional)</label>
+                  <div className="relative group">
+                    <Gift className="w-4 h-4 text-slate-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-indigo-600" />
+                    <input
+                      type="text"
+                      value={referralCodeInput}
+                      onChange={(e) => setReferralCodeInput(e.target.value)}
+                      placeholder="e.g. VELORA77"
+                      className="w-full pl-11 pr-4 py-3 text-sm bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-medium placeholder:text-slate-300 uppercase"
+                    />
+                  </div>
+                  <p className="text-[9px] text-slate-400 ml-1 font-medium italic">Enter a code to get 1-day VIP access instantly!</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <button
               type="submit"

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, MessageSquare, Trash2, LogOut, User, Sparkles, Code2, ShieldCheck, BrainCircuit } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, LogOut, User, Sparkles, Code2, ShieldCheck, BrainCircuit, Gift } from 'lucide-react';
 import { Chat, UserProfile, TokenState } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,11 +20,12 @@ interface SidebarProps {
   onOpenTokenModal?: () => void;
   onSignOut: () => void;
   onOpenProfile: () => void;
+  onOpenReferral?: () => void;
   onOpenDeveloper?: () => void;
   onOpenAdmin?: () => void;
 }
 
-export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelectChat, onNewChat, onDeleteChat, onClearAllChats, userProfile, tokenState, onOpenTokenModal, onSignOut, onOpenProfile, onOpenDeveloper, onOpenAdmin }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelectChat, onNewChat, onDeleteChat, onClearAllChats, userProfile, tokenState, onOpenTokenModal, onSignOut, onOpenProfile, onOpenReferral, onOpenDeveloper, onOpenAdmin }: SidebarProps) {
   return (
     <div className="w-full h-full bg-white text-gray-800 flex flex-col justify-between border-r border-gray-100 shadow-sm">
       <div className="flex flex-col min-h-0 flex-1">
@@ -118,6 +119,18 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
       <div className="shrink-0">
         {/* Admin & Developer Links */}
         <div className="p-2 border-t border-gray-100 space-y-1.5 bg-white">
+          {/* Refer & Earn button */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onOpenReferral}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-rose-600 hover:bg-rose-50/70 rounded-xl transition-colors text-[10px] font-black uppercase tracking-widest border border-rose-100/60 shadow-2xs"
+            title="Refer & Earn VIP"
+          >
+            <Gift className="w-4 h-4 text-rose-500" />
+            <span>Refer & Earn</span>
+          </motion.button>
+
           {/* Admin Panel button - ONLY shown to username 'Admin' or 'admin' */}
           {userProfile?.username?.toLowerCase() === 'admin' && (
             <motion.button

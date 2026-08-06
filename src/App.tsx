@@ -14,7 +14,7 @@ import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { ref, onValue, set, remove, get } from 'firebase/database';
+import { ref, onValue, set, remove, get, update } from 'firebase/database';
 import { formatTokenCount, cn } from './lib/utils';
 
 const getTodayStr = () => new Date().toISOString().split('T')[0];
@@ -30,6 +30,7 @@ const defaultTokenState: TokenState = {
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [profileScrollToReferral, setProfileScrollToReferral] = useState(false);
   const [isDeveloperOpen, setIsDeveloperOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
@@ -194,6 +195,12 @@ export default function App() {
               setUserProfile(prof);
               localStorage.setItem(localProfileKey, JSON.stringify(prof));
 
+              // Auto-generate referral code if missing (for older accounts)
+              if (!prof.referralCode) {
+                const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                update(userRef, { referralCode: newCode }).catch(() => {});
+              }
+
               if (prof.tokenState) {
                 const todayStr = getTodayStr();
                 if (prof.tokenState.lastResetDate === todayStr) {
@@ -229,7 +236,8 @@ export default function App() {
                 createdAt: Date.now(),
                 role: cleanUsername === 'admin' ? 'admin' : 'user',
                 status: 'approved',
-                isBanned: false
+                isBanned: false,
+                referralCode: Math.random().toString(36).substring(2, 8).toUpperCase()
               };
               try {
                 await set(userRef, initialProf);
@@ -721,9 +729,13 @@ export default function App() {
             className="fixed inset-0 z-50 bg-white"
           >
             <ProfilePage 
-              onBack={() => setIsProfileOpen(false)} 
+              onBack={() => {
+                setIsProfileOpen(false);
+                setProfileScrollToReferral(false);
+              }} 
               userProfile={userProfile} 
               onUpdateProfile={(updated) => setUserProfile(updated)} 
+              scrollToReferral={profileScrollToReferral}
             />
           </motion.div>
         ) : (
@@ -760,6 +772,11 @@ export default function App() {
                 onSignOut={handleSignOut}
                 onOpenProfile={() => {
                   setIsProfileOpen(true);
+                  setIsSidebarOpen(false);
+                }}
+                onOpenReferral={() => {
+                  setIsProfileOpen(true);
+                  setProfileScrollToReferral(true);
                   setIsSidebarOpen(false);
                 }}
                 onOpenDeveloper={() => {
@@ -963,6 +980,11 @@ export default function App() {
         userId={user?.uid}
         userProfile={userProfile}
         onUpdateProfile={(updated) => setUserProfile(updated)}
+        onOpenReferral={() => {
+          setIsTokenModalOpen(false);
+          setIsProfileOpen(true);
+          setProfileScrollToReferral(true);
+        }}
         onRewardClaimed={(bonusAmount) => {
           const updated: TokenState = {
             ...tokenState,
