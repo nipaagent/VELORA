@@ -3,7 +3,7 @@ import {
   Users, UserPlus, Search, Edit3, Trash2, Eye, EyeOff, Check, X, 
   ShieldAlert, RefreshCw, KeyRound, ArrowLeft, Save, Sparkles, AlertCircle, ShieldCheck,
   Ban, UserCheck, ShieldX, CheckCircle2, AlertTriangle, Lock, Code2, Loader2, Tv, Plus, ExternalLink, Zap, Minus, Gift,
-  Ticket, Crown, Clock, Tag, Copy, Send
+  Ticket, Crown, Clock, Tag, Copy, Send, LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -42,10 +42,15 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [isStatsLoading, setIsStatsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Visibility toggles for user passwords
+  // Visibility toggles for user passwords (defaulting to hidden for privacy, but easy to show)
   const [visiblePasswords, setVisiblePasswords] = useState<{ [uid: string]: boolean }>({});
   
-  // Edit Modal state
+  const togglePasswordVisibility = (uid: string) => {
+    setVisiblePasswords(prev => ({
+      ...prev,
+      [uid]: !prev[uid]
+    }));
+  };
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
@@ -95,6 +100,25 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   // VIP / Premium Control Modal State
   const [vipModalUser, setVipModalUser] = useState<AdminUser | null>(null);
   const [isSavingVipChange, setIsSavingVipChange] = useState(false);
+
+  // All Logout Logic
+  const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
+
+  const handleAllLogout = async () => {
+    if (!window.confirm("আপনি কি নিশ্চিত যে সকল ইউজারকে লগ আউট করতে চান? (এডমিন বাদে সবাই লগ আউট হবে)")) return;
+
+    setIsLoggingOutAll(true);
+    try {
+      // Set a global timestamp in DB. Users whose lastAuthCheck is before this will be logged out.
+      const timestamp = Date.now();
+      await set(ref(db, 'settings/force_logout_timestamp'), timestamp);
+      showToast("সফলভাবে সকল ইউজারকে লগ আউট সিগন্যাল পাঠানো হয়েছে!", "success");
+    } catch (err: any) {
+      showToast("লগ আউট সিগন্যাল পাঠাতে সমস্যা: " + err.message, "error");
+    } finally {
+      setIsLoggingOutAll(false);
+    }
+  };
 
   // Dashboard Tab State
   const [activeTab, setActiveTab] = useState<'users' | 'tokens' | 'ads' | 'redeem' | 'apikeys'>('users');
@@ -671,10 +695,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
   }, [activeTab]);
 
-  const togglePasswordVisibility = (uid: string) => {
-    setVisiblePasswords(prev => ({ ...prev, [uid]: !prev[uid] }));
-  };
-
   const handleOpenEdit = (user: AdminUser) => {
     setEditingUser(user);
     setEditName(user.fullName);
@@ -907,6 +927,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     try {
       // Direct Firebase RTDB write
       await set(ref(db, `users/${generatedUid}`), newUserObj);
+      await set(ref(db, `user_list/${generatedUid}`), newUserObj);
       await set(ref(db, `usernames/${cleanUsername}`), generatedUid);
 
       // Server API sync
@@ -1066,6 +1087,17 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                 <span>মোট ইউজার: {users.length} জন</span>
               </motion.span>
 
+              <motion.button
+                whileHover={{ scale: 1.02, backgroundColor: '#fef2f2' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleAllLogout}
+                disabled={isLoggingOutAll}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 border border-red-100 text-red-600 font-bold text-xs transition-all shadow-2xs disabled:opacity-50"
+              >
+                {isLoggingOutAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                <span>সকল ইউজার লগআউট</span>
+              </motion.button>
+
               {onBackToChat && (
                 <motion.button
                   whileHover={{ x: -2 }}
@@ -1187,10 +1219,18 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, scale: 0.98 }}
                       transition={{ duration: 0.3, delay: Math.min(idx * 0.03, 0.3) }}
-                      className={`p-3 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      className={`p-3 relative overflow-hidden transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                         isBanned ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-slate-50/80'
                       }`}
                     >
+                      {/* New User Indicator (Logic: Created in last 24h) */}
+                      {user.createdAt && (Date.now() - user.createdAt < 24 * 60 * 60 * 1000) && (
+                        <div className="absolute top-0 right-0 pointer-events-none">
+                          <div className="bg-rose-500 text-white text-[7px] font-black px-4 py-0.5 rotate-45 translate-x-3 -translate-y-0.5 shadow-sm uppercase tracking-tighter">
+                            NEW
+                          </div>
+                        </div>
+                      )}
                       
                       {/* User Details */}
                       <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -1236,21 +1276,39 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-4 text-xs font-mono text-slate-600 flex-wrap">
-                        <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/80">
-                          <KeyRound className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="text-slate-400 text-[10px]">পাসওয়ার্ড:</span>
-                          <span className="font-bold text-slate-800">
-                            {visiblePasswords[user.uid] ? (user.password || 'N/A') : '••••••••'}
+                      <div className="flex items-center gap-3 text-xs font-mono text-slate-600 flex-wrap">
+                        {/* Password Section - High Visibility & Toggleable */}
+                        <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 shadow-lg group/pass min-w-[200px]">
+                          <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                          <span className="text-slate-400 text-[9px] font-black uppercase tracking-widest">Password:</span>
+                          <span className="font-black text-indigo-300 selection:bg-indigo-500/30 text-sm tracking-tight min-w-[60px]">
+                            {visiblePasswords[user.uid] ? (user.password || 'লগইন করলে দেখা যাবে') : '••••••••'}
                           </span>
-                          <motion.button
-                            whileTap={{ scale: 0.8 }}
-                            onClick={() => togglePasswordVisibility(user.uid)}
-                            className="ml-1 text-slate-400 hover:text-slate-700 p-0.5"
-                            title={visiblePasswords[user.uid] ? "Hide Password" : "Show Password"}
-                          >
-                            {visiblePasswords[user.uid] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </motion.button>
+                          <div className="flex items-center gap-1.5 ml-auto pl-2 border-l border-slate-700">
+                            <motion.button
+                              whileHover={{ scale: 1.2, color: '#818cf8' }}
+                              whileTap={{ scale: 0.8 }}
+                              onClick={() => togglePasswordVisibility(user.uid)}
+                              className="text-slate-500 hover:text-indigo-400 p-0.5 transition-all"
+                              title={visiblePasswords[user.uid] ? "Hide Password" : "Show Password"}
+                            >
+                              {visiblePasswords[user.uid] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </motion.button>
+                            {(user.password && visiblePasswords[user.uid]) && (
+                              <motion.button
+                                whileHover={{ scale: 1.2, color: '#818cf8' }}
+                                whileTap={{ scale: 0.8 }}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(user.password || '');
+                                  showToast(`পাসওয়ার্ড কপি করা হয়েছে!`);
+                                }}
+                                className="text-slate-500 hover:text-indigo-400 p-0.5 transition-all"
+                                title="Copy Password"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </motion.button>
+                            )}
+                          </div>
                         </div>
 
                         <div className="text-[10px] text-slate-400 font-sans">

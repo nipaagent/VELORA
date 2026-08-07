@@ -290,6 +290,26 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Global Force Logout Listener
+  useEffect(() => {
+    if (!user || userProfile?.role === 'admin') return;
+
+    const forceLogoutRef = ref(db, 'settings/force_logout_timestamp');
+    const unsubscribe = onValue(forceLogoutRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const forceLogoutTime = snapshot.val();
+        const lastLoginTime = Number(localStorage.getItem(`velora-last-login-${user.uid}`) || 0);
+        
+        if (forceLogoutTime > lastLoginTime) {
+          alert("অ্যাডমিন কর্তৃক সকল ইউজারকে লগ আউট করা হয়েছে। দয়া করে আবার লগইন করুন।");
+          handleSignOut();
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user, userProfile]);
+
   // Sync chats to localStorage per user
   useEffect(() => {
     if (user) {

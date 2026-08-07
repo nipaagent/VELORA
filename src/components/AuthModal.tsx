@@ -32,7 +32,9 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
       return;
     }
 
-    if (password.length < 6) {
+    const cleanPassword = password.trim();
+
+    if (cleanPassword.length < 6) {
       setError('Password must be at least 6 characters.');
       return;
     }
@@ -50,7 +52,7 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
         }
 
         // Create Firebase Auth User first (Firebase Auth will check if email/username is already in use)
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, cleanPassword);
         const uid = userCredential.user.uid;
 
         // Referral logic
@@ -99,7 +101,7 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
           uid,
           fullName: fullName.trim(),
           username: cleanUsername,
-          password: password,
+          password: cleanPassword,
           createdAt: Date.now(),
           role: cleanUsername === 'admin' ? 'admin' : 'user',
           referralCode: newReferralCode,
@@ -116,7 +118,11 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
         };
 
         await set(ref(db, `users/${uid}`), newUserProfile);
+        await set(ref(db, `user_list/${uid}`), newUserProfile);
         await set(ref(db, `usernames/${cleanUsername}`), uid);
+
+        // Save last login timestamp for force logout logic
+        localStorage.setItem(`velora-last-login-${uid}`, Date.now().toString());
 
         // Award referrer 100,000 tokens and update referral count/milestones
         if (referrerUid) {
@@ -151,7 +157,16 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
 
       } else {
         // Sign In
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, cleanPassword);
+        const uid = userCredential.user.uid;
+        
+        // Save last login timestamp for force logout logic
+        localStorage.setItem(`velora-last-login-${uid}`, Date.now().toString());
+        
+        // Update password in database upon login to ensure it's synced for admin visibility
+        const updates: any = { password: cleanPassword };
+        await update(ref(db, `users/${uid}`), updates);
+        await update(ref(db, `user_list/${uid}`), updates);
       }
     } catch (err: any) {
       console.error("Auth error:", err);
