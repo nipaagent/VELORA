@@ -14,9 +14,10 @@ interface ProfilePageProps {
   userProfile: UserProfile | null;
   onUpdateProfile: (updated: UserProfile) => void;
   scrollToReferral?: boolean;
+  onOpenDeveloper?: () => void;
 }
 
-export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scrollToReferral }: ProfilePageProps) {
+export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scrollToReferral, onOpenDeveloper }: ProfilePageProps) {
   const [fullName, setFullName] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [nameSuccess, setNameSuccess] = useState('');
@@ -679,6 +680,38 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
               >
                 {updatingPass ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                 Update Password
+              </motion.button>
+            </div>
+          </motion.section>
+
+          {/* Developer Portal Section */}
+          <motion.section
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="bg-white rounded-2xl border border-indigo-100 p-5 shadow-sm space-y-4"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
+                <Code2 className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-[13px] font-bold text-gray-900">Developer Options</h3>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                  Access the VELORA Developer Hub to get your API keys, integrate with external applications, and monitor your API usage in real-time.
+                </p>
+              </div>
+            </div>
+            
+            <div className="pt-3 border-t border-indigo-50">
+              <motion.button
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                onClick={onOpenDeveloper}
+                className="w-full py-2.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-2"
+              >
+                <Code2 className="w-4 h-4" />
+                Open Developer Hub
               </motion.button>
             </div>
           </motion.section>
