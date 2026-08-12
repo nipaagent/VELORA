@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
+    },
+    {
+      "source": "/v1/(.*)",
+      "destination": "/api/index.ts"
+    },
+    {
+      "source": "/chat/(.*)",
+      "destination": "/api/index.ts"
+    },
+    {
+      "source": "/models(.*)",
+      "destination": "/api/index.ts"
+    },
+    {
+      "source": "/((?!api/|v1/|chat/|models).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

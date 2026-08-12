@@ -42,7 +42,7 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
   const [testResult, setTestResult] = useState('');
   const [isTesting, setIsTesting] = useState(false);
 
-  const domain = typeof window !== 'undefined' ? window.location.origin : 'https://velora-ai.render.com';
+  const domain = typeof window !== 'undefined' ? window.location.origin : 'https://velora-ai.vercel.app';
 
   // Listen to Firebase Realtime DB for live updates on user's profile and apiAccessEnabled status
   useEffect(() => {
