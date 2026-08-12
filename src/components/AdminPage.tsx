@@ -574,6 +574,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   // 100% Pure Real-time & API synchronization with Firebase Database `users/`
   const fetchUsers = async () => {
     setLoading(true);
+    let loadedSuccess = false;
+
     try {
       const currentUser = auth.currentUser;
       const idToken = currentUser ? await currentUser.getIdToken() : '';
@@ -584,12 +586,20 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         }
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.status === 'success' && Array.isArray(data.users)) {
+          setUsers(data.users);
+          loadedSuccess = true;
+        }
+      }
+    } catch (err) {
+      console.warn("Server API fetch skipped, loading from Firebase Realtime DB:", err);
+    }
 
-      if (data.status === 'success' && Array.isArray(data.users)) {
-        setUsers(data.users);
-      } else {
-        // Direct SDK fallback
+    if (!loadedSuccess) {
+      try {
         const usersRef = ref(db, 'users');
         onValue(usersRef, (snapshot) => {
           if (snapshot.exists()) {
@@ -609,15 +619,17 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             }));
             firebaseList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
             setUsers(firebaseList);
+          } else {
+            setUsers([]);
           }
         }, { onlyOnce: true });
+      } catch (sdkErr: any) {
+        console.error("Firebase SDK fetch error:", sdkErr);
+        showToast("ইউজার লোড করতে সমস্যা হয়েছে: " + sdkErr.message, "error");
       }
-    } catch (err: any) {
-      console.error("Fetch error:", err);
-      showToast("ইউজার লোড করতে সমস্যা হয়েছে: " + err.message, "error");
-    } finally {
-      setLoading(false);
     }
+
+    setLoading(false);
   };
 
   const fetchStats = async () => {
@@ -629,13 +641,16 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
           'Pragma': 'no-cache'
         }
       });
-      const data = await res.json();
-      if (data.status === 'success') {
-        setApiKeyCount(data.apiKeyCount);
-        setApiKeysDetails(data.keys || []);
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.status === 'success') {
+          setApiKeyCount(data.apiKeyCount);
+          setApiKeysDetails(data.keys || []);
+        }
       }
     } catch (e) {
-      console.error("Stats fetch error:", e);
+      console.warn("Stats fetch skipped:", e);
     } finally {
       setIsStatsLoading(false);
     }
