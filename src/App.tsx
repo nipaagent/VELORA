@@ -10,7 +10,6 @@ import TokenModal from './components/TokenModal';
 import MenuSlide from './animations/MenuSlide';
 import AuthModal from './components/AuthModal';
 import ProfilePage from './components/ProfilePage';
-import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
@@ -31,7 +30,6 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profileScrollToReferral, setProfileScrollToReferral] = useState(false);
-  const [isDeveloperOpen, setIsDeveloperOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [tokenState, setTokenState] = useState<TokenState>(defaultTokenState);
@@ -775,13 +773,11 @@ export default function App() {
                 currentChatId={currentChatId}
                 onSelectChat={(id) => {
                   setCurrentChatId(id);
-                  setIsDeveloperOpen(false);
                   setIsAdminOpen(false);
                   setIsSidebarOpen(false);
                 }}
                 onNewChat={() => {
                   createNewChat();
-                  setIsDeveloperOpen(false);
                   setIsAdminOpen(false);
                 }}
                 onDeleteChat={handleDeleteChat}
@@ -799,14 +795,8 @@ export default function App() {
                   setProfileScrollToReferral(true);
                   setIsSidebarOpen(false);
                 }}
-                onOpenDeveloper={() => {
-                  setIsDeveloperOpen(true);
-                  setIsAdminOpen(false);
-                  setIsSidebarOpen(false);
-                }}
                 onOpenAdmin={() => {
                   setIsAdminOpen(true);
-                  setIsDeveloperOpen(false);
                   setIsSidebarOpen(false);
                 }}
               />
@@ -952,17 +942,6 @@ export default function App() {
                       className="absolute inset-0 z-10 bg-white"
                     >
                       <AdminPage onBackToChat={() => setIsAdminOpen(false)} />
-                    </motion.div>
-                  ) : isDeveloperOpen ? (
-                    <motion.div
-                      key="developer-view"
-                      initial={{ opacity: 0, scale: 0.98 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 1.02 }}
-                      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute inset-0 z-10 bg-white"
-                    >
-                      <DeveloperPage userProfile={userProfile} user={user} onBackToChat={() => setIsDeveloperOpen(false)} />
                     </motion.div>
                   ) : (
                     <motion.div

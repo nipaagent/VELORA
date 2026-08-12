@@ -57,7 +57,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
   const [editStatus, setEditStatus] = useState<'approved' | 'pending' | 'banned'>('approved');
-  const [editApiAccessEnabled, setEditApiAccessEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Add New User Modal state
@@ -702,7 +701,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     setEditPassword(user.password || '');
     setEditRole((user.role as any) || 'user');
     setEditStatus(user.status || (user.isBanned ? 'banned' : 'approved'));
-    setEditApiAccessEnabled(!!user.apiAccessEnabled);
   };
 
   const handleSaveEdit = async () => {
@@ -793,20 +791,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         console.error("Ban toggle error:", err);
         showToast(`সমস্যা হয়েছে: ${err.message}`, "error");
       }
-    }
-  };
-
-  const handleToggleApiAccess = async (user: AdminUser) => {
-    const newVal = !user.apiAccessEnabled;
-    try {
-      await update(ref(db, `users/${user.uid}`), {
-        apiAccessEnabled: newVal,
-        updatedAt: Date.now()
-      });
-      showToast(`API Access ${newVal ? 'Enabled' : 'Disabled'}!`);
-      await fetchUsers();
-    } catch (err: any) {
-      showToast(err.message, "error");
     }
   };
 
@@ -1353,21 +1337,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                       >
                         <Zap className="w-3 h-3 fill-white" />
                         <span>টোকেন কন্ট্রোল</span>
-                      </motion.button>
-                      
-                      {/* API Access Toggle Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleToggleApiAccess(user)}
-                        className={`p-2 rounded-lg border transition-all ${
-                          user.apiAccessEnabled 
-                            ? 'bg-indigo-600 text-white border-indigo-700' 
-                            : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-                        }`}
-                        title={user.apiAccessEnabled ? "API Access: Enabled" : "API Access: Disabled"}
-                      >
-                        <Code2 className="w-3.5 h-3.5" />
                       </motion.button>
 
                       {/* Admin Toggle Button */}

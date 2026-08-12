@@ -212,7 +212,7 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
               <span className="text-indigo-600">for Modern AI.</span>
             </h2>
             <p className="text-slate-500 text-sm leading-relaxed max-w-[260px] font-medium">
-              Experience the next generation of AI connectivity. Fast, secure, and built for professional developers.
+              Experience the next generation of AI chat intelligence. Fast, secure, and always accessible.
             </p>
           </div>
 
@@ -243,7 +243,7 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
                 {isSignUp ? 'Create Account' : 'Welcome Back'}
               </h1>
               <p className="text-slate-400 text-sm mt-1 font-medium">
-                {isSignUp ? 'Get started with your free gateway account' : 'Sign in to access your developer dashboard'}
+                {isSignUp ? 'Get started with your account' : 'Sign in to access your AI chat dashboard'}
               </p>
             </div>
           <AnimatePresence mode="wait">
