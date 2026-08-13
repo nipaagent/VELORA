@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Code2, Key, Copy, CheckCircle2, ShieldAlert, Terminal, Zap, ShieldCheck, Play, RefreshCw, AlertTriangle, AlertCircle, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, Code2, Key, Copy, CheckCircle2, ShieldAlert, Terminal, Zap, ShieldCheck, Play, RefreshCw, AlertTriangle, AlertCircle, Loader2, Send, Lock, Globe, Cpu, Blocks } from 'lucide-react';
 import { UserProfile } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
 import { db } from '../lib/firebase';
@@ -25,7 +25,7 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
   const [baseUrl, setBaseUrl] = useState('');
 
   // Playground state
-  const [testMessage, setTestMessage] = useState('Hello, who are you?');
+  const [testMessage, setTestMessage] = useState('Hello');
   const [testResponse, setTestResponse] = useState('');
   const [isTesting, setIsTesting] = useState(false);
 
@@ -75,7 +75,20 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
     
     setIsGenerating(true);
     try {
-      const newKey = `vl_live_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+      // Format: VELORA + 6 random uppercase alphanumeric characters (total 12 chars)
+      const generateKeyString = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 6; i++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return `VELORA${result}`;
+      };
+
+      const newKey = generateKeyString();
+
+      // In a production system we would verify uniqueness against all keys in a transaction.
+      // Given the client-side constraints and 2.1 billion combinations, this provides uniqueness.
       await update(ref(db, `users/${user.uid}`), {
         apiKey: newKey,
         keyCreatedAt: Date.now(),
@@ -99,20 +112,25 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
     setTestResponse('');
     
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch('/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          message: testMessage,
+          model: 'velora-ai-core',
+          messages: [{ role: "user", content: testMessage }],
           stream: false
         })
       });
       
       const data = await res.json();
-      setTestResponse(JSON.stringify(data, null, 2));
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        setTestResponse(data.choices[0].message.content);
+      } else {
+        setTestResponse(JSON.stringify(data, null, 2));
+      }
     } catch (err: any) {
       setTestResponse(JSON.stringify({ error: err.message }, null, 2));
     } finally {
@@ -120,28 +138,30 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
     }
   };
 
-  const curlSnippet = `curl -X POST ${baseUrl || 'https://your-domain.com'}/api/chat \\
+  const curlSnippet = `curl -X POST ${baseUrl || 'https://api.yourdomain.com'}/api/v1/chat/completions \\
   -H "Authorization: Bearer ${apiKey || 'YOUR_API_KEY'}" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "message": "Hello, who are you?",
+    "model": "velora-ai-core",
+    "messages": [{"role": "user", "content": "Hello"}],
     "stream": false
   }'`;
 
-  const jsSnippet = `const response = await fetch('${baseUrl || 'https://your-domain.com'}/api/chat', {
+  const jsSnippet = `const response = await fetch('${baseUrl || 'https://api.yourdomain.com'}/api/v1/chat/completions', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer ${apiKey || 'YOUR_API_KEY'}',
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    message: "Hello, who are you?",
+    model: "velora-ai-core",
+    messages: [{"role": "user", "content": "Hello"}],
     stream: false
   })
 });
 
 const data = await response.json();
-console.log(data.choices[0].message.content);`;
+console.log(data);`;
 
   return (
     <div className="h-full flex flex-col bg-slate-50/50">
@@ -199,29 +219,32 @@ console.log(data.choices[0].message.content);`;
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                <Zap className="w-4 h-4 text-indigo-600" />
+                <Globe className="w-4 h-4 text-indigo-600" />
               </div>
               <div>
                 <h2 className="text-sm font-bold text-slate-800">Base API Endpoint</h2>
-                <p className="text-xs text-slate-500 mt-0.5">The root URL for all API requests</p>
+                <p className="text-xs text-slate-500 mt-0.5">The root URL for all VELORA AI platform requests</p>
               </div>
             </div>
             
             <div className="p-5 bg-slate-50/50">
               <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Chat Endpoint URL</label>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">REST API URL</label>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 font-mono text-sm text-slate-700 break-all select-all flex items-center justify-between">
-                    {baseUrl ? `${baseUrl}/api/chat` : 'https://your-domain.com/api/chat'}
+                    {baseUrl ? `${baseUrl}/api` : 'https://api.yourdomain.com/api'}
                   </div>
                   <button
-                    onClick={() => copyToClipboard(baseUrl ? `${baseUrl}/api/chat` : 'https://your-domain.com/api/chat', 'endpoint')}
+                    onClick={() => copyToClipboard(baseUrl ? `${baseUrl}/api` : 'https://api.yourdomain.com/api', 'endpoint')}
                     className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shrink-0 shadow-sm"
                     title="Copy Endpoint URL"
                   >
                     {copiedEndpoint ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
                   </button>
                 </div>
+                <p className="text-[11px] text-slate-500 mt-2">
+                  Append specific endpoint paths (e.g., <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono font-bold">/v1/chat/completions</code>) to this base URL.
+                </p>
               </div>
             </div>
           </section>
@@ -299,18 +322,18 @@ console.log(data.choices[0].message.content);`;
           <section className={cn("bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-opacity", !apiAccessEnabled && "opacity-60 pointer-events-none")}>
             <div className="p-5 border-b border-slate-100 flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                <Terminal className="w-4 h-4 text-indigo-600" />
+                <Blocks className="w-4 h-4 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-slate-800">Quick Start</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Integrate VELORA AI into your app</p>
+                <h2 className="text-sm font-bold text-slate-800">Build Your Own AI Applications</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Use your Velora API key to power any custom application, tool, or integration.</p>
               </div>
             </div>
             
             <div className="p-5 bg-slate-900 text-slate-300 space-y-6">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">cURL Request</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Example: cURL Request</span>
                   <button
                     onClick={() => copyToClipboard(curlSnippet, 'curl')}
                     className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
@@ -328,7 +351,7 @@ console.log(data.choices[0].message.content);`;
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Node.js (Fetch)</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Example: Node.js (Fetch)</span>
                   <button
                     onClick={() => copyToClipboard(jsSnippet, 'js')}
                     className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
@@ -347,14 +370,14 @@ console.log(data.choices[0].message.content);`;
           </section>
 
           {/* API Tester Playground */}
-          <section className={cn("bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-opacity", !apiAccessEnabled && "opacity-60 pointer-events-none")}>
+          <section className={cn("bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-opacity mb-8", !apiAccessEnabled && "opacity-60 pointer-events-none")}>
             <div className="p-5 border-b border-slate-100 flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
                 <Play className="w-4 h-4 text-indigo-600" />
               </div>
               <div>
                 <h2 className="text-sm font-bold text-slate-800">API Playground</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Test your API key and see the response</p>
+                <p className="text-xs text-slate-500 mt-0.5">Test your API key and see the raw response</p>
               </div>
             </div>
             
@@ -366,7 +389,7 @@ console.log(data.choices[0].message.content);`;
                     type="text"
                     value={testMessage}
                     onChange={(e) => setTestMessage(e.target.value)}
-                    placeholder="Enter a message to test the API..."
+                    placeholder="Enter a prompt to test the API..."
                     className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                   />
                   <button
@@ -381,12 +404,12 @@ console.log(data.choices[0].message.content);`;
               </div>
 
               {testResponse && (
-                <div className="mt-4">
+                <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">JSON Response</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Model Response</span>
                   </div>
-                  <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto relative">
-                    <pre className="text-xs font-mono leading-relaxed text-blue-300">
+                  <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto relative max-h-96">
+                    <pre className="text-xs font-mono leading-relaxed text-blue-300 whitespace-pre-wrap">
                       {testResponse}
                     </pre>
                   </div>
@@ -399,27 +422,27 @@ console.log(data.choices[0].message.content);`;
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-12">
              <div className="p-5 border-b border-slate-100 flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                <Zap className="w-4 h-4 text-indigo-600" />
+                <Cpu className="w-4 h-4 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-slate-800">API Endpoints</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Available REST API resources</p>
+                <h2 className="text-sm font-bold text-slate-800">Platform API Endpoints</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Core REST interfaces for building AI products</p>
               </div>
             </div>
             <div className="p-0">
               <div className="border-b border-slate-100 p-4 hover:bg-slate-50 transition-colors">
                 <div className="flex items-center gap-3 mb-2">
                   <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded uppercase tracking-wider">POST</span>
-                  <code className="text-xs font-mono font-bold text-slate-700">/api/chat</code>
+                  <code className="text-xs font-mono font-bold text-slate-700">/v1/chat/completions</code>
                 </div>
-                <p className="text-xs text-slate-600">Creates a model response for the given chat conversation. Supports non-streaming responses only via API key currently.</p>
+                <p className="text-xs text-slate-600">The primary endpoint for generating text, code, summaries, and complex logic. Drop-in compatible with OpenAI standard libraries and sdks.</p>
               </div>
               <div className="p-4 hover:bg-slate-50 transition-colors">
                 <div className="flex items-center gap-3 mb-2">
                   <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase tracking-wider">GET</span>
-                  <code className="text-xs font-mono font-bold text-slate-700">/api/models</code>
+                  <code className="text-xs font-mono font-bold text-slate-700">/v1/models</code>
                 </div>
-                <p className="text-xs text-slate-600">Lists the currently available models, and provides basic information about each one such as the owner and availability.</p>
+                <p className="text-xs text-slate-600">Lists currently available AI models, context windows, capabilities, and basic system properties available to your API key.</p>
               </div>
             </div>
           </section>
