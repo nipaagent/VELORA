@@ -37,7 +37,19 @@ export default function App() {
   const [tokenState, setTokenState] = useState<TokenState>(defaultTokenState);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [urlReferralCode, setUrlReferralCode] = useState<string>('');
   const [authLoading, setAuthLoading] = useState(true);
+
+  // Extract referral code from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get('ref') || params.get('referral');
+    if (refCode) {
+      setUrlReferralCode(refCode.trim().toUpperCase());
+      // Clean URL after reading
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +58,81 @@ export default function App() {
   ]);
   const [adRewardTokenAmount, setAdRewardTokenAmount] = useState<number>(30000);
   const [defaultMaxDailyTokens, setDefaultMaxDailyTokens] = useState<number>(50000);
+
+  // Auto-apply referral code for existing logged-in user
+  useEffect(() => {
+    if (!urlReferralCode || !userProfile || !user) return;
+    
+    // Check if they already have a referrer
+    if (userProfile.referredBy || userProfile.referredByCode) {
+      setUrlReferralCode('');
+      return;
+    }
+    
+    // Check if they are trying to use their own code
+    if (urlReferralCode === userProfile.referralCode) {
+      setUrlReferralCode('');
+      return;
+    }
+
+    // To prevent multiple calls, we clear urlReferralCode locally right away
+    const codeToApply = urlReferralCode;
+    setUrlReferralCode('');
+
+    const applyReferral = async () => {
+      try {
+        const usersRef = ref(db, 'users');
+        const snapshot = await get(usersRef);
+        if (!snapshot.exists()) return;
+        
+        const allUsers = snapshot.val();
+        const referrer = Object.values(allUsers).find((u: any) => u.referralCode === codeToApply) as any;
+        
+        if (!referrer) return; // Invalid code
+
+        const currentUserRef = ref(db, `users/${userProfile.uid}`);
+        const referrerRef = ref(db, `users/${referrer.uid}`);
+
+        // 1. Update Current User: +50k tokens, set referredBy
+        const currentBonus = (userProfile.tokenState?.bonusTokens || 0);
+        const userUpdates: any = {
+          'tokenState/bonusTokens': currentBonus + 50000,
+          'referredBy': referrer.uid,
+          'referredByCode': codeToApply,
+          'referredByName': referrer.fullName || referrer.username
+        };
+        await update(currentUserRef, userUpdates);
+
+        // 2. Update Referrer: +100k tokens, increment count, check milestones
+        const referrerBonus = (referrer.tokenState?.bonusTokens || 0);
+        const newReferralCount = (referrer.referralCount || 0) + 1;
+        
+        let extraVipDays = 0;
+        if (newReferralCount === 10) extraVipDays = 3;
+        else if (newReferralCount === 20) extraVipDays = 10;
+        else if (newReferralCount === 30) extraVipDays = 20;
+
+        const referrerUpdates: any = {
+          'tokenState/bonusTokens': referrerBonus + 100000,
+          'referralCount': newReferralCount
+        };
+
+        if (extraVipDays > 0) {
+          const currentVipExpiry = referrer.vipExpiresAt || 0;
+          const baseTime = Math.max(currentVipExpiry, Date.now());
+          referrerUpdates['vipExpiresAt'] = baseTime + (extraVipDays * 24 * 60 * 60 * 1000);
+          referrerUpdates['isVip'] = true;
+        }
+
+        await update(referrerRef, referrerUpdates);
+        alert('রেফারেল লিংক থেকে সফলভাবে ৫০,০০০ বোনাস টোকেন যুক্ত হয়েছে!');
+      } catch (err) {
+        console.error("Auto referral error:", err);
+      }
+    };
+
+    applyReferral();
+  }, [urlReferralCode, userProfile, user]);
 
   // Inject dynamic theme color CSS variable based on user profile
   useEffect(() => {
@@ -732,7 +819,7 @@ export default function App() {
   };
 
   if (!user && !authLoading) {
-    return <AuthModal isOpen={true} />;
+    return <AuthModal isOpen={true} initialReferralCode={urlReferralCode} />;
   }
 
   return (

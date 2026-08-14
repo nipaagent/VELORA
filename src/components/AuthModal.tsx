@@ -8,14 +8,15 @@ import { Gift } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
+  initialReferralCode?: string;
 }
 
-export default function AuthModal({ isOpen }: AuthModalProps) {
-  const [isSignUp, setIsSignUp] = useState(false);
+export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProps) {
+  const [isSignUp, setIsSignUp] = useState(!!initialReferralCode);
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [referralCodeInput, setReferralCodeInput] = useState('');
+  const [referralCodeInput, setReferralCodeInput] = useState(initialReferralCode || '');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -338,7 +339,8 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
                       value={referralCodeInput}
                       onChange={(e) => setReferralCodeInput(e.target.value)}
                       placeholder="e.g. VELORA77"
-                      className="w-full pl-11 pr-4 py-3 text-sm bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-medium placeholder:text-slate-300 uppercase"
+                      readOnly={!!initialReferralCode}
+                      className={`w-full pl-11 pr-4 py-3 text-sm rounded-2xl outline-none transition-all font-medium uppercase placeholder:text-slate-300 ${initialReferralCode ? 'bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed opacity-90' : 'bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50'}`}
                     />
                   </div>
                   <p className="text-[9px] text-slate-400 ml-1 font-medium italic">Enter a code to get 1-day VIP access instantly!</p>

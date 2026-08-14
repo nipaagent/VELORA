@@ -38,7 +38,8 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
 
   const handleCopyReferral = () => {
     if (!userProfile.referralCode) return;
-    navigator.clipboard.writeText(userProfile.referralCode);
+    const referralLink = `${window.location.origin}/?ref=${userProfile.referralCode}`;
+    navigator.clipboard.writeText(referralLink);
     setCopyingReferral(true);
     setTimeout(() => setCopyingReferral(false), 2000);
   };
@@ -468,14 +469,14 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
               </p>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <div className="flex-1 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 px-4 py-3 flex items-center justify-between group/code">
-                  <span className="font-mono font-black text-lg tracking-wider">
-                    {userProfile.referralCode || 'NOT_FOUND'}
+                <div className="flex-1 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 px-4 py-3 flex items-center justify-between group/code overflow-hidden">
+                  <span className="font-mono font-bold text-sm tracking-wide truncate mr-2" title={`${window.location.origin}/?ref=${userProfile.referralCode}`}>
+                    {window.location.origin}/?ref={userProfile.referralCode || 'NOT_FOUND'}
                   </span>
                   <button 
                     onClick={handleCopyReferral}
-                    className="p-1.5 hover:bg-white/20 rounded-lg transition-colors text-indigo-100 hover:text-white"
-                    title="Copy Code"
+                    className="p-1.5 shrink-0 hover:bg-white/20 rounded-lg transition-colors text-indigo-100 hover:text-white"
+                    title="Copy Link"
                   >
                     {copyingReferral ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
                   </button>
@@ -483,9 +484,9 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
                 
                 <button 
                   onClick={handleCopyReferral}
-                  className="bg-white text-indigo-700 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-indigo-50 active:scale-95 transition-all shadow-lg"
+                  className="bg-white text-indigo-700 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-indigo-50 active:scale-95 transition-all shadow-lg whitespace-nowrap"
                 >
-                  {copyingReferral ? 'কপি হয়েছে' : 'রেফার কোড কপি করুন'}
+                  {copyingReferral ? 'কপি হয়েছে' : 'রেফার লিংক কপি করুন'}
                 </button>
               </div>
 

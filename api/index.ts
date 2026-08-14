@@ -110,6 +110,12 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
     }
 
     let gatewayUrl = process.env.GATEWAY_URL || "https://api.naga.ac/v1/chat/completions";
+    
+    // Map custom frontend models to the actual backend model
+    if (modelFromClient === 'velora-ai-core') {
+      modelFromClient = "nemotron-3-ultra-550b-a55b:free";
+    }
+    
     let modelName = modelFromClient || "nemotron-3-ultra-550b-a55b:free";
 
     const allKeysInfo = getApiKeysInfo();
@@ -280,6 +286,7 @@ const handleModelsRequest = (req: express.Request, res: express.Response) => {
   res.json({
     object: "list",
     data: [
+      { id: "velora-ai-core", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
       { id: "claude-3-5-sonnet", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
       { id: "nemotron-3-ultra-550b-a55b:free", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
       { id: "gpt-4o", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
