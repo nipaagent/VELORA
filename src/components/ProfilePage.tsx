@@ -30,18 +30,26 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
   const [updatingPass, setUpdatingPass] = useState(false);
   const [passSuccess, setPassSuccess] = useState('');
   const [passError, setPassError] = useState('');
-  const [copyingReferral, setCopyingReferral] = useState(false);
+  const [copyingCode, setCopyingCode] = useState(false);
+  const [copyingLink, setCopyingLink] = useState(false);
   const [redeemCode, setRedeemCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const [redeemError, setRedeemError] = useState('');
   const [redeemSuccess, setRedeemSuccess] = useState('');
 
-  const handleCopyReferral = () => {
+  const handleCopyCode = () => {
+    if (!userProfile.referralCode) return;
+    navigator.clipboard.writeText(userProfile.referralCode);
+    setCopyingCode(true);
+    setTimeout(() => setCopyingCode(false), 2000);
+  };
+
+  const handleCopyLink = () => {
     if (!userProfile.referralCode) return;
     const referralLink = `${window.location.origin}/?ref=${userProfile.referralCode}`;
     navigator.clipboard.writeText(referralLink);
-    setCopyingReferral(true);
-    setTimeout(() => setCopyingReferral(false), 2000);
+    setCopyingLink(true);
+    setTimeout(() => setCopyingLink(false), 2000);
   };
 
     const handleRedeemReferral = async () => {
@@ -309,7 +317,7 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
           className="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-100 flex items-center gap-4 relative overflow-hidden"
         >
           {(() => {
-            const isVipActive = Boolean(userProfile.isVip || (userProfile.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+            const isVipActive = Boolean((userProfile.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile.isVip && (!userProfile.vipExpiresAt || userProfile.vipExpiresAt === 0)));
             return (
               <>
                 <div className="relative">
@@ -468,26 +476,50 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
                 আপনার রেফার কোড ব্যবহার করে কেউ একাউন্ট খুললে আপনি পাবেন <span className="font-bold text-white">১ লক্ষ টোকেন</span> এবং তারা পাবে <span className="font-bold text-white">৫০,০০০ টোকেন</span>।
               </p>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <div className="flex-1 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 px-4 py-3 flex items-center justify-between group/code overflow-hidden">
-                  <span className="font-mono font-bold text-sm tracking-wide truncate mr-2" title={`${window.location.origin}/?ref=${userProfile.referralCode}`}>
-                    {window.location.origin}/?ref={userProfile.referralCode || 'NOT_FOUND'}
-                  </span>
+              <div className="flex flex-col gap-3">
+                {/* Code Row */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="flex-1 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 px-4 py-3 flex items-center justify-between group/code overflow-hidden">
+                    <span className="font-mono font-bold text-lg tracking-wider mr-2">
+                      {userProfile.referralCode || 'NOT_FOUND'}
+                    </span>
+                    <button 
+                      onClick={handleCopyCode}
+                      className="p-1.5 shrink-0 hover:bg-white/20 rounded-lg transition-colors text-indigo-100 hover:text-white"
+                      title="Copy Code"
+                    >
+                      {copyingCode ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+                    </button>
+                  </div>
                   <button 
-                    onClick={handleCopyReferral}
-                    className="p-1.5 shrink-0 hover:bg-white/20 rounded-lg transition-colors text-indigo-100 hover:text-white"
-                    title="Copy Link"
+                    onClick={handleCopyCode}
+                    className="bg-white/10 text-white border border-white/20 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-white/20 active:scale-95 transition-all whitespace-nowrap"
                   >
-                    {copyingReferral ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+                    {copyingCode ? 'কপি হয়েছে' : 'কোড কপি করুন'}
                   </button>
                 </div>
-                
-                <button 
-                  onClick={handleCopyReferral}
-                  className="bg-white text-indigo-700 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-indigo-50 active:scale-95 transition-all shadow-lg whitespace-nowrap"
-                >
-                  {copyingReferral ? 'কপি হয়েছে' : 'রেফার লিংক কপি করুন'}
-                </button>
+
+                {/* Link Row */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="flex-1 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 px-4 py-3 flex items-center justify-between group/code overflow-hidden">
+                    <span className="font-mono font-bold text-sm tracking-wide truncate mr-2" title={`${window.location.origin}/?ref=${userProfile.referralCode}`}>
+                      {window.location.origin}/?ref={userProfile.referralCode || 'NOT_FOUND'}
+                    </span>
+                    <button 
+                      onClick={handleCopyLink}
+                      className="p-1.5 shrink-0 hover:bg-white/20 rounded-lg transition-colors text-indigo-100 hover:text-white"
+                      title="Copy Link"
+                    >
+                      {copyingLink ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  <button 
+                    onClick={handleCopyLink}
+                    className="bg-white text-indigo-700 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-indigo-50 active:scale-95 transition-all shadow-lg whitespace-nowrap"
+                  >
+                    {copyingLink ? 'কপি হয়েছে' : 'লিংক কপি করুন'}
+                  </button>
+                </div>
               </div>
 
               {/* Milestone Progress */}

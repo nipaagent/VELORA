@@ -38,14 +38,27 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [urlReferralCode, setUrlReferralCode] = useState<string>('');
+  const [urlPromoCode, setUrlPromoCode] = useState<string>('');
+  const [globalTokenMultiplier, setGlobalTokenMultiplier] = useState<number>(1);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Extract referral code from URL
+  // Extract referral and promo codes from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const refCode = params.get('ref') || params.get('referral');
+    const promoCode = params.get('promo') || params.get('redeem');
+    
+    let hasCleaned = false;
     if (refCode) {
       setUrlReferralCode(refCode.trim().toUpperCase());
+      hasCleaned = true;
+    }
+    if (promoCode) {
+      setUrlPromoCode(promoCode.trim().toUpperCase());
+      hasCleaned = true;
+    }
+    
+    if (hasCleaned) {
       // Clean URL after reading
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -118,10 +131,17 @@ export default function App() {
         };
 
         if (extraVipDays > 0) {
-          const currentVipExpiry = referrer.vipExpiresAt || 0;
-          const baseTime = Math.max(currentVipExpiry, Date.now());
-          referrerUpdates['vipExpiresAt'] = baseTime + (extraVipDays * 24 * 60 * 60 * 1000);
-          referrerUpdates['isVip'] = true;
+          const isLifetime = referrer.isVip && (!referrer.vipExpiresAt || referrer.vipExpiresAt === 0);
+          if (!isLifetime) {
+            const currentVipExpiry = typeof referrer.vipExpiresAt === 'number' ? referrer.vipExpiresAt : 0;
+            const baseTime = Math.max(currentVipExpiry, Date.now());
+            const newExpiry = baseTime + (extraVipDays * 24 * 60 * 60 * 1000);
+            
+            if (newExpiry > Date.now() && !isNaN(newExpiry)) {
+              referrerUpdates['vipExpiresAt'] = newExpiry;
+              referrerUpdates['isVip'] = true;
+            }
+          }
         }
 
         await update(referrerRef, referrerUpdates);
@@ -133,6 +153,84 @@ export default function App() {
 
     applyReferral();
   }, [urlReferralCode, userProfile, user]);
+
+  // Auto-apply promo code for logged-in user
+  useEffect(() => {
+    if (!urlPromoCode || !userProfile || !user) return;
+    
+    const codeToApply = urlPromoCode;
+    setUrlPromoCode(''); // Clear locally to prevent loops
+    
+    const applyPromo = async () => {
+      try {
+        const codeRef = ref(db, `redeem_codes/${codeToApply}`);
+        const snapshot = await get(codeRef);
+        if (!snapshot.exists()) {
+          alert(`ভুল প্রোমো কোড: ${codeToApply}`);
+          return;
+        }
+
+        const codeData = snapshot.val();
+        
+        if (!codeData.isActive) {
+          alert("এই প্রোমো কোডটি বর্তমানে নিষ্ক্রিয় রয়েছে।");
+          return;
+        }
+
+        if (codeData.expiresAt && codeData.expiresAt < Date.now()) {
+          alert("এই প্রোমো কোডের সময়সীমা শেষ হয়ে গেছে!");
+          return;
+        }
+
+        if (codeData.maxUses && (codeData.usedCount || 0) >= codeData.maxUses) {
+          alert("এই প্রোমো কোডের ব্যবহারের সীমা শেষ হয়ে গেছে!");
+          return;
+        }
+
+        if (codeData.usedBy && codeData.usedBy[user.uid]) {
+          alert("আপনি ইতিমধ্যে এই প্রোমো কোডটি ব্যবহার করেছেন!");
+          return;
+        }
+
+        // Apply reward
+        const updates: any = {};
+        updates[`redeem_codes/${codeToApply}/usedCount`] = (codeData.usedCount || 0) + 1;
+        updates[`redeem_codes/${codeToApply}/usedBy/${user.uid}`] = Date.now();
+
+        if (codeData.rewardType === 'tokens') {
+          const addedTokens = codeData.tokenAmount || 0;
+          updates[`users/${user.uid}/tokenState/bonusTokens`] = (userProfile.tokenState?.bonusTokens || 0) + addedTokens;
+          alert(`🎉 প্রোমো কোড সফল! +${new Intl.NumberFormat('en-US').format(addedTokens)} বোনাস টোকেন আপনার একাউন্টে যুক্ত হয়েছে!`);
+        } else if (codeData.rewardType === 'vip_days') {
+          const days = codeData.vipDays || 0;
+          if (days > 0) {
+            const isLifetime = userProfile.isVip && (!userProfile.vipExpiresAt || userProfile.vipExpiresAt === 0);
+            if (!isLifetime) {
+              const currentVipExpiry = typeof userProfile.vipExpiresAt === 'number' ? userProfile.vipExpiresAt : 0;
+              const baseTime = Math.max(currentVipExpiry, Date.now());
+              const newExpiry = baseTime + (days * 24 * 60 * 60 * 1000);
+              
+              if (newExpiry > Date.now() && !isNaN(newExpiry)) {
+                updates[`users/${user.uid}/vipExpiresAt`] = newExpiry;
+                updates[`users/${user.uid}/isVip`] = true;
+                alert(`🎉 প্রোমো কোড সফল! ${days} দিনের জন্য ভিআইপি অ্যাক্সেস চালু হয়েছে!`);
+              } else {
+                alert(`⚠️ প্রোমো কোড কাজ করেনি, ভিআইপি মেয়াদ অবৈধ।`);
+              }
+            } else {
+              alert(`🎉 আপনি আগে থেকেই লাইফটাইম ভিআইপি মেম্বার!`);
+            }
+          }
+        }
+
+        await update(ref(db), updates);
+      } catch (err) {
+        console.error("Auto promo error:", err);
+      }
+    };
+    
+    applyPromo();
+  }, [urlPromoCode, userProfile, user]);
 
   // Inject dynamic theme color CSS variable based on user profile
   useEffect(() => {
@@ -177,6 +275,11 @@ export default function App() {
           }
           if (typeof val.defaultMaxDailyTokens === 'number' && val.defaultMaxDailyTokens > 0) {
             setDefaultMaxDailyTokens(val.defaultMaxDailyTokens);
+          }
+          if (typeof val.tokenMultiplier === 'number' && val.tokenMultiplier > 0) {
+            setGlobalTokenMultiplier(val.tokenMultiplier);
+          } else {
+            setGlobalTokenMultiplier(1);
           }
         }
       }
@@ -460,7 +563,7 @@ export default function App() {
     if (!user) return;
 
     // Check token balance & VIP status
-    const isVipActive = Boolean(userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+    const isVipActive = Boolean((userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile?.isVip && (!userProfile?.vipExpiresAt || userProfile.vipExpiresAt === 0)));
     const totalAvailable = (tokenState.maxDailyTokens || defaultMaxDailyTokens) + (tokenState.bonusTokens || 0);
     const remaining = isVipActive ? 999999999 : Math.max(0, totalAvailable - (tokenState.tokensUsedToday || 0));
 
@@ -520,6 +623,7 @@ export default function App() {
         const decoder = new TextDecoder("utf-8");
         const modelMessageId = (Date.now() + 1).toString();
         let fullResponse = "";
+        let buffer = "";
         
         const modelMessage: Message = {
           id: modelMessageId,
@@ -542,13 +646,26 @@ export default function App() {
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            if (buffer.trim()) {
+              // Try to parse whatever is left in the buffer just in case
+              const trimmedLine = buffer.trim();
+              if (trimmedLine.startsWith('data:')) {
+                let dataStr = trimmedLine.substring(5).trim();
+                try { if (dataStr !== '[DONE]') { const data = JSON.parse(dataStr); const content = data.choices?.[0]?.delta?.content || data.choices?.[0]?.message?.content || data.text || ''; if (content) fullResponse += content; } } catch(e) {}
+              }
+            }
+            break;
+          }
           
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n').filter(line => line.trim() !== '');
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
           
           for (const line of lines) {
             const trimmedLine = line.trim();
+            if (trimmedLine.length === 0) continue;
+            
             if (trimmedLine.startsWith('data:')) {
               let dataStr = trimmedLine.substring(5).trim();
               if (dataStr === '[DONE]') continue;
@@ -610,7 +727,7 @@ export default function App() {
         // Calculate exact token consumption based on prompt & output character length
         const promptCharCount = text.length + (currentChatState.messages ? currentChatState.messages.reduce((acc, m) => acc + (m.text ? m.text.length : 0), 0) : 0);
         const responseCharCount = fullResponse.length;
-        const requestTokensSpent = Math.max(10, Math.round((promptCharCount + responseCharCount) / 3.5));
+        const requestTokensSpent = Math.max(10, Math.round(((promptCharCount + responseCharCount) / 3.5) * globalTokenMultiplier));
 
         setTokenState(prev => {
           const updatedState = {
@@ -703,7 +820,7 @@ export default function App() {
           // Calculate exact token consumption based on prompt & output character length
           const promptCharCount = text.length + (currentChatState.messages ? currentChatState.messages.reduce((acc, m) => acc + (m.text ? m.text.length : 0), 0) : 0);
           const responseCharCount = currentText.length;
-          const requestTokensSpent = Math.max(10, Math.round((promptCharCount + responseCharCount) / 3.5));
+          const requestTokensSpent = Math.max(10, Math.round(((promptCharCount + responseCharCount) / 3.5) * globalTokenMultiplier));
 
           setTokenState(prev => {
             const updatedState = {
@@ -916,7 +1033,7 @@ export default function App() {
                 
                 <div className="flex flex-col items-center justify-center shrink-0 relative px-4 pt-1">
                   {(() => {
-                    const isVipActive = Boolean(userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+                    const isVipActive = Boolean((userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile?.isVip && (!userProfile?.vipExpiresAt || userProfile.vipExpiresAt === 0)));
                     return (
                       <>
                         {isVipActive && (
@@ -984,7 +1101,7 @@ export default function App() {
                   <TokenBadge tokenState={tokenState} userProfile={userProfile} onClick={() => setIsTokenModalOpen(true)} />
 
                   {userProfile && (() => {
-                    const isVipActive = Boolean(userProfile.isVip || (userProfile.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+                    const isVipActive = Boolean((userProfile.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile.isVip && (!userProfile.vipExpiresAt || userProfile.vipExpiresAt === 0)));
                     return (
                       <button 
                         onClick={() => setIsProfileOpen(true)}

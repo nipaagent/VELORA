@@ -20,7 +20,7 @@ export const VipUserModal: React.FC<VipUserModalProps> = ({
 
   if (!user) return null;
 
-  const isVipActive = Boolean(user.isVip || (user.vipExpiresAt && user.vipExpiresAt > Date.now()));
+  const isVipActive = Boolean((user.vipExpiresAt && user.vipExpiresAt > Date.now()) || (user.isVip && (!user.vipExpiresAt || user.vipExpiresAt === 0)));
   const isLifetime = user.isVip && (!user.vipExpiresAt || user.vipExpiresAt >= 2000000000000);
   
   const remainingDays = user.vipExpiresAt && user.vipExpiresAt > Date.now() && user.vipExpiresAt < 2000000000000

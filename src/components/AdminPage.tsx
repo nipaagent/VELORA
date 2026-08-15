@@ -3,7 +3,7 @@ import {
   Users, UserPlus, Search, Edit3, Trash2, Eye, EyeOff, Check, X, 
   ShieldAlert, RefreshCw, KeyRound, ArrowLeft, Save, Sparkles, AlertCircle, ShieldCheck,
   Ban, UserCheck, ShieldX, CheckCircle2, AlertTriangle, Lock, Code2, Loader2, Tv, Plus, ExternalLink, Zap, Minus, Gift,
-  Ticket, Crown, Clock, Tag, Copy, Send, LogOut
+  Ticket, Crown, Clock, Tag, Copy, Send, LogOut, Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -78,6 +78,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   // System Token Configuration State (Global Daily Limit & Ad Reward per watch)
   const [globalDailyLimitInput, setGlobalDailyLimitInput] = useState<string>('50000');
   const [globalAdRewardInput, setGlobalAdRewardInput] = useState<string>('30000');
+  const [globalTokenMultiplierInput, setGlobalTokenMultiplierInput] = useState<string>('1');
   const [isSavingGlobalConfig, setIsSavingGlobalConfig] = useState(false);
 
   // Redeem Codes Management State
@@ -156,6 +157,9 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
           }
           if (typeof val.adRewardTokenAmount === 'number') {
             setGlobalAdRewardInput(val.adRewardTokenAmount.toString());
+          }
+          if (typeof val.tokenMultiplier === 'number') {
+            setGlobalTokenMultiplierInput(val.tokenMultiplier.toString());
           }
         }
       }
@@ -286,8 +290,9 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const handleSaveGlobalTokenConfig = async () => {
     const dailyNum = Number(globalDailyLimitInput);
     const rewardNum = Number(globalAdRewardInput);
+    const multNum = Number(globalTokenMultiplierInput);
 
-    if (!dailyNum || dailyNum <= 0 || !rewardNum || rewardNum <= 0) {
+    if (!dailyNum || dailyNum <= 0 || !rewardNum || rewardNum <= 0 || !multNum || multNum <= 0) {
       showToast("দয়া করে সঠিক সংখ্যা প্রদান করুন!", "error");
       return;
     }
@@ -297,9 +302,10 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       await set(ref(db, 'settings/token_config'), {
         defaultMaxDailyTokens: dailyNum,
         adRewardTokenAmount: rewardNum,
+        tokenMultiplier: multNum,
         updatedAt: Date.now()
       });
-      showToast(`গ্লোবাল টোকেন সেটিংস রিয়েলটাইমে সেভ হয়েছে! ডেইলি লিমিট: ${formatTokenCount(dailyNum)} | এড রিওয়ার্ড: ${formatTokenCount(rewardNum)}`, "success");
+      showToast(`গ্লোবাল টোকেন সেটিংস রিয়েলটাইমে সেভ হয়েছে! ডেইলি লিমিট: ${formatTokenCount(dailyNum)} | এড রিওয়ার্ড: ${formatTokenCount(rewardNum)} | মাল্টিপ্লায়ার: ${multNum}x`, "success");
     } catch (err: any) {
       showToast("গ্লোবাল সেটিংস সেভ করতে সমস্যা: " + err.message, "error");
     } finally {
@@ -310,6 +316,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const handleApplyGlobalLimitToAllUsers = async () => {
     const dailyNum = Number(globalDailyLimitInput);
     const rewardNum = Number(globalAdRewardInput);
+    const multNum = Number(globalTokenMultiplierInput);
 
     if (!dailyNum || dailyNum <= 0) {
       showToast("দয়া করে সঠিক ডেইলি লিমিট টাইপ করুন!", "error");
@@ -331,6 +338,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       await set(ref(db, 'settings/token_config'), {
         defaultMaxDailyTokens: dailyNum,
         adRewardTokenAmount: rewardNum || 30000,
+        tokenMultiplier: multNum || 1,
         updatedAt: Date.now()
       });
 
@@ -342,7 +350,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       await update(ref(db), updates);
 
       showToast(`সকল ${users.length} জন ইউজারের ডেলি লিমিট ${formatTokenCount(dailyNum)} টোকেনে রিয়েলটাইমে আপডেট হয়েছে!`, "success");
-      await fetchUsers();
     } catch (err: any) {
       showToast("ইউজারদের ডেলি লিমিট আপডেট করতে সমস্যা: " + err.message, "error");
     } finally {
@@ -572,67 +579,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
   };
 
-  // 100% Pure Real-time & API synchronization with Firebase Database `users/`
-  const fetchUsers = async () => {
-    setLoading(true);
-    let loadedSuccess = false;
-
-    try {
-      const currentUser = auth.currentUser;
-      const idToken = currentUser ? await currentUser.getIdToken() : '';
-
-      const res = await fetch('/api/admin/users', {
-        headers: {
-          'Authorization': idToken ? `Bearer ${idToken}` : ''
-        }
-      });
-
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.status === 'success' && Array.isArray(data.users)) {
-          setUsers(data.users);
-          loadedSuccess = true;
-        }
-      }
-    } catch (err) {
-      console.warn("Server API fetch skipped, loading from Firebase Realtime DB:", err);
-    }
-
-    if (!loadedSuccess) {
-      try {
-        const usersRef = ref(db, 'users');
-        onValue(usersRef, (snapshot) => {
-          if (snapshot.exists()) {
-            const val = snapshot.val();
-            const firebaseList: AdminUser[] = Object.keys(val).map((key) => ({
-              uid: key,
-              fullName: val[key].fullName || 'No Name',
-              username: val[key].username || key,
-              password: val[key].password || '',
-              createdAt: val[key].createdAt || Date.now(),
-              role: val[key].role || (val[key].username === 'admin' ? 'admin' : 'user'),
-              status: val[key].status || (val[key].isBanned ? 'banned' : 'approved'),
-              isBanned: !!val[key].isBanned || val[key].status === 'banned',
-              isVip: val[key].isVip,
-              vipExpiresAt: val[key].vipExpiresAt,
-              tokenState: val[key].tokenState
-            }));
-            firebaseList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            setUsers(firebaseList);
-          } else {
-            setUsers([]);
-          }
-        }, { onlyOnce: true });
-      } catch (sdkErr: any) {
-        console.error("Firebase SDK fetch error:", sdkErr);
-        showToast("ইউজার লোড করতে সমস্যা হয়েছে: " + sdkErr.message, "error");
-      }
-    }
-
-    setLoading(false);
-  };
-
   const fetchStats = async () => {
     setIsStatsLoading(true);
     try {
@@ -657,8 +603,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
   };
 
+  // 100% Pure Real-time DB listeners (No REST API polling)
   useEffect(() => {
-    fetchUsers();
     fetchStats();
 
     // Stats auto-refresh for "100% Realtime" feel when modal is open
@@ -668,6 +614,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
 
     try {
+      setLoading(true);
       const usersRef = ref(db, 'users');
       const unsubscribe = onValue(usersRef, (snapshot) => {
         if (snapshot.exists()) {
@@ -683,7 +630,9 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             isBanned: !!val[key].isBanned || val[key].status === 'banned',
             isVip: val[key].isVip,
             vipExpiresAt: val[key].vipExpiresAt,
-            tokenState: val[key].tokenState
+            tokenState: val[key].tokenState,
+            apiAccessEnabled: val[key].apiAccessEnabled,
+            apiKey: val[key].apiKey
           }));
           firebaseList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
           setUsers(firebaseList);
@@ -694,9 +643,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             const liveUser = firebaseList.find(u => u.uid === prev.uid);
             return liveUser || prev;
           });
+        } else {
+          setUsers([]);
         }
+        setLoading(false);
       }, (error) => {
         console.warn("RTDB WebSocket Notice (handled via API):", error.message);
+        setLoading(false);
       });
       return () => {
         unsubscribe();
@@ -704,6 +657,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       };
     } catch (e) {
       console.warn("RTDB listener notice:", e);
+      setLoading(false);
       return () => {
         if (statsInterval) clearInterval(statsInterval);
       };
@@ -732,13 +686,15 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
     try {
       // 1. Direct Firebase Realtime DB update
-      await update(ref(db, `users/${editingUser.uid}`), {
+      const updates = {
         fullName: editName.trim(),
         username: cleanUsername,
         password: editPassword.trim(),
         apiAccessEnabled: editApiAccessEnabled,
         updatedAt: Date.now()
-      });
+      };
+      await update(ref(db, `users/${editingUser.uid}`), updates);
+      await update(ref(db, `user_list/${editingUser.uid}`), updates);
 
       // 2. Server API sync
       const currentUser = auth.currentUser;
@@ -760,7 +716,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
       showToast("ইউজার তথ্য আপডেট করা হয়েছে।");
       setEditingUser(null);
-      await fetchUsers();
     } catch (err: any) {
       console.error("Firebase update error:", err);
       showToast(`ফায়ারবেস আপডেট করতে সমস্যা হয়েছে: ${err.message}`, "error");
@@ -777,11 +732,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     if (window.confirm(`আপনি কি নিশ্চিত যে '${user.fullName}' (@${user.username}) ইউজারকে ${actionText} করতে চান?`)) {
       try {
         // Direct Firebase Realtime DB update
-        await update(ref(db, `users/${user.uid}`), {
+        const updates = {
           status: newStatus,
           isBanned: !isCurrentlyBanned,
           updatedAt: Date.now()
-        });
+        };
+        await update(ref(db, `users/${user.uid}`), updates);
+        await update(ref(db, `user_list/${user.uid}`), updates);
 
         // Server API update
         const currentUser = auth.currentUser;
@@ -804,7 +761,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         });
 
         showToast(`ইউজার ${isCurrentlyBanned ? 'আনব্যান' : 'ব্যান'} করা হয়েছে!`);
-        await fetchUsers();
       } catch (err: any) {
         console.error("Ban toggle error:", err);
         showToast(`সমস্যা হয়েছে: ${err.message}`, "error");
@@ -819,8 +775,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         apiAccessEnabled: newVal,
         updatedAt: Date.now()
       });
+      await update(ref(db, `user_list/${user.uid}`), { apiAccessEnabled: newVal });
       showToast(`API Access ${newVal ? 'Enabled' : 'Disabled'}!`);
-      await fetchUsers();
     } catch (err: any) {
       showToast(err.message, "error");
     }
@@ -833,8 +789,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         role: newRole,
         updatedAt: Date.now()
       });
+      await update(ref(db, `user_list/${user.uid}`), { role: newRole });
       showToast(`Role changed to ${newRole.toUpperCase()}!`);
-      await fetchUsers();
     } catch (err: any) {
       showToast(err.message, "error");
     }
@@ -850,7 +806,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
           updatedAt: Date.now()
         });
         showToast("New API key generated successfully!");
-        await fetchUsers();
         alert(`New API key has been generated successfully.`);
       } catch (err: any) {
         showToast(err.message, "error");
@@ -867,7 +822,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
           updatedAt: Date.now()
         });
         showToast("API key revoked and deleted!");
-        await fetchUsers();
         alert(`API key has been revoked and deleted.`);
       } catch (err: any) {
         showToast(err.message, "error");
@@ -879,6 +833,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     if (window.confirm(`আপনি কি নিশ্চিত যে '${user.fullName}' (@${user.username}) ইউজারকে ফায়ারবেস থেকে সম্পূর্ণ ডিলিট করতে চান?`)) {
       try {
         await remove(ref(db, `users/${user.uid}`));
+        await remove(ref(db, `user_list/${user.uid}`));
         if (user.username) {
           await remove(ref(db, `usernames/${user.username}`));
         }
@@ -894,7 +849,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         });
 
         showToast("ফায়ারবেস থেকে ইউজার ১০০% সফলভাবে ডিলিট করা হয়েছে!");
-        await fetchUsers();
       } catch (err: any) {
         console.error("Firebase deletion error:", err);
         showToast(`ফায়ারবেস থেকে ডিলিট করতে সমস্যা হয়েছে: ${err.message}`, "error");
@@ -970,7 +924,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       setNewName('');
       setNewUsername('');
       setNewPassword('');
-      await fetchUsers();
     } catch (err: any) {
       console.error("Firebase creation error:", err);
       showToast(`ফায়ারবেসে নতুন ইউজার তৈরিতে সমস্যা: ${err.message}`, "error");
@@ -1021,7 +974,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       }
 
       showToast("ডিফল্ট ইউজারসমূহ ফায়ারবেসে সফলভাবে সিড করা হয়েছে!");
-      await fetchUsers();
     } catch (err: any) {
       console.error("Seed error:", err);
       showToast(`সিড করতে সমস্যা: ${err.message}`, "error");
@@ -1226,7 +1178,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               <AnimatePresence initial={false}>
                 {filteredUsers.map((user, idx) => {
                   const isBanned = user.status === 'banned' || user.isBanned;
-                  const isVipActive = Boolean(user.isVip || (user.vipExpiresAt && user.vipExpiresAt > Date.now()));
+                  const isVipActive = Boolean((user.vipExpiresAt && user.vipExpiresAt > Date.now()) || (user.isVip && (!user.vipExpiresAt || user.vipExpiresAt === 0)));
 
                   return (
                     <motion.div 
@@ -1961,6 +1913,36 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                     </div>
                   </div>
 
+                  {/* 3. Token Deduction Multiplier (Normal Users) */}
+                  <div className="space-y-2 pt-2 border-t border-slate-800 mt-2">
+                    <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                      <span>৩. নরমাল ইউজারদের টোকেন কাটার হার (Multiplier):</span>
+                      <span className="text-rose-400 font-extrabold">{globalTokenMultiplierInput}x</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={globalTokenMultiplierInput}
+                      onChange={(e) => setGlobalTokenMultiplierInput(e.target.value)}
+                      placeholder="1"
+                      step="0.1"
+                      min="0.1"
+                      className="w-full px-3.5 py-2 bg-slate-800/90 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
+                    />
+                    {/* Quick Presets */}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {[1, 1.5, 2, 3, 5, 10].map(amt => (
+                        <button
+                          key={'mult_' + amt}
+                          type="button"
+                          onClick={() => setGlobalTokenMultiplierInput(amt.toString())}
+                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-rose-300 rounded-md text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          {amt}x
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Save buttons */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800">
                     <motion.button
@@ -2516,6 +2498,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                                     className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors cursor-pointer"
                                   >
                                     {copiedCodeId === c.code ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                                  </button>
+                                  <button
+                                    onClick={() => handleCopyCode(`${window.location.origin}/?promo=${c.code}`)}
+                                    title="লিংক কপি করুন"
+                                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors cursor-pointer flex items-center"
+                                  >
+                                    {copiedCodeId === `${window.location.origin}/?promo=${c.code}` ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Link2 className="w-4 h-4" />}
                                   </button>
                                 </div>
 

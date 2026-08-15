@@ -58,7 +58,7 @@ export default function TokenModal({
   const [iframeKey, setIframeKey] = useState(0);
   const [phaseNumber, setPhaseNumber] = useState(1); // 1 = first 15s ad, 2 = second 15s ad
 
-  const isVipActive = Boolean(userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+  const isVipActive = Boolean((userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile?.isVip && (!userProfile?.vipExpiresAt || userProfile.vipExpiresAt === 0)));
 
   // Color Picker States
   const [selectedColor, setSelectedColor] = useState(userProfile?.themeColor || '#4f46e5');
@@ -275,12 +275,21 @@ export default function TokenModal({
         };
 
         if (currentAdsCount >= 100) {
-          const currentVipExp = userProfile.vipExpiresAt || 0;
-          const baseTime = Math.max(currentVipExp, Date.now());
-          updates.vipExpiresAt = baseTime + (12 * 60 * 60 * 1000); // 12 hours
-          updates.isVip = true;
+          const isLifetime = userProfile.isVip && (!userProfile.vipExpiresAt || userProfile.vipExpiresAt === 0);
+          if (!isLifetime) {
+            const currentVipExp = typeof userProfile.vipExpiresAt === 'number' ? userProfile.vipExpiresAt : 0;
+            const baseTime = Math.max(currentVipExp, Date.now());
+            const newExpiry = baseTime + (12 * 60 * 60 * 1000); // 12 hours
+            
+            if (newExpiry > Date.now() && !isNaN(newExpiry)) {
+              updates.vipExpiresAt = newExpiry;
+              updates.isVip = true;
+              alert("🎉 অভিনন্দন! আপনি ১০০টি অ্যাড দেখেছেন! আপনাকে ১২ ঘন্টার জন্য ভিআইপি মেম্বারশিপ দেওয়া হয়েছে।");
+            }
+          } else {
+            alert("🎉 অভিনন্দন! আপনি ১০০টি অ্যাড দেখেছেন! (আপনি ইতোমধ্যে লাইফটাইম ভিআইপি)");
+          }
           updates.adsWatchedCount = 0; // Reset milestone
-          alert("🎉 অভিনন্দন! আপনি ১০০টি অ্যাড দেখেছেন! আপনাকে ১২ ঘন্টার জন্য ভিআইপি মেম্বারশিপ দেওয়া হয়েছে।");
         }
 
         await update(ref(db, `users/${userId}`), updates);

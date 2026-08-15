@@ -4,7 +4,7 @@ import { Copy, Check } from 'lucide-react';
 
 interface TypewriterMarkdownProps {
   text: string;
-  isLatest: boolean;
+  isGenerating?: boolean;
 }
 
 function CodeBlock({ children, className, ...props }: any) {
@@ -58,9 +58,25 @@ function CodeBlock({ children, className, ...props }: any) {
   );
 }
 
-export default function TypewriterMarkdown({ text, isLatest }: TypewriterMarkdownProps) {
+export default function TypewriterMarkdown({ text, isGenerating }: TypewriterMarkdownProps) {
+  // Add a blinking cursor class if it's currently generating
+  const generatingClass = isGenerating ? "generating-markdown" : "";
+  
   return (
-    <div className="relative markdown-body selection:bg-indigo-100 selection:text-indigo-900">
+    <div className={`relative markdown-body selection:bg-indigo-100 selection:text-indigo-900 ${generatingClass}`}>
+      <style>{`
+        .generating-markdown > *:last-child::after {
+          content: '▋';
+          display: inline-block;
+          margin-left: 4px;
+          animation: blink 1s step-start infinite;
+          color: #4f46e5;
+          vertical-align: baseline;
+        }
+        @keyframes blink {
+          50% { opacity: 0; }
+        }
+      `}</style>
       <ReactMarkdown
         components={{
           code: CodeBlock,

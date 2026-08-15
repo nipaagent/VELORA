@@ -12,7 +12,7 @@ interface TokenBadgeProps {
 }
 
 export default function TokenBadge({ tokenState, userProfile, onClick, compact = false }: TokenBadgeProps) {
-  const isVipActive = Boolean((userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now())));
+  const isVipActive = Boolean((userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile?.isVip && (!userProfile?.vipExpiresAt || userProfile.vipExpiresAt === 0)));
 
   if (isVipActive) {
     return (

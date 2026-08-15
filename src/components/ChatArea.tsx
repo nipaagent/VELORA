@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bot, User, Loader2, Send, BrainCircuit, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Chat, UserProfile } from '../types';
 import { cn } from '../lib/utils';
 import TypingIndicator from '../animations/TypingIndicator';
@@ -53,7 +54,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
 
-  const isVipActive = Boolean(userProfile?.isVip || (userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()));
+  const isVipActive = Boolean((userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile?.isVip && (!userProfile?.vipExpiresAt || userProfile.vipExpiresAt === 0)));
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
@@ -95,54 +96,67 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
           </div>
         ) : (
           <div className="w-full max-w-full space-y-5 pb-6">
-            {messages.map((msg, idx) => (
-              <div 
-                key={msg.id} 
-                className={cn(
-                  "flex w-full",
-                  msg.role === 'user' ? 'justify-end' : 'justify-start'
-                )}
-              >
-                <div className="flex gap-3 max-w-[95%] xl:max-w-[85%]">
-                  {msg.role === 'model' && (
-                    <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      <Bot className="w-3.5 h-3.5 text-white" />
-                    </div>
-                  )}
-                  
-                  <div 
+            <AnimatePresence initial={false}>
+              {messages.map((msg, idx) => {
+                const isUser = msg.role === 'user';
+                const isGenerating = isLoading && idx === messages.length - 1;
+                return (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    key={msg.id} 
                     className={cn(
-                      "px-4 py-3 shadow-xs text-[13px] sm:text-sm min-w-0 break-words overflow-hidden",
-                      msg.role === 'user' 
-                        ? 'bg-slate-900 text-white rounded-2xl rounded-tr-xs' 
-                        : 'bg-white border border-slate-200/90 text-slate-800 rounded-2xl rounded-tl-xs'
+                      "flex w-full",
+                      isUser ? 'justify-end' : 'justify-start'
                     )}
                   >
-                    {msg.role === 'model' && msg.thinking && (
-                      <ThinkingSection 
-                        thinking={msg.thinking} 
-                        isGenerating={isLoading && idx === messages.length - 1} 
-                      />
+                  <div className="flex gap-3 max-w-[95%] xl:max-w-[85%]">
+                    {!isUser && (
+                      <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                        <Bot className="w-3.5 h-3.5 text-white" />
+                      </div>
                     )}
                     
-                    {msg.role === 'model' ? (
-                      <div className="w-full text-slate-800">
-                        <TypewriterMarkdown text={msg.text} isLatest={idx === messages.length - 1} />
-                      </div>
-                    ) : (
-                      <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                    <div 
+                      className={cn(
+                        "px-4 py-3 shadow-xs text-[13px] sm:text-sm min-w-0 break-words overflow-hidden",
+                        isUser 
+                          ? 'bg-slate-900 text-white rounded-2xl rounded-tr-xs' 
+                          : 'bg-white border border-slate-200/90 text-slate-800 rounded-2xl rounded-tl-xs'
+                      )}
+                    >
+                      {!isUser && msg.thinking && (
+                        <ThinkingSection 
+                          thinking={msg.thinking} 
+                          isGenerating={isGenerating} 
+                        />
+                      )}
+                      
+                      {!isUser ? (
+                        <div className="w-full text-slate-800">
+                          <TypewriterMarkdown text={msg.text} isGenerating={isGenerating} />
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                      )}
+                    </div>
+
+                    {isUser && (
+                      <UserAvatar name={userProfile?.fullName || userProfile?.username || 'User'} size="sm" />
                     )}
                   </div>
-
-                  {msg.role === 'user' && (
-                    <UserAvatar name={userProfile?.fullName || userProfile?.username || 'User'} size="sm" />
-                  )}
-                </div>
-              </div>
-            ))}
-
+                </motion.div>
+              );
+            })}
+            </AnimatePresence>
+            
             {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
-              <div className="flex w-full justify-start">
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex w-full justify-start"
+              >
                 <div className="flex gap-3 max-w-full">
                   <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                     <Bot className="w-3.5 h-3.5 text-white" />
@@ -151,7 +165,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                     <TypingIndicator />
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -202,7 +216,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                 }
               }}
               placeholder="Type your message here..."
-              className="flex-1 max-h-32 min-h-[38px] bg-transparent resize-none border-0 focus:ring-0 py-1.5 px-0 text-sm text-slate-800 placeholder-slate-400 leading-relaxed outline-none"
+              className="flex-1 max-h-32 min-h-[38px] bg-transparent resize-none border-0 focus:ring-0 py-1.5 px-0 text-sm text-slate-800 placeholder-slate-400 leading-relaxed outline-none custom-scrollbar"
               rows={1}
             />
             <button 
