@@ -1,0 +1,4 @@
+#!/bin/bash
+sed -i 's/    const email = `${cleanUsername}@velora.app`;/    if (isSignUp) {\n      if (passStrength.label.includes("Weak") || passStrength.label.includes("দুর্বল") || passStrength.label.includes("মিল")) {\n        setError("পাসওয়ার্ডটি খুব দুর্বল! শক্তিশালী পাসওয়ার্ড দিন।");\n        return;\n      }\n    }\n\n    const email = `${cleanUsername}@velora.app`;/' src/components/AuthModal.tsx
+
+sed -i 's/\/\/ Create Firebase Auth User first/\/\/ Check if username exists before creating user\n        const usernameRef = await get(ref(db, `usernames\/${cleanUsername}`));\n        if (usernameRef.exists()) {\n          setError("এই ইউজারনেমটি আগে থেকেই অন্য কেউ ব্যবহার করছে। নতুন ইউজারনেম দিন।");\n          setLoading(false);\n          return;\n        }\n\n        \/\/ Create Firebase Auth User first/' src/components/AuthModal.tsx

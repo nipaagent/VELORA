@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift } from 'lucide-react';
+import { ArrowLeft, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database } from 'lucide-react';
 import { UserProfile } from '../types';
 import { auth, db } from '../lib/firebase';
 import UserAvatar from './UserAvatar';
@@ -52,7 +52,75 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
     setTimeout(() => setCopyingLink(false), 2000);
   };
 
-    const handleRedeemReferral = async () => {
+    const handleExportData = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      const snapshot = await get(ref(db, `chats/${user.uid}`));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `velora-chat-backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        alert("কোনো চ্যাট ডেটা পাওয়া যায়নি!");
+      }
+    } catch (e) {
+      console.error("Export error:", e);
+      alert("ডেটা এক্সপোর্ট করতে সমস্যা হয়েছে।");
+    }
+  };
+
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        let data = JSON.parse(text);
+        
+        const user = auth.currentUser;
+        if (!user) return;
+
+        let processedData: Record<string, any> = {};
+
+        if (Array.isArray(data)) {
+          // If it's an array, convert to an object map keyed by id
+          data.forEach((chat: any) => {
+            if (chat && chat.id) {
+              processedData[chat.id] = chat;
+            }
+          });
+        } else if (typeof data === 'object' && data !== null) {
+          processedData = data;
+        } else {
+          throw new Error("Invalid format");
+        }
+
+        if (Object.keys(processedData).length > 0) {
+          await update(ref(db, `chats/${user.uid}`), processedData);
+          alert("ডেটা সফলভাবে ইমপোর্ট হয়েছে!");
+        } else {
+          alert("ফাইলে কোনো চ্যাট ডেটা পাওয়া যায়নি!");
+        }
+      } catch (err) {
+        console.error("Import error:", err);
+        alert("ভুল ফরম্যাটের ফাইল! ইমপোর্ট করা যায়নি।");
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    e.target.value = '';
+  };
+
+  const handleRedeemReferral = async () => {
     const code = redeemCode.trim().toUpperCase();
     if (!code) return;
 
@@ -746,6 +814,56 @@ export default function ProfilePage({ onBack, userProfile, onUpdateProfile, scro
                 <Code2 className="w-4 h-4" />
                 Open Developer Hub
               </motion.button>
+            </div>
+          </motion.section>
+
+          {/* Data Management Section */}
+          <motion.section
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="bg-white rounded-2xl border border-gray-200/90 p-5 shadow-sm space-y-4"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                <Database className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-[13px] font-bold text-gray-900">ডেটা ম্যানেজমেন্ট</h3>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                  আপনার সম্পূর্ণ চ্যাট হিস্ট্রি ডাউনলোড (Export) করে ব্যাকআপ রাখুন অথবা অন্য কোনো ডিভাইস থেকে চ্যাট হিস্ট্রি আপলোড (Import) করুন।
+                </p>
+              </div>
+            </div>
+            
+            <div className="pt-3 border-t border-gray-100 grid grid-cols-2 gap-3">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleExportData}
+                className="w-full py-2.5 bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-xs font-semibold hover:bg-gray-100 hover:text-gray-900 transition-colors shadow-sm flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                এক্সপোর্ট করুন
+              </motion.button>
+
+              <div className="relative">
+                <input 
+                  type="file" 
+                  accept=".json"
+                  onChange={handleImportData}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  title="Import Data"
+                />
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full py-2.5 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-800 transition-colors shadow-sm flex items-center justify-center gap-2 pointer-events-none"
+                >
+                  <Upload className="w-4 h-4" />
+                  ইমপোর্ট করুন
+                </motion.div>
+              </div>
             </div>
           </motion.section>
 

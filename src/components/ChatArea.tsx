@@ -102,9 +102,17 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                 const isGenerating = isLoading && idx === messages.length - 1;
                 return (
                   <motion.div 
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
+                    
+                    initial={{ opacity: 0, y: 20, scale: 0.95, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                    transition={{ 
+                      type: "spring",
+                      stiffness: 350,
+                      damping: 30,
+                      mass: 0.8,
+                      opacity: { duration: 0.2 },
+                      filter: { duration: 0.2 }
+                    }}
                     key={msg.id} 
                     className={cn(
                       "flex w-full",
@@ -153,8 +161,17 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
             
             {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
               <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                
+                initial={{ opacity: 0, y: 15, scale: 0.95, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, scale: 0.9, filter: "blur(4px)", transition: { duration: 0.2 } }}
+                transition={{ 
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 30,
+                  opacity: { duration: 0.2 },
+                  filter: { duration: 0.2 }
+                }}
                 className="flex w-full justify-start"
               >
                 <div className="flex gap-3 max-w-full">

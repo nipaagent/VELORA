@@ -23,6 +23,32 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
 
   if (!isOpen) return null;
 
+  const calculatePasswordStrength = (pass: string) => {
+    if (!pass) return { label: '', color: '' };
+    if (pass.length < 6) return { label: 'খুব দুর্বল (Weak)', color: 'text-red-500' };
+    
+    const hasLetters = /[a-zA-Z]/.test(pass);
+    const hasNumbers = /[0-9]/.test(pass);
+    const hasSymbols = /[^a-zA-Z0-9]/.test(pass);
+    
+    if (
+      (username && pass.toLowerCase().includes(username.toLowerCase())) ||
+      (fullName && pass.toLowerCase().includes(fullName.toLowerCase().split(' ')[0]))
+    ) {
+      return { label: 'নামের সাথে মিল রয়েছে (Weak)', color: 'text-red-500' };
+    }
+
+    if (pass.length >= 8 && hasLetters && hasNumbers && hasSymbols) {
+      return { label: 'শক্তিশালী (Hard)', color: 'text-emerald-500' };
+    } else if (pass.length >= 6 && hasLetters && hasNumbers) {
+      return { label: 'মাঝারি (Medium)', color: 'text-amber-500' };
+    } else {
+      return { label: 'দুর্বল (Weak)', color: 'text-rose-500' };
+    }
+  };
+
+  const passStrength = isSignUp ? calculatePasswordStrength(password) : { label: '', color: '' };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -40,6 +66,13 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
       return;
     }
 
+    if (isSignUp) {
+      if (passStrength.label.includes("Weak") || passStrength.label.includes("দুর্বল") || passStrength.label.includes("মিল")) {
+        setError("পাসওয়ার্ডটি খুব দুর্বল! শক্তিশালী পাসওয়ার্ড দিন।");
+        return;
+      }
+    }
+
     const email = `${cleanUsername}@velora.app`;
 
     setLoading(true);
@@ -48,6 +81,14 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
       if (isSignUp) {
         if (!fullName.trim()) {
           setError('Please enter your full name.');
+          setLoading(false);
+          return;
+        }
+
+        // Check if username exists before creating user
+        const usernameRef = await get(ref(db, `usernames/${cleanUsername}`));
+        if (usernameRef.exists()) {
+          setError("এই ইউজারনেমটি আগে থেকেই অন্য কেউ ব্যবহার করছে। নতুন ইউজারনেম দিন।");
           setLoading(false);
           return;
         }
@@ -172,7 +213,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
     } catch (err: any) {
       console.error("Auth error:", err);
       if (err.code === 'auth/email-already-in-use') {
-        setError('This username is already registered.');
+        setError('এই ইউজারনেমটি আগে থেকেই অন্য কেউ ব্যবহার করছে। নতুন ইউজারনেম দিন।');
       } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
         setError('Invalid username or password.');
       } else {
@@ -294,7 +335,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                   type="text"
                   required
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))}
                   placeholder="e.g. alex_john"
                   className="w-full pl-11 pr-4 py-3 text-sm bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-medium placeholder:text-slate-300"
                 />
@@ -309,7 +350,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value.replace(/\s/g, ""))}
                   placeholder="••••••••"
                   className="w-full pl-11 pr-12 py-3 text-sm bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-medium placeholder:text-slate-300"
                 />
@@ -321,6 +362,13 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              
+              {isSignUp && password.length > 0 && (
+                <div className="flex items-center gap-1.5 mt-1.5 ml-1">
+                  <div className={`h-1.5 rounded-full flex-1 transition-all ${passStrength.color.replace("text-", "bg-")}`} />
+                  <span className={`text-[10px] font-bold ${passStrength.color}`}>{passStrength.label}</span>
+                </div>
+              )}
             </div>
 
             <AnimatePresence mode="wait">
