@@ -151,7 +151,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                     </div>
 
                     {isUser && (
-                      <UserAvatar name={userProfile?.fullName || userProfile?.username || 'User'} size="sm" />
+                      <UserAvatar name={userProfile?.fullName || userProfile?.username || "User"} avatarIndex={userProfile?.avatarIndex || 0} size="sm" />
                     )}
                   </div>
                 </motion.div>

@@ -1185,7 +1185,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                       
                       {/* User Details */}
                       <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <UserAvatar name={user.fullName || user.username} avatarUrl={user.avatarUrl} size="md" />
+                        <UserAvatar name={user.fullName || user.username} avatarIndex={user.avatarIndex || 0} avatarUrl={user.avatarUrl} size="md" />
                         <div className="space-y-1 min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-extrabold text-xs text-slate-900 truncate">

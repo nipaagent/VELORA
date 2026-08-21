@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, MessageSquare, Trash2, LogOut, User, Sparkles, ShieldCheck, BrainCircuit, Gift } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, LogOut, User, Sparkles, ShieldCheck, BrainCircuit, Gift, Settings } from 'lucide-react';
 import { Chat, UserProfile, TokenState } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -118,17 +118,7 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
       <div className="shrink-0">
         {/* Admin & Referral Links */}
         <div className="p-2 border-t border-gray-100 space-y-1.5 bg-white">
-          {/* Refer & Earn button */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onOpenReferral}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-rose-600 hover:bg-rose-50/70 rounded-xl transition-colors text-[10px] font-black uppercase tracking-widest border border-rose-100/60 shadow-2xs"
-            title="Refer & Earn VIP"
-          >
-            <Gift className="w-4 h-4 text-rose-500" />
-            <span>Refer & Earn</span>
-          </motion.button>
+
 
           {/* Admin Panel button - ONLY shown to username 'Admin' or 'admin' */}
           {userProfile?.username?.toLowerCase() === 'admin' && (
@@ -152,23 +142,25 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
               <motion.button 
                 whileHover={{ x: 2 }}
                 onClick={onOpenProfile}
-                className="flex items-center gap-2 overflow-hidden text-left hover:bg-white p-1.5 -ml-1 rounded-xl transition-colors flex-1 group border border-transparent hover:border-slate-200/60"
-                title="Profile Settings"
+                className="flex items-center gap-3 overflow-hidden text-left hover:bg-white p-1.5 rounded-xl transition-colors flex-1 group border border-transparent hover:border-slate-200/60"
+                title="Settings"
               >
-                <UserAvatar name={userProfile.fullName || userProfile.username} avatarUrl={userProfile.avatarUrl} size="sm" />
-                <div className="overflow-hidden leading-tight flex-1">
-                  <div className="text-[11px] font-black text-slate-900 truncate">{userProfile.fullName || userProfile.username}</div>
-                  <div className="text-[9px] text-slate-500 truncate font-bold uppercase tracking-wider">@{userProfile.username}</div>
+                <div className="w-9 h-9 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                  <Settings className="w-4.5 h-4.5 text-slate-700" />
+                </div>
+                <div className="overflow-hidden leading-tight flex-1 mt-0.5">
+                  <div className="text-xs font-black text-slate-900 truncate tracking-tight uppercase">Settings</div>
+                  <div className="text-[9px] text-slate-500 truncate font-bold uppercase tracking-widest mt-0.5">Preferences & Data</div>
                 </div>
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.1, color: '#e11d48' }}
                 whileTap={{ scale: 0.9 }}
                 onClick={onSignOut}
-                className="p-1.5 rounded-lg text-slate-400 transition-colors shrink-0"
+                className="p-2 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors shrink-0"
                 title="Sign Out"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-4.5 h-4.5" />
               </motion.button>
             </div>
           </div>

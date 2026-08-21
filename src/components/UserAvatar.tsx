@@ -1,7 +1,8 @@
 import React from 'react';
-import { LETTER_3D_THEMES, DEFAULT_3D_THEME, Letter3DTheme } from '../lib/letter3DThemes';
+import { LETTER_3D_THEMES, DEFAULT_3D_THEME, Letter3DTheme, generateAvatarStyles } from '../lib/letter3DThemes';
 
 interface UserAvatarProps {
+  avatarIndex?: number;
   name?: string;
   avatarUrl?: string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
@@ -9,13 +10,14 @@ interface UserAvatarProps {
   showBorder?: boolean;
 }
 
-export default function UserAvatar({ name, avatarUrl, size = 'md', className = '', showBorder = true }: UserAvatarProps) {
+export default function UserAvatar({ name, avatarUrl, avatarIndex = 0, size = 'md', className = '', showBorder = true }: UserAvatarProps) {
   // Extract clean first letter
   const cleanName = (name || 'User').trim();
   const firstChar = cleanName.charAt(0).toUpperCase();
   const isLetter = /[A-Z]/.test(firstChar);
   const letterKey = isLetter ? firstChar : 'A';
-  const theme: Letter3DTheme = LETTER_3D_THEMES[letterKey] || DEFAULT_3D_THEME;
+  const themes = generateAvatarStyles(letterKey);
+  const theme = themes[avatarIndex] || themes[0];
 
   // Size mapping (Tailwind dimensions & font sizes)
   let sizeClasses = 'w-8 h-8 text-xs';
@@ -47,8 +49,8 @@ export default function UserAvatar({ name, avatarUrl, size = 'md', className = '
     }
   }
 
-  const gradId = `letter-3d-grad-${letterKey}`;
-  const filterId = `letter-3d-glow-${letterKey}`;
+  const gradId = `letter-3d-grad-${letterKey}-${avatarIndex}`;
+  const filterId = `letter-3d-glow-${letterKey}-${avatarIndex}`;
 
   return (
     <div

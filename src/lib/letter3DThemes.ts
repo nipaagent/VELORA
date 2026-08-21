@@ -340,3 +340,73 @@ export const DEFAULT_3D_THEME: Letter3DTheme = {
   ringColor: '#EEF2FF',
   description: '3D Universal Monogram Emblem'
 };
+
+export const generateAvatarStyles = (letter: string): Letter3DTheme[] => {
+  const isLetter = /[A-Z]/.test(letter.toUpperCase());
+  const letterKey = isLetter ? letter.toUpperCase() : 'A';
+  const baseTheme = LETTER_3D_THEMES[letterKey] || DEFAULT_3D_THEME;
+
+  return [
+    baseTheme, // Style 0: Default Letter Theme
+    { // Style 1: Cyberpunk Neon
+      bgGradient: 'from-slate-950 via-fuchsia-950 to-cyan-950',
+      badgeBorder: 'border-cyan-400/60 shadow-[0_0_15px_rgba(34,211,238,0.3)]',
+      badgeShape: 'rounded-2xl',
+      textStart: '#A5F3FC',
+      textMid: '#06B6D4',
+      textEnd: '#0891B2',
+      sideShadow: '#164E63',
+      glowColor: '#E879F9',
+      ringColor: '#FDF4FF',
+      description: 'Cyberpunk Neon'
+    },
+    { // Style 2: Luxury Gold
+      bgGradient: 'from-slate-950 via-yellow-950 to-amber-950',
+      badgeBorder: 'border-yellow-400/60 shadow-[0_0_15px_rgba(250,204,21,0.3)]',
+      badgeShape: 'rounded-full',
+      textStart: '#FEF08A',
+      textMid: '#EAB308',
+      textEnd: '#A16207',
+      sideShadow: '#713F12',
+      glowColor: '#FACC15',
+      ringColor: '#FEF9C3',
+      description: 'Luxury Gold'
+    },
+    { // Style 3: Dark Silver/Minimal
+      bgGradient: 'from-slate-950 via-slate-900 to-slate-950',
+      badgeBorder: 'border-slate-500/60 shadow-[0_0_15px_rgba(100,116,139,0.3)]',
+      badgeShape: 'rounded-xl',
+      textStart: '#F1F5F9',
+      textMid: '#94A3B8',
+      textEnd: '#475569',
+      sideShadow: '#1E293B',
+      glowColor: '#94A3B8',
+      ringColor: '#F8FAFC',
+      description: 'Dark Silver Minimal'
+    },
+    { // Style 4: Cosmic Violet
+      bgGradient: 'from-slate-950 via-violet-950 to-purple-950',
+      badgeBorder: 'border-violet-400/60 shadow-[0_0_15px_rgba(139,92,246,0.3)]',
+      badgeShape: 'rounded-2xl',
+      textStart: '#DDD6FE',
+      textMid: '#8B5CF6',
+      textEnd: '#5B21B6',
+      sideShadow: '#4C1D95',
+      glowColor: '#A78BFA',
+      ringColor: '#F5F3FF',
+      description: 'Cosmic Violet'
+    },
+    { // Style 5: Emerald Forest
+      bgGradient: 'from-slate-950 via-emerald-950 to-green-950',
+      badgeBorder: 'border-emerald-400/60 shadow-[0_0_15px_rgba(52,211,153,0.3)]',
+      badgeShape: 'rounded-full',
+      textStart: '#A7F3D0',
+      textMid: '#10B981',
+      textEnd: '#047857',
+      sideShadow: '#064E3B',
+      glowColor: '#34D399',
+      ringColor: '#ECFDF5',
+      description: 'Emerald Forest'
+    }
+  ];
+};

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, LogOut, User, Sparkles, BrainCircuit, Crown } from 'lucide-react';
+import { Menu, LogOut, ArrowLeft, User, Sparkles, BrainCircuit, Crown } from 'lucide-react';
 import { Chat, Message, UserProfile, TokenState } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
@@ -9,7 +9,7 @@ import TokenBadge from './components/TokenBadge';
 import TokenModal from './components/TokenModal';
 import MenuSlide from './animations/MenuSlide';
 import AuthModal from './components/AuthModal';
-import ProfilePage from './components/ProfilePage';
+import SettingsPage from './components/SettingsPage';
 import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
 import { auth, db } from './lib/firebase';
@@ -31,7 +31,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDeveloperOpen, setIsDeveloperOpen] = useState(false);
-  const [profileScrollToReferral, setProfileScrollToReferral] = useState(false);
+  const [settingsView, setSettingsView] = useState<'main' | 'profile' | 'referral' | 'data' | 'tips'>('main');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [tokenState, setTokenState] = useState<TokenState>(defaultTokenState);
@@ -957,35 +957,8 @@ export default function App() {
   return (
     <div className="flex h-[100dvh] bg-white text-gray-900 font-sans overflow-hidden selection:bg-indigo-100">
       <AnimatePresence mode="wait">
-        {/* Full Page Profile View */}
-        {isProfileOpen ? (
-          <motion.div
-            key="profile"
-            initial={{ opacity: 0, scale: 1.05 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-50 bg-white"
-          >
-            <ProfilePage 
-              onBack={() => {
-                setIsProfileOpen(false);
-                setProfileScrollToReferral(false);
-              }} 
-              userProfile={userProfile} 
-              onUpdateProfile={(updated) => setUserProfile(updated)} 
-              scrollToReferral={profileScrollToReferral}
-              onOpenDeveloper={() => {
-                setIsDeveloperOpen(true);
-                setIsAdminOpen(false);
-                setIsProfileOpen(false);
-                setIsSidebarOpen(false);
-              }}
-            />
-          </motion.div>
-        ) : (
-          <motion.div 
-            key="main-layout"
+        <motion.div 
+          key="main-layout"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1021,7 +994,7 @@ export default function App() {
                 }}
                 onOpenReferral={() => {
                   setIsProfileOpen(true);
-                  setProfileScrollToReferral(true);
+                  setSettingsView('referral');
                   setIsSidebarOpen(false);
                 }}
                 onOpenAdmin={() => {
@@ -1037,13 +1010,30 @@ export default function App() {
               {/* Main Header */}
               <header className="h-14 border-b border-slate-200/80 bg-white px-2 sm:px-3 flex items-center shrink-0 z-10 relative shadow-xs">
                 <div className="flex-1 flex justify-start items-center gap-2">
-                  <button 
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 -ml-1 rounded-xl hover:bg-slate-100 text-slate-700 transition-all active:scale-95 outline-none"
-                    aria-label="Open menu"
-                  >
-                    <Menu className="w-5 h-5" />
-                  </button>
+                  {isProfileOpen ? (
+                    <button 
+                      onClick={() => {
+                        if (settingsView !== 'main') {
+                          setSettingsView('main');
+                        } else {
+                          setIsProfileOpen(false);
+                          setSettingsView('main');
+                        }
+                      }}
+                      className="p-2 -ml-1 rounded-xl hover:bg-slate-100 text-slate-700 transition-all active:scale-95 outline-none"
+                      aria-label="Back"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => setIsSidebarOpen(true)}
+                      className="p-2 -ml-1 rounded-xl hover:bg-slate-100 text-slate-700 transition-all active:scale-95 outline-none"
+                      aria-label="Open menu"
+                    >
+                      <Menu className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
                 
                 <div className="flex flex-col items-center justify-center shrink-0 relative px-4 pt-1">
@@ -1113,9 +1103,10 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 flex justify-end items-center gap-1.5 sm:gap-2.5 ml-auto">
-                  <TokenBadge tokenState={tokenState} userProfile={userProfile} onClick={() => setIsTokenModalOpen(true)} />
-
-                  {userProfile && (() => {
+                  {!isProfileOpen && (
+                    <>
+                      <TokenBadge tokenState={tokenState} userProfile={userProfile} onClick={() => setIsTokenModalOpen(true)} />
+                      {userProfile && (() => {
                     const isVipActive = Boolean((userProfile.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile.isVip && (!userProfile.vipExpiresAt || userProfile.vipExpiresAt === 0)));
                     return (
                       <button 
@@ -1151,18 +1142,50 @@ export default function App() {
                               />
                             </>
                           )}
-                          <UserAvatar name={userProfile.fullName || userProfile.username} avatarUrl={userProfile.avatarUrl} size="sm" />
+                          <UserAvatar name={userProfile.fullName || userProfile.username} avatarIndex={userProfile.avatarIndex || 0} avatarUrl={userProfile.avatarUrl} size="sm" />
                         </div>
                       </button>
                     );
                   })()}
+                    </>
+                  )}
                 </div>
               </header>
 
               {/* Main Body with Internal Transitions */}
               <div className="flex-1 relative overflow-hidden bg-white">
                 <AnimatePresence mode="wait">
-                  {isAdminOpen && userProfile?.username?.toLowerCase() === 'admin' ? (
+                  {isProfileOpen ? (
+                    <motion.div
+                      key="profile-view"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.3 }}
+                      className="absolute inset-0 z-10 bg-slate-50"
+                    >
+                      <SettingsPage 
+                        onBack={() => {
+                          if (settingsView !== 'main') {
+                            setSettingsView('main');
+                          } else {
+                            setIsProfileOpen(false);
+                            setSettingsView('main');
+                          }
+                        }} 
+                        userProfile={userProfile} 
+                        onUpdateProfile={(updated) => setUserProfile(updated)} 
+                        currentView={settingsView}
+                        onNavigateView={(view) => setSettingsView(view)}
+                        onOpenDeveloper={() => {
+                          setIsDeveloperOpen(true);
+                          setIsAdminOpen(false);
+                          setIsProfileOpen(false);
+                          setIsSidebarOpen(false);
+                        }}
+                      />
+                    </motion.div>
+                  ) : isAdminOpen && userProfile?.username?.toLowerCase() === 'admin' ? (
                     <motion.div
                       key="admin-view"
                       initial={{ opacity: 0, x: 20 }}
@@ -1182,7 +1205,7 @@ export default function App() {
                       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                       className="absolute inset-0 z-10 bg-white"
                     >
-                      <DeveloperPage userProfile={userProfile!} user={user!} onBackToChat={() => setIsDeveloperOpen(false)} />
+                      <DeveloperPage userProfile={userProfile!} user={user!} onBackToChat={() => { setIsDeveloperOpen(false); setIsProfileOpen(true); }} />
                     </motion.div>
                   ) : (
                     <motion.div
@@ -1206,7 +1229,6 @@ export default function App() {
               </div>
             </div>
           </motion.div>
-        )}
       </AnimatePresence>
 
       {/* Token & Ad Modal */}
@@ -1223,7 +1245,7 @@ export default function App() {
         onOpenReferral={() => {
           setIsTokenModalOpen(false);
           setIsProfileOpen(true);
-          setProfileScrollToReferral(true);
+          setSettingsView('referral');
         }}
         onRewardClaimed={(bonusAmount) => {
           const updated: TokenState = {
