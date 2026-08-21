@@ -3,15 +3,22 @@ import {
   Users, UserPlus, Search, Edit3, Trash2, Eye, EyeOff, Check, X, 
   ShieldAlert, RefreshCw, KeyRound, ArrowLeft, Save, Sparkles, AlertCircle, ShieldCheck,
   Ban, UserCheck, ShieldX, CheckCircle2, AlertTriangle, Lock, Code2, Loader2, Tv, Plus, ExternalLink, Zap, Minus, Gift,
-  Ticket, Crown, Clock, Tag, Copy, Send, LogOut, Link2
+  Ticket, Crown, Clock, Tag, Copy, Send, LogOut, Link2, ScrollText, Activity, Terminal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
-import { ref, onValue, set, remove, update } from 'firebase/database';
+import { ref, onValue, set, remove, update, push, query, limitToLast } from 'firebase/database';
 import { generateUniqueVeloraKey, cn, formatTokenCount } from '../lib/utils';
 import { TokenState, RedeemCode, RedeemRewardType } from '../types';
 import UserAvatar from './UserAvatar';
 import { VipUserModal } from './VipUserModal';
+
+export interface AdminLog {
+  id: string;
+  action: string;
+  description: string;
+  timestamp: number;
+}
 
 export interface AdminUser {
   uid: string;
@@ -92,6 +99,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [isSavingRedeemCode, setIsSavingRedeemCode] = useState(false);
   const [redeemSearchTerm, setRedeemSearchTerm] = useState('');
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+  // Logs state
+  const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
 
   // User Token Control Modal state
   const [tokenModalUser, setTokenModalUser] = useState<AdminUser | null>(null);
@@ -122,7 +131,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   };
 
   // Dashboard Tab State
-  const [activeTab, setActiveTab] = useState<'users' | 'tokens' | 'ads' | 'redeem' | 'apikeys'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'tokens' | 'ads' | 'redeem' | 'apikeys' | 'logs'>('users');
 
   // Toast alert feedback
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -130,6 +139,18 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ type, text });
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const logAdminAction = async (action: string, description: string) => {
+    try {
+      await push(ref(db, 'admin_logs'), {
+        action,
+        description,
+        timestamp: Date.now()
+      });
+    } catch (e) {
+      console.error("Failed to log action:", e);
+    }
   };
 
   // Listen to ad links, global token_config and redeem_codes in Firebase RTDB
@@ -166,6 +187,21 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     });
 
     const redeemRef = ref(db, 'redeem_codes');
+    const logsRef = query(ref(db, 'admin_logs'), limitToLast(100));
+    const unsubscribeLogs = onValue(logsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        const logsList = Object.keys(val).map(key => ({
+          id: key,
+          ...val[key]
+        }));
+        logsList.sort((a, b) => b.timestamp - a.timestamp);
+        setAdminLogs(logsList);
+      } else {
+        setAdminLogs([]);
+      }
+    });
+
     const unsubscribeRedeem = onValue(redeemRef, (snapshot) => {
       if (snapshot.exists()) {
         const val = snapshot.val();
@@ -187,6 +223,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       unsubscribeAd();
       unsubscribeConfig();
       unsubscribeRedeem();
+      unsubscribeLogs();
     };
   }, []);
 
@@ -696,25 +733,15 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       await update(ref(db, `users/${editingUser.uid}`), updates);
       await update(ref(db, `user_list/${editingUser.uid}`), updates);
 
-      // 2. Server API sync
-      const currentUser = auth.currentUser;
-      const idToken = currentUser ? await currentUser.getIdToken() : '';
-
-      await fetch(`/api/admin/users/${editingUser.uid}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': idToken ? `Bearer ${idToken}` : ''
-        },
-        body: JSON.stringify({
-          fullName: editName.trim(),
-          username: cleanUsername,
-          password: editPassword.trim(),
-          oldUsername: editingUser.username
-        })
-      });
+      if (editingUser.username && editingUser.username !== cleanUsername) {
+        await remove(ref(db, `usernames/${editingUser.username}`));
+      }
+      if (cleanUsername) {
+        await set(ref(db, `usernames/${cleanUsername}`), editingUser.uid);
+      }
 
       showToast("ইউজার তথ্য আপডেট করা হয়েছে।");
+      logAdminAction('USER_UPDATED', `Updated details for user @${cleanUsername}`);
       setEditingUser(null);
     } catch (err: any) {
       console.error("Firebase update error:", err);
@@ -740,27 +767,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         await update(ref(db, `users/${user.uid}`), updates);
         await update(ref(db, `user_list/${user.uid}`), updates);
 
-        // Server API update
-        const currentUser = auth.currentUser;
-        const idToken = currentUser ? await currentUser.getIdToken() : '';
-
-        await fetch(`/api/admin/users/${user.uid}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': idToken ? `Bearer ${idToken}` : ''
-          },
-          body: JSON.stringify({
-            fullName: user.fullName,
-            username: user.username,
-            password: user.password || '',
-            role: user.role || 'user',
-            status: newStatus,
-            isBanned: !isCurrentlyBanned
-          })
-        });
-
-        showToast(`ইউজার ${isCurrentlyBanned ? 'আনব্যান' : 'ব্যান'} করা হয়েছে!`);
+      showToast(`ইউজার ${isCurrentlyBanned ? 'আনব্যান' : 'ব্যান'} করা হয়েছে!`);
+      logAdminAction(isCurrentlyBanned ? 'USER_UNBANNED' : 'USER_BANNED', `User @${user.username} (${user.fullName}) was ${isCurrentlyBanned ? 'unbanned' : 'banned'}`);
       } catch (err: any) {
         console.error("Ban toggle error:", err);
         showToast(`সমস্যা হয়েছে: ${err.message}`, "error");
@@ -791,6 +799,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       });
       await update(ref(db, `user_list/${user.uid}`), { role: newRole });
       showToast(`Role changed to ${newRole.toUpperCase()}!`);
+      logAdminAction('ROLE_CHANGED', `User @${user.username} role changed to ${newRole}`);
     } catch (err: any) {
       showToast(err.message, "error");
     }
@@ -838,17 +847,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
           await remove(ref(db, `usernames/${user.username}`));
         }
 
-        const currentUser = auth.currentUser;
-        const idToken = currentUser ? await currentUser.getIdToken() : '';
-
-        await fetch(`/api/admin/users/${user.uid}?username=${encodeURIComponent(user.username)}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': idToken ? `Bearer ${idToken}` : ''
-          }
-        });
-
         showToast("ফায়ারবেস থেকে ইউজার ১০০% সফলভাবে ডিলিট করা হয়েছে!");
+        logAdminAction('USER_DELETED', `User @${user.username} (${user.fullName}) was deleted`);
       } catch (err: any) {
         console.error("Firebase deletion error:", err);
         showToast(`ফায়ারবেস থেকে ডিলিট করতে সমস্যা হয়েছে: ${err.message}`, "error");
@@ -900,26 +900,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       await set(ref(db, `user_list/${generatedUid}`), newUserObj);
       await set(ref(db, `usernames/${cleanUsername}`), generatedUid);
 
-      // Server API sync
-      const currentUser = auth.currentUser;
-      const idToken = currentUser ? await currentUser.getIdToken() : '';
-
-      await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': idToken ? `Bearer ${idToken}` : ''
-        },
-        body: JSON.stringify({
-          fullName: newName.trim(),
-          username: cleanUsername,
-          password: newPassword.trim(),
-          role: newRole,
-          status: newStatus
-        })
-      });
-
       showToast("ফায়ারবেসে নতুন ইউজার ১০০% সফলভাবে তৈরি করা হয়েছে!");
+      logAdminAction('USER_CREATED', `User @${cleanUsername} (${newName.trim()}) was created`);
       setIsAddModalOpen(false);
       setNewName('');
       setNewUsername('');
@@ -1086,7 +1068,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               { id: 'users', label: 'Users Management', icon: Users, count: users.length, activeCls: 'bg-indigo-600 text-white border-indigo-700 shadow-md transform scale-105' },
               { id: 'ads', label: 'Ad Links Config', icon: Tv, count: adLinks.length, activeCls: 'bg-purple-600 text-white border-purple-700 shadow-md transform scale-105' },
               { id: 'redeem', label: 'Redeem Codes', icon: Ticket, count: redeemCodes.length, activeCls: 'bg-amber-500 text-white border-amber-600 shadow-md transform scale-105' },
-              { id: 'apikeys', label: 'API Keys Status', icon: KeyRound, count: apiKeyCount, activeCls: 'bg-sky-500 text-white border-sky-600 shadow-md transform scale-105' }
+              { id: 'apikeys', label: 'API Keys Status', icon: KeyRound, count: apiKeyCount, activeCls: 'bg-sky-500 text-white border-sky-600 shadow-md transform scale-105' },
+              { id: 'logs', label: 'Activity Logs', icon: ScrollText, count: adminLogs.length, activeCls: 'bg-emerald-600 text-white border-emerald-700 shadow-md transform scale-105' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1818,6 +1801,87 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      
+      {/* ACTIVITY LOGS TAB */}
+      <AnimatePresence>
+        {activeTab === 'logs' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full"
+          >
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden w-full">
+              <div className="bg-slate-900 p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                    <Activity className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-white flex items-center gap-2 tracking-tight uppercase">
+                      Admin Activity Logs
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                      Real-time tracker for administrative actions
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 max-h-[65vh] overflow-y-auto custom-scrollbar">
+                {adminLogs.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <Terminal className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                    <p className="text-xs font-bold uppercase tracking-widest">No activity logs found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {adminLogs.map((log) => {
+                      const logDate = new Date(log.timestamp);
+                      const isRecent = Date.now() - log.timestamp < 3600000;
+                      return (
+                        <motion.div 
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          key={log.id} 
+                          className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100/70 transition-colors"
+                        >
+                          <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
+                            log.action.includes('BANNED') || log.action.includes('DELETED') ? "bg-red-100 text-red-600" :
+                            log.action.includes('CREATED') || log.action.includes('ADDED') ? "bg-emerald-100 text-emerald-600" :
+                            log.action.includes('UPDATED') || log.action.includes('CHANGED') ? "bg-sky-100 text-sky-600" :
+                            "bg-slate-200 text-slate-600"
+                          )}>
+                            <Terminal className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-bold text-xs uppercase tracking-wider text-slate-700">
+                                {log.action.replace(/_/g, ' ')}
+                              </span>
+                              <span className={cn(
+                                "text-[10px] font-semibold",
+                                isRecent ? "text-emerald-600 font-bold" : "text-slate-400"
+                              )}>
+                                {logDate.toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                              {log.description}
+                            </p>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

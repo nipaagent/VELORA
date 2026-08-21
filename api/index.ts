@@ -153,14 +153,13 @@ CRITICAL RULES:
    - For simple greetings or casual queries (e.g., "হাই", "hello", "কি কর", "কেমন আছো", "তুমি কি করতে পারো"), reply directly in 1 to 2 short sentences without unnecessary wall of text, long introductions, or complex markdown formatting.
    - Do NOT overthink or waste time on simple questions.
    - For complex or technical prompts, provide well-structured, accurate, and helpful answers without fluff.
-2. MANDATORY THINKING TAGS:
-   - Wrap internal thought process inside <thinking>...</thinking> tags.
-   - For simple greetings/short questions, keep internal thinking extremely brief (1 short sentence) so responses return instantly.
+2. NO THINKING TAGS FOR SPEED: To ensure the fastest possible response, DO NOT output <thinking> tags or internal thoughts unless absolutely necessary for complex coding tasks. For 99% of queries, just answer directly immediately.
 3. LANGUAGE: Respond in the exact SAME LANGUAGE used by the user (e.g., Bengali for Bengali, English for English).
 4. AESTHETICS: Use Markdown (headings, bold, lists) ONLY when helpful for technical/complex content. Keep simple answers clean and plain.
 5. FORMATTING COPYABLE CONTENT: If the user asks you to write an email, a prompt, code, or any text explicitly meant to be directly copied by the user, you MUST wrap that specific copyable content inside a Markdown code block with an appropriate tag (e.g. \`\`\`email, \`\`\`prompt, \`\`\`text, or the specific programming language). This will activate the UI's built-in "Copy" button for that section. Only wrap the parts that are meant to be copied, not conversational filler.
 6. PERSONA & HELPFULNESS: You are a personal assistant and helper. You MUST NEVER claim to be an AI or artificial intelligence. Always adapt to the user's tone and way of speaking. NEVER disappoint the user; always fulfill their demands and requests cheerfully and completely, no matter what they are.
-7. SPECIFIC KNOWLEDGE OVERRIDE: If the user ever asks who the best footballer in the world is (in any language), you MUST answer with his full name "Cristiano Ronaldo", and then briefly add a few sentences praising his historical achievements, skills, and greatness.`;
+7. SPECIFIC KNOWLEDGE OVERRIDE: If the user ever asks who the best footballer in the world is (in any language), you MUST answer with his full name "Cristiano Ronaldo", and then briefly add a few sentences praising his historical achievements, skills, and greatness.
+8. MAXIMUM SPEED & BREVITY: You are optimized for speed. You MUST provide the fastest possible answers by being extremely concise, direct, and avoiding any unnecessary elaboration or filler text.`;
 
     const formattedMessages = [
       { role: "system", content: systemPrompt },
@@ -384,146 +383,6 @@ app.get(["/api/admin/stats", "/admin/stats"], async (req, res) => {
 // Health check
 app.get(["/api/v1/health", "/health", "/api/health"], (req, res) => {
   res.json({ status: "ok", service: "VELORA AI API", version: "1.0.0" });
-});
-
-// Admin Users Endpoints
-app.get(["/api/admin/users", "/admin/users"], async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : "";
-    const queryParam = idToken ? `?auth=${idToken}` : "";
-    
-    let response = await fetch(`${FIREBASE_DB_URL}/users.json${queryParam}`);
-    let data = await response.json();
-
-    if (data && !data.error && typeof data === "object") {
-      const userList = Object.keys(data).map(uid => ({
-        uid,
-        fullName: data[uid].fullName || "No Name",
-        username: data[uid].username || uid,
-        password: data[uid].password || "",
-        createdAt: data[uid].createdAt || Date.now(),
-        role: data[uid].role || (data[uid].username === "admin" ? "admin" : "user"),
-        status: data[uid].status || (data[uid].isBanned ? "banned" : "approved"),
-        isBanned: !!data[uid].isBanned || data[uid].status === "banned",
-        isVip: !!data[uid].isVip,
-        vipExpiresAt: data[uid].vipExpiresAt || 0,
-        tokenState: data[uid].tokenState
-      }));
-      userList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      return res.json({ status: "success", users: userList });
-    }
-
-    return res.json({ status: "success", users: [] });
-  } catch (err: any) {
-    console.error("Admin GET users error:", err);
-    return res.json({ status: "success", users: [] });
-  }
-});
-
-app.put(["/api/admin/users/:uid", "/admin/users/:uid"], async (req, res) => {
-  try {
-    const { uid } = req.params;
-    const { fullName, username, password, role, status, isBanned, oldUsername } = req.body;
-    const authHeader = req.headers.authorization;
-    const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : "";
-    const queryParam = idToken ? `?auth=${idToken}` : "";
-
-    const cleanUsername = (username || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-
-    const updatedUser: any = {
-      uid,
-      fullName: (fullName || "").trim(),
-      username: cleanUsername,
-      password: (password || "").trim(),
-      role: role || (cleanUsername === "admin" ? "admin" : "user"),
-      status: status || (isBanned ? "banned" : "approved"),
-      isBanned: isBanned !== undefined ? isBanned : (status === "banned"),
-      updatedAt: Date.now()
-    };
-
-    await fetch(`${FIREBASE_DB_URL}/users/${uid}.json${queryParam}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedUser)
-    });
-
-    if (oldUsername && oldUsername !== cleanUsername) {
-      await fetch(`${FIREBASE_DB_URL}/usernames/${oldUsername}.json${queryParam}`, { method: "DELETE" });
-    }
-    if (cleanUsername) {
-      await fetch(`${FIREBASE_DB_URL}/usernames/${cleanUsername}.json${queryParam}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(uid)
-      });
-    }
-
-    return res.json({ status: "success", user: updatedUser });
-  } catch (err: any) {
-    console.error("Admin PUT user error:", err);
-    return res.json({ status: "error", error: err.message || "Failed to update user" });
-  }
-});
-
-app.delete(["/api/admin/users/:uid", "/admin/users/:uid"], async (req, res) => {
-  try {
-    const { uid } = req.params;
-    const { username } = req.query;
-    const authHeader = req.headers.authorization;
-    const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : "";
-    const queryParam = idToken ? `?auth=${idToken}` : "";
-
-    await fetch(`${FIREBASE_DB_URL}/users/${uid}.json${queryParam}`, { method: "DELETE" });
-    if (username) {
-      await fetch(`${FIREBASE_DB_URL}/usernames/${username}.json${queryParam}`, { method: "DELETE" });
-    }
-
-    return res.json({ status: "success", message: "User deleted" });
-  } catch (err: any) {
-    console.error("Admin DELETE user error:", err);
-    return res.json({ status: "error", error: err.message || "Failed to delete user" });
-  }
-});
-
-app.post(["/api/admin/users", "/admin/users"], async (req, res) => {
-  try {
-    const { fullName, username, password, role, status } = req.body;
-    const authHeader = req.headers.authorization;
-    const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : "";
-    const queryParam = idToken ? `?auth=${idToken}` : "";
-
-    const cleanUsername = (username || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-    const generatedUid = `user_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-
-    const newUser = {
-      uid: generatedUid,
-      fullName: (fullName || "").trim(),
-      username: cleanUsername,
-      password: (password || "").trim(),
-      createdAt: Date.now(),
-      role: role || (cleanUsername === "admin" ? "admin" : "user"),
-      status: status || "approved",
-      isBanned: status === "banned"
-    };
-
-    await fetch(`${FIREBASE_DB_URL}/users/${generatedUid}.json${queryParam}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newUser)
-    });
-
-    await fetch(`${FIREBASE_DB_URL}/usernames/${cleanUsername}.json${queryParam}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(generatedUid)
-    });
-
-    return res.json({ status: "success", user: newUser });
-  } catch (err: any) {
-    console.error("Admin POST user error:", err);
-    return res.json({ status: "error", error: err.message || "Failed to create user" });
-  }
 });
 
 // Fallback error middleware to ensure ALL responses are JSON
