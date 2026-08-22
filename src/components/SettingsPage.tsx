@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Lightbulb, Info, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database, Edit2, ChevronRight } from 'lucide-react';
-import { UserProfile } from '../types';
+import {   ArrowLeft, Lightbulb, Info, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database, Edit2, ChevronRight , FileText, UploadCloud , X } from 'lucide-react';
+import {  UserProfile , Attachment } from '../types';
 import { auth, db } from '../lib/firebase';
 import UserAvatar from './UserAvatar';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
@@ -40,6 +40,183 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
   const [redeemError, setRedeemError] = useState('');
   const [redeemSuccess, setRedeemSuccess] = useState('');
 
+  const [kbTitle, setKbTitle] = useState('');
+  const [kbContent, setKbContent] = useState('');
+  const [kbAttachments, setKbAttachments] = useState<Attachment[]>([]);
+  const [isUploadingKbFile, setIsUploadingKbFile] = useState(false);
+  const [isSavingKb, setIsSavingKb] = useState(false);
+  const [kbSuccess, setKbSuccess] = useState('');
+  const [kbError, setKbError] = useState('');
+  
+  const handleSaveKb = async () => {
+    if (!kbTitle.trim() || !kbContent.trim()) {
+      setKbError('Title and content are required.');
+      return;
+    }
+    const currentUser = auth.currentUser;
+    if (!currentUser || !userProfile) return;
+    setIsSavingKb(true);
+    setKbError('');
+    setKbSuccess('');
+    
+    try {
+      const newId = crypto.randomUUID();
+      const newKb = { id: newId, title: kbTitle.trim(), content: kbContent.trim(), createdAt: Date.now(), attachments: kbAttachments };
+      const updatedKbs = [...(userProfile.knowledgeBases || []), newKb];
+      
+      await update(ref(db, `users/${currentUser.uid}`), {
+        knowledgeBases: updatedKbs,
+        activeKnowledgeBaseId: newId
+      });
+      
+      const updatedProfile = { ...userProfile, knowledgeBases: updatedKbs, activeKnowledgeBaseId: newId };
+      onUpdateProfile(updatedProfile);
+      setKbTitle('');
+      setKbContent('');
+      setKbAttachments([]);
+      setKbSuccess('Data saved and set as active!');
+      setTimeout(() => setKbSuccess(''), 3000);
+    } catch (e: any) {
+      setKbError(e.message || 'Failed to save data');
+    } finally {
+      setIsSavingKb(false);
+    }
+  };
+
+  const handleDeleteKb = async (id: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !userProfile) return;
+    
+    const updatedKbs = (userProfile.knowledgeBases || []).filter(k => k.id !== id);
+    let newActiveId = userProfile.activeKnowledgeBaseId;
+    if (newActiveId === id) {
+      newActiveId = updatedKbs.length > 0 ? updatedKbs[0].id : '';
+    }
+    
+    try {
+      await update(ref(db, `users/${currentUser.uid}`), {
+        knowledgeBases: updatedKbs,
+        activeKnowledgeBaseId: newActiveId || null
+      });
+      onUpdateProfile({ ...userProfile, knowledgeBases: updatedKbs, activeKnowledgeBaseId: newActiveId });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  
+
+  const handleKbFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setIsUploadingKbFile(true);
+
+    const newAttachments: Attachment[] = [];
+    let newTextContent = "";
+    let suggestedTitle = kbTitle;
+    
+    const readPromises = Array.from(files).map(file => {
+      return new Promise<void>((resolve) => {
+        if (file.size > 5 * 1024 * 1024) {
+          alert(`ফাইল ${file.name} ৫ মেগাবাইটের বেশি হতে পারবে না।`);
+          resolve();
+          return;
+        }
+
+        if (!suggestedTitle) {
+          suggestedTitle = file.name.split('.')[0];
+        }
+        
+        const textTypes = ['text/plain', 'text/markdown', 'text/csv', 'application/json'];
+        const isTextFile = textTypes.includes(file.type) || file.name.endsWith('.md') || file.name.endsWith('.txt') || file.name.endsWith('.csv') || file.name.endsWith('.json');
+
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            newAttachments.push({
+              id: crypto.randomUUID(),
+              type: 'image',
+              url: event.target?.result as string,
+              name: file.name,
+              mimeType: file.type
+            });
+            resolve();
+          };
+          reader.readAsDataURL(file);
+        } else if (isTextFile) {
+          const textReader = new FileReader();
+          textReader.onload = (e) => {
+            const text = e.target?.result as string;
+            if (text && typeof text === 'string') {
+              newTextContent += (newTextContent ? "\n\n" : "") + text;
+            }
+            resolve();
+          };
+          textReader.readAsText(file);
+        } else {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            newAttachments.push({
+              id: crypto.randomUUID(),
+              type: 'file',
+              url: event.target?.result as string,
+              name: file.name,
+              mimeType: file.type
+            });
+            resolve();
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    });
+
+    await Promise.all(readPromises);
+    
+    if (newAttachments.length > 0) {
+      setKbAttachments(prev => [...prev, ...newAttachments]);
+    }
+    if (newTextContent) {
+      setKbContent(prev => prev ? prev + "\n\n" + newTextContent : newTextContent);
+    }
+    if (!kbTitle && suggestedTitle) {
+      setKbTitle(suggestedTitle);
+    }
+    
+    setIsUploadingKbFile(false);
+    e.target.value = ''; // reset
+  };
+
+  const removeKbAttachment = (id: string) => {
+    setKbAttachments(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleSetActiveKb = async (id: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !userProfile) return;
+    try {
+      await update(ref(db, `users/${currentUser.uid}`), {
+        activeKnowledgeBaseId: id
+      });
+      onUpdateProfile({ ...userProfile, activeKnowledgeBaseId: id });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  
+  const handleClearMemory = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !userProfile) return;
+    try {
+      await update(ref(db, `users/${currentUser.uid}`), {
+        userMemory: null
+      });
+      onUpdateProfile({ ...userProfile, userMemory: undefined });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+
   useEffect(() => {
     if (userProfile?.fullName) {
       setFullName(userProfile.fullName);
@@ -68,9 +245,9 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
     const user = auth.currentUser;
     if (!user) return;
     try {
-      const snapshot = await get(ref(db, `chats/${user.uid}`));
-      if (snapshot.exists()) {
-        const data = snapshot.val();
+      const localChats = localStorage.getItem(`velora-chats-${user.uid}`);
+      if (localChats) {
+        const data = JSON.parse(localChats);
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -102,19 +279,32 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
 
         let processedData: Record<string, any> = {};
 
+        let finalChats = [];
         if (Array.isArray(data)) {
-          data.forEach((chat: any) => {
-            if (chat && chat.id) {
-              processedData[chat.id] = chat;
-            }
-          });
+          finalChats = data;
         } else if (typeof data === 'object' && data !== null) {
-          processedData = data;
+          finalChats = Object.values(data);
         } else {
           throw new Error("Invalid format");
         }
-
-        await update(ref(db, `chats/${user.uid}`), processedData);
+        
+        // Merge with existing local chats
+        const existingStr = localStorage.getItem(`velora-chats-${user.uid}`);
+        let existingChats = existingStr ? JSON.parse(existingStr) : [];
+        if (!Array.isArray(existingChats)) existingChats = Object.values(existingChats);
+        
+        const mergedChats = [...finalChats, ...existingChats];
+        const uniqueChats = [];
+        const seenIds = new Set();
+        for (const c of mergedChats) {
+           if (c && c.id && !seenIds.has(c.id)) {
+              seenIds.add(c.id);
+              uniqueChats.push(c);
+           }
+        }
+        
+        uniqueChats.sort((a, b) => b.updatedAt - a.updatedAt);
+        localStorage.setItem(`velora-chats-${user.uid}`, JSON.stringify(uniqueChats));
         alert("ডেটা সফলভাবে ইমপোর্ট হয়েছে!");
         window.location.reload();
       } catch (e) {
@@ -716,8 +906,162 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
             transition={{ duration: 0.2 }}
             className="flex-1 w-full max-w-3xl mx-auto p-4 sm:p-5 space-y-4"
           >
+
             <h3 className="text-sm font-black text-slate-800 tracking-tight uppercase flex items-center gap-2 mb-4">
-              <Database className="w-4 h-4 text-blue-500" /> Data Management
+              <Cpu className="w-4 h-4 text-blue-500" /> AI Knowledge Base & Memory
+            </h3>
+            
+            <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-5">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 mb-1">এআই মেমরি (AI Memory)</h4>
+                <p className="text-xs text-gray-500 mb-3">এআই আপনার পূর্বের চ্যাট থেকে যেসব বিষয় মনে রেখেছে, সেগুলো এখানে দেখা যাবে।</p>
+                {userProfile.userMemory ? (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 whitespace-pre-wrap font-medium">
+                    {userProfile.userMemory}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-400 italic">
+                    কোনো ডাটা সেভ নেই।
+                  </div>
+                )}
+                <button 
+                  onClick={handleClearMemory}
+                  disabled={!userProfile.userMemory}
+                  className="mt-3 text-xs text-red-500 font-bold hover:text-red-600 disabled:opacity-50"
+                >
+                  ক্লিয়ার মেমরি
+                </button>
+              </div>
+              
+              <div className="border-t border-gray-100 pt-5">
+                <h4 className="text-sm font-bold text-gray-900 mb-1">কাস্টম ডাটা ইনপুট</h4>
+                <p className="text-xs text-gray-500 mb-4">এআইকে নতুন কোনো তথ্য বা ডাটা দিতে চাইলে নিচে লিখুন।</p>
+                
+                {kbSuccess && (
+                  <div className="p-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs flex items-center gap-2 font-bold">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{kbSuccess}</span>
+                  </div>
+                )}
+                {kbError && (
+                  <div className="p-3 mb-4 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 text-xs flex items-center gap-2 font-bold">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{kbError}</span>
+                  </div>
+                )}
+                
+                <div className="space-y-3 mb-5">
+                  <input
+                    type="text"
+                    placeholder="ডাটার নাম (যেমন: My Website Info)"
+                    value={kbTitle}
+                    onChange={(e) => setKbTitle(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400"
+                  />
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500 font-medium">ছবি বা ফাইল আপলোড করুন</span>
+                      <label className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors ${isUploadingKbFile ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploadingKbFile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                        {isUploadingKbFile ? 'আপলোড হচ্ছে...' : 'আপলোড'}
+                        <input 
+                          type="file" 
+                          multiple
+                          disabled={isUploadingKbFile}
+                          className="hidden" 
+                          accept="image/*,.txt,.md,.csv,.json,.pdf,.doc,.docx" 
+                          onChange={handleKbFileUpload} 
+                        />
+                      </label>
+                    </div>
+                    {kbAttachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2 p-2 border border-slate-200 rounded-xl bg-slate-50">
+                        {kbAttachments.map((att) => (
+                          <div key={att.id} className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
+                            {att.type === 'image' ? (
+                              <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center p-1 text-slate-500">
+                                <FileText className="w-6 h-6 mb-1" />
+                                <span className="text-[8px] sm:text-[10px] text-center line-clamp-1 truncate w-full">{att.name}</span>
+                              </div>
+                            )}
+                            <button 
+                              type="button" 
+                              onClick={() => removeKbAttachment(att.id)}
+                              className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <textarea
+                    placeholder="বিস্তারিত ডাটা এখানে পেস্ট করুন..."
+                    value={kbContent}
+                    onChange={(e) => setKbContent(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400 custom-scrollbar resize-none"
+                  />
+                  <button
+                    onClick={handleSaveKb}
+                    disabled={isSavingKb}
+                    className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2"
+                  >
+                    {isSavingKb ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    সেভ ডাটা
+                  </button>
+                </div>
+                
+                {userProfile.knowledgeBases && userProfile.knowledgeBases.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">সেভ করা ডাটা সমূহ</h4>
+                    {userProfile.knowledgeBases.map((kb) => (
+                      <div key={kb.id} className={`p-3 rounded-xl border ${userProfile.activeKnowledgeBaseId === kb.id ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'} flex items-center justify-between gap-3`}>
+                        <div 
+                          className="flex-1 cursor-pointer"
+                          onClick={() => handleSetActiveKb(kb.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${userProfile.activeKnowledgeBaseId === kb.id ? 'bg-blue-500' : 'bg-gray-300'}`}></span>
+                            <span className="text-sm font-bold text-gray-900">{kb.title}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1 line-clamp-1 ml-4">
+                            {kb.content || (kb.attachments && kb.attachments.length > 0 ? `${kb.attachments.length} files attached` : "")}
+                          </p>
+                          {kb.attachments && kb.attachments.length > 0 && (
+                            <div className="flex gap-1 ml-4 mt-2">
+                              {kb.attachments.slice(0, 3).map(att => (
+                                <div key={att.id} className="w-6 h-6 rounded overflow-hidden border border-slate-200">
+                                  {att.type === 'image' ? (
+                                    <img src={att.url} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full bg-slate-100 flex items-center justify-center"><FileText className="w-3 h-3 text-slate-400" /></div>
+                                  )}
+                                </div>
+                              ))}
+                              {kb.attachments.length > 3 && <span className="text-[10px] text-slate-500 flex items-center ml-1">+{kb.attachments.length - 3}</span>}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleDeleteKb(kb.id)}
+                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4 hidden" />
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <h3 className="text-sm font-black text-slate-800 tracking-tight uppercase flex items-center gap-2 mb-4 mt-8">
+              <Database className="w-4 h-4 text-blue-500" /> Chat History Export / Import
             </h3>
             <div className="bg-white rounded-3xl border border-blue-100 p-6 shadow-sm space-y-5">
               <p className="text-sm text-slate-500 leading-relaxed font-medium">
@@ -769,21 +1113,50 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
               <div className="p-5 bg-gradient-to-br from-violet-600 to-fuchsia-700 text-white relative">
                 <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <Clock className="w-24 h-24" />
+                  <Sparkles className="w-24 h-24" />
                 </div>
                 <div className="relative z-10">
                   <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-black uppercase tracking-wider mb-3">
-                    Coming Soon
+                    New Update
                   </div>
                   <h2 className="text-xl font-black tracking-tight mb-2">Velora v1.2</h2>
                   <p className="text-violet-100 text-sm leading-relaxed max-w-sm font-medium">
-                    খুব শীঘ্রই আসছে নতুন আপডেটেড ভার্সন Velora v1.2! আপাতত এতে কোনো নতুন ফিচার যোগ হয়নি, তবে পরবর্তী দারুণ সব আপডেটের জন্য প্রস্তুত থাকুন।
+                    এআই মেমরি এবং কাস্টম ডাটা ম্যানেজমেন্ট সহ আরো অনেক নতুন ফিচার যুক্ত করা হয়েছে।
                   </p>
+                </div>
+              </div>
+              
+              <div className="p-5 space-y-5">
+                <div className="flex gap-4">
+                  <div className="shrink-0 mt-1">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                      <Database className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 mb-1">কাস্টম ডাটা ইনপুট ও ম্যানেজমেন্ট</h4>
+                    <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                      ডাটা ইনপুট সিস্টেমটি আরও হার্ডি এবং মজবুত করা হয়েছে। এখন আপনি চাইলে একাধিক ডাটা সেভ করে রাখতে পারবেন, যেকোনো সময় ডিলিট করতে পারবেন এবং প্রয়োজন অনুযায়ী যেকোনো একটিকে 'অ্যাকটিভ' হিসেবে সিলেক্ট করে চ্যাটে ব্যবহার করতে পারবেন। এআই ঠিক সেই ডাটার ওপর ভিত্তি করেই ভেবেচিন্তে রিপ্লাই দেবে।
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="shrink-0 mt-1">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <Cpu className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 mb-1">এআই মেমরি (ক্রস-চ্যাট সিঙ্ক)</h4>
+                    <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                      আগের চ্যাটে বলা বিশেষ কোনো তথ্য (যেমন: আপনার নাম, পছন্দ-অপছন্দ) এআই এখন ১০০% পারফেক্টলি মনে রাখবে! নতুন চ্যাট শুরু করলেও আগের চ্যাটের সাথে মিল রেখে কথা বলতে পারবে। আপনি চাইলে এআই মেমরি সেকশন থেকে দেখা ও ক্লিয়ারও করতে পারবেন।
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
             
-                        
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-5 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white relative">
                 <div className="absolute top-0 right-0 p-4 opacity-10">

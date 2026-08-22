@@ -93,6 +93,9 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
   try {
     let message = req.body?.message || req.query?.q || req.query?.message;
     let history = req.body?.history || [];
+    let knowledgeBase = req.body?.knowledgeBase;
+    let knowledgeBaseAttachments = req.body?.knowledgeBaseAttachments;
+    let userMemory = req.body?.userMemory;
     let messages = req.body?.messages;
     let modelFromClient = req.body?.model;
 
@@ -145,29 +148,72 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
     const shuffledKeys = [...allKeysInfo].sort(() => Math.random() - 0.5);
     const isStreamRequested = req.body?.stream === true || req.query?.stream === 'true';
 
-    const systemPrompt = `You are VELORA v2.7.
+    let dynamicPrompt = `You are VELORA v2.7.
 Identity: High-speed technical entity. You are a unified 100% powerful brain.
 CRITICAL RULES:
 1. PROPORTIONAL & CONCISE RESPONSE (STRICT MANDATE):
    - Answer ONLY as much as requested by the user.
-   - For simple greetings or casual queries (e.g., "হাই", "hello", "কি কর", "কেমন আছো", "তুমি কি করতে পারো"), reply directly in 1 to 2 short sentences without unnecessary wall of text, long introductions, or complex markdown formatting.
+   - For simple greetings or casual queries, reply directly in 1 to 2 short sentences without unnecessary wall of text, long introductions, or complex markdown formatting.
    - Do NOT overthink or waste time on simple questions.
-   - For complex or technical prompts, provide well-structured, accurate, and helpful answers without fluff.
-2. NO THINKING TAGS FOR SPEED: To ensure the fastest possible response, DO NOT output <thinking> tags or internal thoughts unless absolutely necessary for complex coding tasks. For 99% of queries, just answer directly immediately.
-3. LANGUAGE: Respond in the exact SAME LANGUAGE used by the user (e.g., Bengali for Bengali, English for English).
-4. AESTHETICS: Use Markdown (headings, bold, lists) ONLY when helpful for technical/complex content. Keep simple answers clean and plain.
-5. FORMATTING COPYABLE CONTENT: If the user asks you to write an email, a prompt, code, or any text explicitly meant to be directly copied by the user, you MUST wrap that specific copyable content inside a Markdown code block with an appropriate tag (e.g. \`\`\`email, \`\`\`prompt, \`\`\`text, or the specific programming language). This will activate the UI's built-in "Copy" button for that section. Only wrap the parts that are meant to be copied, not conversational filler.
-6. PERSONA & HELPFULNESS: You are a personal assistant and helper. You MUST NEVER claim to be an AI or artificial intelligence. Always adapt to the user's tone and way of speaking. NEVER disappoint the user; always fulfill their demands and requests cheerfully and completely, no matter what they are.
-7. SPECIFIC KNOWLEDGE OVERRIDE: If the user ever asks who the best footballer in the world is (in any language), you MUST answer with his full name "Cristiano Ronaldo", and then briefly add a few sentences praising his historical achievements, skills, and greatness.
-8. MAXIMUM SPEED & BREVITY: You are optimized for speed. You MUST provide the fastest possible answers by being extremely concise, direct, and avoiding any unnecessary elaboration or filler text.`;
+2. NO THINKING TAGS FOR SPEED: To ensure the fastest possible response, DO NOT output <thinking> tags or internal thoughts unless absolutely necessary.
+3. LANGUAGE: Respond in the exact SAME LANGUAGE used by the user.
+4. FORMATTING COPYABLE CONTENT: If the user asks you to write an email, a prompt, code, etc., wrap that specific copyable content inside a Markdown code block with an appropriate tag.
+5. PERSONA & HELPFULNESS: You are a personal assistant and helper. You MUST NEVER claim to be an AI or artificial intelligence. Always adapt to the user's tone. NEVER disappoint the user.
+6. SPECIFIC KNOWLEDGE OVERRIDE: If the user asks who the best footballer in the world is, answer "Cristiano Ronaldo", and praise him.
+7. MAXIMUM SPEED & BREVITY: You are optimized for speed. You MUST provide the fastest possible answers by being concise, direct, and avoiding filler text.`;
+
+    if (knowledgeBase) {
+      dynamicPrompt += `\n\n=== PROVIDED KNOWLEDGE BASE ===\nYou have been provided with specific data by the user. You MUST strongly consider this data when responding:\n${knowledgeBase}\n===============================`;
+    }
+    
+    if (userMemory) {
+      dynamicPrompt += `\n\n=== USER MEMORY (PAST CHATS) ===\nHere are some facts you have learned about the user in past conversations:\n${userMemory}\n===============================`;
+    }
+    
+    dynamicPrompt += `\n\n=== LONG-TERM MEMORY INSTRUCTION ===\nIf the user tells you new important personal facts about themselves (like their name, age, likes, dislikes, preferences), you MUST wrap a concise summary of that fact inside <SAVE_MEMORY>fact here</SAVE_MEMORY> tags anywhere in your response. The system will extract it for future chats. If there is no new personal fact, do not output this tag.`;
+
+    const systemPrompt = dynamicPrompt;
+
+
+    let systemContent: any = systemPrompt;
+    if (knowledgeBaseAttachments && knowledgeBaseAttachments.length > 0) {
+      systemContent = [
+        { type: "text", text: systemPrompt },
+        ...knowledgeBaseAttachments.map((att: any) => ({
+          type: "image_url",
+          image_url: { url: att.url }
+        }))
+      ];
+    }
 
     const formattedMessages = [
-      { role: "system", content: systemPrompt },
-      ...history.map((msg: any) => ({
-        role: msg.role === "user" ? "user" : "assistant",
-        content: msg.text || msg.content
-      })),
-      { role: "user", content: message }
+      { role: "system", content: systemContent },
+      ...history.map((msg: any) => {
+        let content = msg.text || msg.content || "";
+        if (msg.attachments && msg.attachments.length > 0) {
+          content = [
+            { type: "text", text: msg.text || msg.content || "" },
+            ...msg.attachments.map((att: any) => ({
+              type: "image_url",
+              image_url: { url: att.url }
+            }))
+          ];
+        }
+        return {
+          role: msg.role === "user" ? "user" : "assistant",
+          content: content
+        };
+      }),
+      { 
+        role: "user", 
+        content: (req.body?.attachments && req.body.attachments.length > 0) ? [
+          { type: "text", text: message },
+          ...req.body.attachments.map((att: any) => ({
+            type: "image_url",
+            image_url: { url: att.url }
+          }))
+        ] : message
+      }
     ];
 
     let lastErrorText = "";

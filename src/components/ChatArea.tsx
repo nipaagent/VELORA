@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, User, Loader2, Send, BrainCircuit, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bot, User, Loader2, Send, BrainCircuit, ChevronDown, ChevronUp, Paperclip, X, Image as ImageIcon, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Chat, UserProfile } from '../types';
 import { cn } from '../lib/utils';
@@ -50,6 +50,7 @@ function ThinkingSection({ thinking, isGenerating }: { thinking: string; isGener
 
 export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }: ChatAreaProps) {
   const [input, setInput] = useState('');
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
@@ -146,7 +147,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                           <TypewriterMarkdown text={msg.text} isGenerating={isGenerating} />
                         </div>
                       ) : (
-                        <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+<p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
                       )}
                     </div>
 

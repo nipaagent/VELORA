@@ -351,7 +351,25 @@ export default function App() {
         // Load local fallback profile data
         const cachedProfile = localStorage.getItem(localProfileKey);
         const fallbackName = currentUser.email ? currentUser.email.split('@')[0] : 'User';
-        const defaultProfile: UserProfile = cachedProfile ? JSON.parse(cachedProfile) : {
+        let parsedProfile = null;
+        if (cachedProfile) {
+          try {
+            parsedProfile = JSON.parse(cachedProfile);
+            if (parsedProfile.knowledgeBases && Array.isArray(parsedProfile.knowledgeBases)) {
+              const seenKbLoc = new Set();
+              parsedProfile.knowledgeBases = parsedProfile.knowledgeBases.map((kb: any) => {
+                let kbId = kb.id;
+                if (!kbId || seenKbLoc.has(kbId)) {
+                  kbId = crypto.randomUUID();
+                }
+                seenKbLoc.add(kbId);
+                return { ...kb, id: kbId };
+              });
+            }
+          } catch (e) {}
+        }
+        
+        const defaultProfile: UserProfile = parsedProfile ? parsedProfile : {
           uid: currentUser.uid,
           fullName: fallbackName,
           username: fallbackName,
@@ -362,7 +380,30 @@ export default function App() {
         const cachedChats = localStorage.getItem(localChatsKey);
         if (cachedChats) {
           try {
-            setChats(JSON.parse(cachedChats));
+            let parsedChats = JSON.parse(cachedChats);
+          if (Array.isArray(parsedChats)) {
+            const seenChats = new Set();
+            parsedChats = parsedChats.map(chat => {
+              if (!chat.messages) return chat;
+              if (seenChats.has(chat.id)) {
+                chat = { ...chat, id: crypto.randomUUID() };
+              }
+              seenChats.add(chat.id);
+              
+              const seen = new Set();
+              const newMessages = chat.messages.map(m => {
+                if (seen.has(m.id)) {
+                  return { ...m, id: crypto.randomUUID() };
+                }
+                seen.add(m.id);
+                return m;
+              });
+              return { ...chat, messages: newMessages };
+            });
+            setChats(parsedChats);
+          } else {
+            setChats(parsedChats);
+          }
           } catch (e) {
             console.warn("Local chat cache parse warning:", e);
           }
@@ -382,6 +423,19 @@ export default function App() {
                 setUserProfile(null);
                 return;
               }
+              // Fix any duplicated knowledgeBase IDs
+              if (prof.knowledgeBases && Array.isArray(prof.knowledgeBases)) {
+                const seenKbFB = new Set();
+                prof.knowledgeBases = prof.knowledgeBases.map((kb: any) => {
+                  let kbId = kb.id;
+                  if (!kbId || seenKbFB.has(kbId)) {
+                    kbId = crypto.randomUUID();
+                  }
+                  seenKbFB.add(kbId);
+                  return { ...kb, id: kbId };
+                });
+              }
+              
               setUserProfile(prof);
               localStorage.setItem(localProfileKey, JSON.stringify(prof));
 
@@ -443,42 +497,8 @@ export default function App() {
           console.warn("DB profile access notice (using local profile):", e);
         }
 
-        // Subscribe to Firebase Realtime Database for chats
-        let unsubscribeDb = () => {};
-        try {
-          const chatsRef = ref(db, `chats/${currentUser.uid}`);
-          unsubscribeDb = onValue(chatsRef, (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.val();
-              const chatsList: Chat[] = Object.values(data);
-              chatsList.sort((a, b) => b.updatedAt - a.updatedAt);
-              
-              // 7MB Data Limit Check (approx 7,000,000 bytes)
-              let dataString = JSON.stringify(chatsList);
-              if (dataString.length > 7000000) {
-                let updated = false;
-                while (dataString.length > 7000000 && chatsList.length > 1) {
-                  const oldestChat = chatsList.pop();
-                  if (oldestChat) {
-                    remove(ref(db, `chats/${currentUser.uid}/${oldestChat.id}`));
-                    updated = true;
-                  }
-                  dataString = JSON.stringify(chatsList);
-                }
-                if (updated) console.log("Data quota exceeded (7MB). Oldest chats deleted.");
-              }
-              setChats(chatsList);
-              localStorage.setItem(localChatsKey, JSON.stringify(chatsList));
-            }
-            setAuthLoading(false);
-          }, (error) => {
-            console.warn("Realtime DB sync notice (using local storage):", error);
-            setAuthLoading(false);
-          });
-        } catch (e) {
-          console.warn("Realtime DB subscription notice:", e);
-          setAuthLoading(false);
-        }
+        // Firebase chats sync removed. Relying entirely on localStorage.
+        setAuthLoading(false);
 
         return () => {
           unsubscribeUserRef();
@@ -538,14 +558,14 @@ export default function App() {
 
   const currentChat = chats.find(c => c.id === currentChatId);
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, attachments?: any[]) => {
     if (!user) return;
 
     let activeChatId = currentChatId;
     let targetChat: Chat;
 
     if (!activeChatId) {
-      const newChatId = Date.now().toString();
+      const newChatId = crypto.randomUUID();
       targetChat = {
         id: newChatId,
         title: text.slice(0, 30) + (text.length > 30 ? '...' : ''),
@@ -571,10 +591,10 @@ export default function App() {
       }
     }
 
-    await processMessage(activeChatId, text, targetChat);
+    await processMessage(activeChatId, text, targetChat, attachments);
   };
 
-  const processMessage = async (chatId: string, text: string, currentChatState: Chat) => {
+  const processMessage = async (chatId: string, text: string, currentChatState: Chat, attachments?: any[]) => {
     if (!user) return;
 
     // Check token balance & VIP status
@@ -589,10 +609,11 @@ export default function App() {
     }
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: 'user',
       text,
       timestamp: Date.now(),
+      attachments,
     };
 
     const updatedWithUser: Chat = {
@@ -611,7 +632,7 @@ export default function App() {
     });
 
     try {
-      await set(ref(db, `chats/${user.uid}/${chatId}`), updatedWithUser);
+      /* LocalStorage handles it */
     } catch (e) {
       console.warn("DB save error:", e);
     }
@@ -624,8 +645,13 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: text, 
-          history: currentChatState.messages.map(h => ({ role: h.role, text: h.text })),
-          stream: true
+          attachments,
+          history: currentChatState.messages.map(h => ({ role: h.role, text: h.text, attachments: h.attachments })),
+          stream: true,
+          knowledgeBase: userProfile?.activeKnowledgeBaseId && userProfile.knowledgeBases ? userProfile.knowledgeBases.find(k => k.id === userProfile.activeKnowledgeBaseId)?.content : undefined,
+          knowledgeBaseAttachments: userProfile?.activeKnowledgeBaseId && userProfile.knowledgeBases ? userProfile.knowledgeBases.find(k => k.id === userProfile.activeKnowledgeBaseId)?.attachments : undefined,
+          userMemory: userProfile?.userMemory || undefined,
+          uid: user.uid
         }),
       });
       
@@ -636,7 +662,7 @@ export default function App() {
         if (!reader) throw new Error("No readable stream available");
         
         const decoder = new TextDecoder("utf-8");
-        const modelMessageId = (Date.now() + 1).toString();
+        const modelMessageId = crypto.randomUUID();
         let fullResponse = "";
         let buffer = "";
         
@@ -742,7 +768,37 @@ export default function App() {
         // Calculate exact token consumption based on prompt & output character length
         const promptCharCount = text.length + (currentChatState.messages ? currentChatState.messages.reduce((acc, m) => acc + (m.text ? m.text.length : 0), 0) : 0);
         const responseCharCount = fullResponse.length;
+        
         const requestTokensSpent = Math.max(10, Math.round(((promptCharCount + responseCharCount) / 3.5) * globalTokenMultiplier));
+
+        // Memory extraction logic
+        const memoryMatch = fullResponse.match(/<SAVE_MEMORY>([\s\S]*?)<\/SAVE_MEMORY>/);
+        if (memoryMatch && memoryMatch[1] && userProfile && user) {
+          const newFact = memoryMatch[1].trim();
+          if (newFact) {
+            const currentMemory = userProfile.userMemory || "";
+            const updatedMemory = (currentMemory ? currentMemory + "\n- " : "- ") + newFact;
+            
+            const updatedProfile = { ...userProfile, userMemory: updatedMemory };
+            setUserProfile(updatedProfile);
+            set(ref(db, `users/${user.uid}/userMemory`), updatedMemory).catch(console.warn);
+            
+            // Clean up the message text in the final chat state
+            setChats(prev => prev.map(c => {
+              if (c.id === chatId) {
+                const newMessages = c.messages.map(m => {
+                  if (m.id === modelMessageId) {
+                    return { ...m, text: m.text.replace(/<SAVE_MEMORY>[\s\S]*?(<\/SAVE_MEMORY>)?/g, '').trim() };
+                  }
+                  return m;
+                });
+                return { ...c, messages: newMessages };
+              }
+              return c;
+            }));
+          }
+        }
+
 
         setTokenState(prev => {
           const updatedState = {
@@ -760,7 +816,7 @@ export default function App() {
         setChats(prev => {
           const finalChat = prev.find(c => c.id === chatId);
           if (finalChat && user) {
-            set(ref(db, `chats/${user.uid}/${chatId}`), finalChat).catch(console.warn);
+            /* LocalStorage handles it */
           }
           return prev;
         });
@@ -785,7 +841,7 @@ export default function App() {
         if (data.error) {
           console.error("Error from API:", data.error);
           const errorMessage: Message = {
-            id: (Date.now() + 1).toString(),
+            id: crypto.randomUUID(),
             role: 'model',
             text: `**Error:** ${data.error}`,
             timestamp: Date.now(),
@@ -825,7 +881,7 @@ export default function App() {
           }
 
           const modelMessage: Message = {
-            id: (Date.now() + 1).toString(),
+            id: crypto.randomUUID(),
             role: 'model',
             text: currentText.trim(),
             thinking: currentThinking,
@@ -853,7 +909,7 @@ export default function App() {
           setChats(prev => prev.map(c => {
             if (c.id === chatId) {
               const updatedChat = { ...c, messages: [...c.messages, modelMessage], updatedAt: Date.now() };
-              if (user) set(ref(db, `chats/${user.uid}/${chatId}`), updatedChat).catch(console.warn);
+              /* LocalStorage handles it */
               return updatedChat;
             }
             return c;
@@ -874,7 +930,7 @@ export default function App() {
         
         console.error("Error from API:", data.error);
         const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: crypto.randomUUID(),
           role: 'model',
           text: `**Error:** ${data.error || 'Sorry, something went wrong while generating response.'}`,
           timestamp: Date.now(),
@@ -888,16 +944,12 @@ export default function App() {
 
         setChats(prev => prev.map(c => c.id === chatId ? updatedWithError : c));
 
-        try {
-          await set(ref(db, `chats/${user.uid}/${chatId}`), updatedWithError);
-        } catch (e) {
-          console.warn("DB save error:", e);
-        }
+        
       }
     } catch (e) {
       console.error("Failed to send message", e);
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: crypto.randomUUID(),
         role: 'model',
         text: `**ত্রুটি:** নেটওয়ার্ক সমস্যা বা সার্ভার ডাউন।`,
         timestamp: Date.now(),
@@ -911,11 +963,7 @@ export default function App() {
 
       setChats(prev => prev.map(c => c.id === chatId ? updatedWithError : c));
 
-      try {
-        await set(ref(db, `chats/${user.uid}/${chatId}`), updatedWithError);
-      } catch (err) {
-        console.warn("DB save error:", err);
-      }
+      
     } finally {
       setIsLoading(false);
     }
@@ -928,7 +976,7 @@ export default function App() {
     }
     if (!user) return;
     try {
-      await remove(ref(db, `chats/${user.uid}/${id}`));
+      /* LocalStorage handles it */
     } catch (e) {
       console.error("Failed to delete chat:", e);
     }
@@ -942,7 +990,7 @@ export default function App() {
       if (user) {
         localStorage.removeItem(`velora-chats-${user.uid}`);
         try {
-          await remove(ref(db, `chats/${user.uid}`));
+          /* LocalStorage handles it */
         } catch (e) {
           console.error("Failed to clear all chats:", e);
         }

@@ -1,9 +1,18 @@
+export interface Attachment {
+  id: string;
+  type: 'image' | 'file';
+  url: string;
+  name: string;
+  mimeType?: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'model';
   text: string;
   thinking?: string;
   timestamp: number;
+  attachments?: Attachment[];
 }
 
 export interface Chat {
@@ -45,6 +54,9 @@ export interface UserProfile {
   referredByName?: string;
   referralCount?: number;
   adsWatchedCount?: number;
+  knowledgeBases?: { id: string; title: string; content: string; createdAt: number; attachments?: Attachment[]; }[];
+  activeKnowledgeBaseId?: string;
+  userMemory?: string;
 }
 
 export type RedeemRewardType = 'tokens' | 'vip_days';
