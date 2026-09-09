@@ -502,7 +502,6 @@ export default function App() {
 
         return () => {
           unsubscribeUserRef();
-          unsubscribeDb();
         };
       } else {
         setUserProfile(null);

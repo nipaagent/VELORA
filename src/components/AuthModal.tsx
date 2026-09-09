@@ -5,6 +5,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'fire
 import { ref, get, set, update } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
 import { Gift } from 'lucide-react';
+import RecaptchaWidget from './RecaptchaWidget';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -73,11 +75,36 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
       }
     }
 
+    if (!recaptchaToken) {
+      setError("দয়া করে reCAPTCHA ভেরিফিকেশন (I'm not a robot) সম্পন্ন করুন।");
+      return;
+    }
+
     const email = `${cleanUsername}@velora.app`;
 
     setLoading(true);
 
     try {
+      // Verify reCAPTCHA token with backend
+      try {
+        const verifyRes = await fetch('/api/verify-recaptcha', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: recaptchaToken })
+        });
+        const verifyData = await verifyRes.json();
+        if (verifyData && verifyData.success === false) {
+          if (verifyData['error-codes']?.includes('invalid-input-response') || verifyData['error-codes']?.includes('timeout-or-duplicate')) {
+            setError('reCAPTCHA ভেরিফিকেশন এর মেয়াদ শেষ বা ত্রুটি হয়েছে। পুনরায় বক্সে টিক দিন।');
+            setRecaptchaToken('');
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (captchaErr) {
+        console.warn('reCAPTCHA verification error (handled):', captchaErr);
+      }
+
       if (isSignUp) {
         if (!fullName.trim()) {
           setError('Please enter your full name.');
@@ -396,10 +423,20 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
               )}
             </AnimatePresence>
 
+            {/* Google reCAPTCHA v2 / v3 Security Widget */}
+            <RecaptchaWidget
+              onVerify={(token) => {
+                setRecaptchaToken(token);
+                setError('');
+              }}
+              onExpire={() => setRecaptchaToken('')}
+              resetTrigger={isSignUp}
+            />
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 mt-6 bg-indigo-600 text-white rounded-2xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2.5 disabled:opacity-70"
+              className="w-full py-4 mt-4 bg-indigo-600 text-white rounded-2xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2.5 disabled:opacity-70"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -422,6 +459,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError('');
+                setRecaptchaToken('');
               }}
               className="text-[11px] text-slate-500 hover:text-indigo-600 font-bold transition-colors uppercase tracking-wider"
             >

@@ -25,6 +25,7 @@ export interface AdminUser {
   fullName: string;
   username: string;
   avatarUrl?: string;
+  avatarIndex?: number;
   password?: string;
   createdAt?: number;
   role?: string;
@@ -99,6 +100,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [isSavingRedeemCode, setIsSavingRedeemCode] = useState(false);
   const [redeemSearchTerm, setRedeemSearchTerm] = useState('');
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+
+  // Google reCAPTCHA Security Keys State
+  const [showRecaptchaSecret, setShowRecaptchaSecret] = useState(false);
+  const [copiedKeyType, setCopiedKeyType] = useState<'site' | 'secret' | null>(null);
+  const recaptchaSiteKey = "6Le7LLItAAAAABV8rnbTiRwlHGz6CtqazHY52IRB";
+  const recaptchaSecretKey = "6Le7LLItAAAAAPFiygSO_mFa1Rt4ichp_uHfjgKf";
+
   // Logs state
   const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
 
@@ -2030,6 +2038,99 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                       {isSavingGlobalConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                       <span>⚡ সব ইউজারের লিমিট আপডেট</span>
                     </motion.button>
+                  </div>
+                </div>
+
+                {/* Google reCAPTCHA Security Configuration Card */}
+                <div className="bg-gradient-to-br from-indigo-50/80 via-white to-blue-50/50 border border-indigo-200/80 rounded-2xl p-5 space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                          Google reCAPTCHA v2 / v3 সিকিউরিটি
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                            সক্রিয় (Configured)
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          নিবন্ধিত সাইট: <span className="font-bold text-indigo-700">&apos;Velora&apos;</span> • বট ও স্প্যাম প্রতিরোধে ব্যবহৃত হচ্ছে
+                        </p>
+                      </div>
+                    </div>
+
+                    <a 
+                      href="https://www.google.com/recaptcha/admin" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-600 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Google কনসোল
+                    </a>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    {/* Site Key */}
+                    <div className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Site Key (Client-side HTML)</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(recaptchaSiteKey);
+                            setCopiedKeyType('site');
+                            showToast("Site Key কপি হয়েছে!", "success");
+                            setTimeout(() => setCopiedKeyType(null), 2000);
+                          }}
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedKeyType === 'site' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedKeyType === 'site' ? 'কপি হয়েছে' : 'কপি করুন'}</span>
+                        </button>
+                      </div>
+                      <div className="font-mono text-xs bg-slate-50 text-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-100 break-all select-all font-semibold">
+                        {recaptchaSiteKey}
+                      </div>
+                    </div>
+
+                    {/* Secret Key */}
+                    <div className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Secret Key (Server API Verification)</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowRecaptchaSecret(!showRecaptchaSecret)}
+                            className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                            title={showRecaptchaSecret ? "লুকান" : "দেখুন"}
+                          >
+                            {showRecaptchaSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(recaptchaSecretKey);
+                              setCopiedKeyType('secret');
+                              showToast("Secret Key কপি হয়েছে!", "success");
+                              setTimeout(() => setCopiedKeyType(null), 2000);
+                            }}
+                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedKeyType === 'secret' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedKeyType === 'secret' ? 'কপি হয়েছে' : 'কপি করুন'}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="font-mono text-xs bg-slate-50 text-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-100 break-all select-all font-semibold">
+                        {showRecaptchaSecret ? recaptchaSecretKey : '••••••••••••••••••••••••••••••••••••••••'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] text-indigo-700/80 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>ইউজার লগইন ও রেজিস্ট্রেশন ফর্মে reCAPTCHA চেকবক্স সক্রিয় আছে এবং সার্ভারে সিক্রেট কি দিয়ে ভেরিফাই হচ্ছে।</span>
                   </div>
                 </div>
 

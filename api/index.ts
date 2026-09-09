@@ -386,6 +386,46 @@ app.use((req, res, next) => {
   next();
 });
 
+// Google reCAPTCHA Verification Endpoint
+app.post(["/api/verify-recaptcha", "/api/v1/verify-recaptcha"], async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ success: false, error: "reCAPTCHA token is required." });
+    }
+
+    const secretKey = process.env.RECAPTCHA_SECRET_KEY || "6Le7LLItAAAAAPFiygSO_mFa1Rt4ichp_uHfjgKf";
+    
+    const params = new URLSearchParams();
+    params.append("secret", secretKey);
+    params.append("response", token);
+    if (req.ip) {
+      params.append("remoteip", req.ip);
+    }
+
+    const googleRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString()
+    });
+
+    const data = await googleRes.json();
+    return res.json(data);
+  } catch (err: any) {
+    console.error("reCAPTCHA verification error:", err);
+    return res.status(500).json({ success: false, error: err?.message || "Internal server error" });
+  }
+});
+
+// Google reCAPTCHA Config Endpoint
+app.get(["/api/recaptcha-config", "/api/v1/recaptcha-config"], (req, res) => {
+  const siteKey = process.env.VITE_RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || "6Le7LLItAAAAABV8rnbTiRwlHGz6CtqazHY52IRB";
+  res.json({
+    siteKey,
+    enabled: true
+  });
+});
+
 // Admin Stats
 app.get(["/api/admin/stats", "/admin/stats"], async (req, res) => {
   try {
