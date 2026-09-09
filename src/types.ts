@@ -32,6 +32,7 @@ export interface TokenState {
 
 export interface UserProfile {
   uid: string;
+  email?: string;
   fullName: string;
   username: string;
   password?: string;
@@ -73,4 +74,23 @@ export interface RedeemCode {
   createdAt: number;
   isActive: boolean;
   expiresAt?: number; // optional timestamp expiration
+}
+
+export interface SystemAnnouncement {
+  isActive: boolean;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'alert' | 'promo';
+  linkUrl?: string;
+  linkText?: string;
+  updatedAt?: number;
+}
+
+export interface SystemControl {
+  maintenanceMode: boolean;
+  maintenanceNotice?: string;
+  allowRegistration: boolean;
+  aiChatEnabled: boolean;
+  adRewardsEnabled: boolean;
+  updatedAt?: number;
 }

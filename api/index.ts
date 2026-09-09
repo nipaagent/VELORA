@@ -114,16 +114,44 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
 
     let gatewayUrl = process.env.GATEWAY_URL || "https://api.naga.ac/v1/chat/completions";
     
-    // Map custom frontend models to the actual backend model
-    if (modelFromClient === 'velora-ai-core') {
-      modelFromClient = "nemotron-3-ultra-550b-a55b:free";
+    // Choose model for Naga API
+    let modelName = modelFromClient;
+    if (!modelName || modelName === 'velora-ai-core' || modelName.includes('gemini') || modelName.includes('550b')) {
+      modelName = process.env.NAGA_MODEL || "sonar:free";
+    }
+
+    const isStreamRequested = req.body?.stream === true || req.query?.stream === 'true';
+
+    let dynamicPrompt = `You are VELORA v2.7.
+Identity: High-speed technical entity. You are a unified 100% powerful brain.
+CRITICAL RULES:
+1. ULTRA-FAST & CONCISE RESPONSE (STRICT 1-2 SECOND TARGET):
+   - Answer immediately and directly without any delay.
+   - For simple greetings or casual queries, reply directly in 1 to 2 crisp, fast sentences without unnecessary walls of text, repetitive intros, or long disclaimers.
+   - Do NOT overthink or waste time on simple questions.
+2. NO THINKING DELAYS: Do not output <thinking> tags or pause unless deep scientific or complex coding reasoning is explicitly requested.
+3. LANGUAGE: Respond in the exact SAME LANGUAGE used by the user.
+4. FORMATTING COPYABLE CONTENT: If the user asks you to write an email, a prompt, code, etc., wrap that specific copyable content inside a Markdown code block with an appropriate tag.
+5. PERSONA & HELPFULNESS: You are a personal assistant and helper. You MUST NEVER claim to be an AI or artificial intelligence. Always adapt to the user's tone. NEVER disappoint the user.
+6. SPECIFIC KNOWLEDGE OVERRIDE: If the user asks who the best footballer in the world is, answer "Cristiano Ronaldo", and praise him.
+7. MAXIMUM SPEED & BREVITY: You are optimized for speed. You MUST provide the fastest possible answers by being concise, direct, and avoiding filler text.`;
+
+    if (knowledgeBase) {
+      dynamicPrompt += `\n\n=== PROVIDED KNOWLEDGE BASE ===\nYou have been provided with specific data by the user. You MUST strongly consider this data when responding:\n${knowledgeBase}\n===============================`;
     }
     
-    let modelName = modelFromClient || "nemotron-3-ultra-550b-a55b:free";
+    if (userMemory) {
+      dynamicPrompt += `\n\n=== USER MEMORY (PAST CHATS) ===\nHere are some facts you have learned about the user in past conversations:\n${userMemory}\n===============================`;
+    }
+    
+    dynamicPrompt += `\n\n=== LONG-TERM MEMORY INSTRUCTION ===\nIf the user tells you new important personal facts about themselves (like their name, age, likes, dislikes, preferences), you MUST wrap a concise summary of that fact inside <SAVE_MEMORY>fact here</SAVE_MEMORY> tags anywhere in your response. The system will extract it for future chats. If there is no new personal fact, do not output this tag.`;
 
+    const systemPrompt = dynamicPrompt;
+
+    // ⚡ EXCLUSIVE ENGINE: Naga API Gateway (no Gemini)
     const allKeysInfo = getApiKeysInfo();
     if (allKeysInfo.length === 0) {
-      const noKeyMsg = "Naga API Key পাওয়া যায়নি। Vercel Environment Variables-এ NAGA_API_KEY যুক্ত করুন।";
+      const noKeyMsg = "Naga API কী কনফিগার করা নেই। অনুগ্রহ করে Vercel বা এনভায়রনমেন্টে NAGA_API_KEY সেট করুন।";
       if (req.body?.stream === true || req.query?.stream === 'true') {
         res.setHeader("Content-Type", "text/event-stream");
         res.setHeader("Cache-Control", "no-cache");
@@ -146,34 +174,6 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
     }
 
     const shuffledKeys = [...allKeysInfo].sort(() => Math.random() - 0.5);
-    const isStreamRequested = req.body?.stream === true || req.query?.stream === 'true';
-
-    let dynamicPrompt = `You are VELORA v2.7.
-Identity: High-speed technical entity. You are a unified 100% powerful brain.
-CRITICAL RULES:
-1. PROPORTIONAL & CONCISE RESPONSE (STRICT MANDATE):
-   - Answer ONLY as much as requested by the user.
-   - For simple greetings or casual queries, reply directly in 1 to 2 short sentences without unnecessary wall of text, long introductions, or complex markdown formatting.
-   - Do NOT overthink or waste time on simple questions.
-2. NO THINKING TAGS FOR SPEED: To ensure the fastest possible response, DO NOT output <thinking> tags or internal thoughts unless absolutely necessary.
-3. LANGUAGE: Respond in the exact SAME LANGUAGE used by the user.
-4. FORMATTING COPYABLE CONTENT: If the user asks you to write an email, a prompt, code, etc., wrap that specific copyable content inside a Markdown code block with an appropriate tag.
-5. PERSONA & HELPFULNESS: You are a personal assistant and helper. You MUST NEVER claim to be an AI or artificial intelligence. Always adapt to the user's tone. NEVER disappoint the user.
-6. SPECIFIC KNOWLEDGE OVERRIDE: If the user asks who the best footballer in the world is, answer "Cristiano Ronaldo", and praise him.
-7. MAXIMUM SPEED & BREVITY: You are optimized for speed. You MUST provide the fastest possible answers by being concise, direct, and avoiding filler text.`;
-
-    if (knowledgeBase) {
-      dynamicPrompt += `\n\n=== PROVIDED KNOWLEDGE BASE ===\nYou have been provided with specific data by the user. You MUST strongly consider this data when responding:\n${knowledgeBase}\n===============================`;
-    }
-    
-    if (userMemory) {
-      dynamicPrompt += `\n\n=== USER MEMORY (PAST CHATS) ===\nHere are some facts you have learned about the user in past conversations:\n${userMemory}\n===============================`;
-    }
-    
-    dynamicPrompt += `\n\n=== LONG-TERM MEMORY INSTRUCTION ===\nIf the user tells you new important personal facts about themselves (like their name, age, likes, dislikes, preferences), you MUST wrap a concise summary of that fact inside <SAVE_MEMORY>fact here</SAVE_MEMORY> tags anywhere in your response. The system will extract it for future chats. If there is no new personal fact, do not output this tag.`;
-
-    const systemPrompt = dynamicPrompt;
-
 
     let systemContent: any = systemPrompt;
     if (knowledgeBaseAttachments && knowledgeBaseAttachments.length > 0) {
@@ -216,64 +216,76 @@ CRITICAL RULES:
       }
     ];
 
+    const candidateModels: string[] = [modelName];
+    if (!candidateModels.includes("sonar:free")) candidateModels.push("sonar:free");
+    if (!candidateModels.includes("nemotron-3.5-lightning:free")) candidateModels.push("nemotron-3.5-lightning:free");
+
     let lastErrorText = "";
 
     for (let i = 0; i < shuffledKeys.length; i++) {
       const keyObj = shuffledKeys[i];
       const apiKey = keyObj.value;
 
-      const promptLength = formattedMessages.reduce((acc: number, m: any) => acc + (m.content ? m.content.length : 0), 0);
+      const promptLength = formattedMessages.reduce((acc: number, m: any) => acc + (m.content ? (typeof m.content === 'string' ? m.content.length : 100) : 0), 0);
       const estTokens = Math.max(50, Math.round(promptLength / 3.5));
 
-      try {
-        const response = await fetch(gatewayUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: modelName,
-            messages: formattedMessages,
-            temperature: 0.2,
-            max_tokens: 4000,
-            stream: isStreamRequested
-          })
-        });
+      for (const currentModel of candidateModels) {
+        try {
+          const response = await fetch(gatewayUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: currentModel,
+              messages: formattedMessages,
+              temperature: 0.2,
+              max_tokens: 4000,
+              stream: isStreamRequested
+            }),
+            signal: AbortSignal.timeout(25000)
+          });
 
-        if (response.ok && response.body) {
-          trackApiUsage(apiKey, modelName, true, response.status, estTokens).catch(() => {});
+          if (response.ok && response.body) {
+            trackApiUsage(apiKey, currentModel, true, response.status, estTokens).catch(() => {});
 
-          if (isStreamRequested) {
-            res.setHeader("Content-Type", "text/event-stream");
-            res.setHeader("Cache-Control", "no-cache");
-            res.setHeader("Connection", "keep-alive");
+            if (isStreamRequested) {
+              res.setHeader("Content-Type", "text/event-stream");
+              res.setHeader("Cache-Control", "no-cache");
+              res.setHeader("Connection", "keep-alive");
 
-            try {
-              for await (const chunk of response.body as any) {
-                res.write(chunk);
+              try {
+                for await (const chunk of response.body as any) {
+                  res.write(chunk);
+                }
+              } catch (streamErr) {
+                console.error("Stream pipe error:", streamErr);
               }
-            } catch (streamErr) {
-              console.error("Stream pipe error:", streamErr);
+              return res.end();
+            } else {
+              const data = await response.json();
+              return res.json(data);
             }
-            return res.end();
           } else {
-            const data = await response.json();
-            return res.json(data);
+            lastErrorText = await response.text();
+            console.warn(`[Naga Gateway] Key ${keyObj.name} with model ${currentModel} failed (${response.status}): ${lastErrorText}`);
+            trackApiUsage(apiKey, currentModel, false, response.status, 0).catch(() => {});
+
+            // If 402 Insufficient Quota or 400 Model not found, try next candidate model (e.g. free models)
+            if (response.status === 402 || response.status === 400) {
+              continue;
+            }
           }
-        } else {
-          lastErrorText = await response.text();
-          console.warn(`[Gateway] Key ${keyObj.name} failed (${response.status}): ${lastErrorText}`);
-          trackApiUsage(apiKey, modelName, false, response.status, 0).catch(() => {});
+        } catch (attemptError: any) {
+          lastErrorText = attemptError.message || "Network error";
+          trackApiUsage(apiKey, currentModel, false, 500, 0).catch(() => {});
         }
-      } catch (attemptError: any) {
-        lastErrorText = attemptError.message || "Network error";
-        trackApiUsage(apiKey, modelName, false, 500, 0).catch(() => {});
       }
     }
 
     // All keys failed fallback
-    let userErrMsg = `**সীমা অতিক্রম (All Keys Rate Limited):** সিস্টেমে উপলব্ধ মোট ${shuffledKeys.length}টি Naga API Key-এর প্রতিটিরই সীমা শেষ হয়েছে। দয়া করে Vercel-এ নতুন Naga API Key যুক্ত করুন।`;
+    let userErrMsg = `**সীমা অতিক্রম (All Keys Rate Limited):** সিস্টেমে উপলব্ধ মোট ${shuffledKeys.length}টি Naga API Key-এর প্রতিটিরই সীমা শেষ হয়েছে বা অনুপলব্ধ। দয়া করে Vercel-এ নতুন Naga API Key যুক্ত করুন।`;
 
     if (isStreamRequested) {
       res.setHeader("Content-Type", "text/event-stream");
@@ -334,11 +346,12 @@ const handleModelsRequest = (req: express.Request, res: express.Response) => {
   res.json({
     object: "list",
     data: [
-      { id: "velora-ai-core", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
-      { id: "claude-3-5-sonnet", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
-      { id: "nemotron-3-ultra-550b-a55b:free", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
-      { id: "gpt-4o", object: "model", created: now, owned_by: "velora", permission: defaultPerm },
-      { id: "gpt-4o-mini", object: "model", created: now, owned_by: "velora", permission: defaultPerm }
+      { id: "velora-ai-core", object: "model", created: now, owned_by: "naga", permission: defaultPerm },
+      { id: "sonar:free", object: "model", created: now, owned_by: "naga", permission: defaultPerm },
+      { id: "nemotron-3.5-lightning:free", object: "model", created: now, owned_by: "naga", permission: defaultPerm },
+      { id: "gpt-4o-mini", object: "model", created: now, owned_by: "naga", permission: defaultPerm },
+      { id: "gpt-4o", object: "model", created: now, owned_by: "naga", permission: defaultPerm },
+      { id: "claude-3-5-sonnet", object: "model", created: now, owned_by: "naga", permission: defaultPerm }
     ]
   });
 };
@@ -384,51 +397,6 @@ app.use((req, res, next) => {
   }
 
   next();
-});
-
-// Google reCAPTCHA Verification Endpoint
-app.post(["/api/verify-recaptcha", "/api/v1/verify-recaptcha"], async (req, res) => {
-  try {
-    const { token } = req.body || {};
-    if (!token) {
-      return res.status(400).json({ success: false, error: "reCAPTCHA token is required." });
-    }
-
-    // Direct acceptance for test bypass tokens
-    if (typeof token === 'string' && (token.startsWith('manual-verified-') || token === 'test-token')) {
-      return res.json({ success: true, score: 0.9, action: 'manual-test-bypass' });
-    }
-
-    const secretKey = process.env.RECAPTCHA_SECRET_KEY || "6Le7LLItAAAAAPFiygSO_mFa1Rt4ichp_uHfjgKf";
-    
-    const params = new URLSearchParams();
-    params.append("secret", secretKey);
-    params.append("response", token);
-    if (req.ip) {
-      params.append("remoteip", req.ip);
-    }
-
-    const googleRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString()
-    });
-
-    const data = await googleRes.json();
-    return res.json(data);
-  } catch (err: any) {
-    console.error("reCAPTCHA verification error:", err);
-    return res.status(500).json({ success: false, error: err?.message || "Internal server error" });
-  }
-});
-
-// Google reCAPTCHA Config Endpoint
-app.get(["/api/recaptcha-config", "/api/v1/recaptcha-config"], (req, res) => {
-  const siteKey = process.env.VITE_RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || "6Le7LLItAAAAABV8rnbTiRwlHGz6CtqazHY52IRB";
-  res.json({
-    siteKey,
-    enabled: true
-  });
 });
 
 // Admin Stats

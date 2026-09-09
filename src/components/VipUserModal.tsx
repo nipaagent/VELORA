@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Crown, Clock, Sparkles, ShieldAlert, X, Loader2, Calendar, Check } from 'lucide-react';
-import { AdminUser } from './AdminPage';
+import { AdminUser } from './admin/adminTypes';
 
 interface VipUserModalProps {
   user: AdminUser | null;
@@ -227,3 +227,5 @@ export const VipUserModal: React.FC<VipUserModalProps> = ({
     </AnimatePresence>
   );
 };
+
+export default VipUserModal;

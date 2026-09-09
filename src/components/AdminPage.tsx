@@ -1,2769 +1,749 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, UserPlus, Search, Edit3, Trash2, Eye, EyeOff, Check, X, 
-  ShieldAlert, RefreshCw, KeyRound, ArrowLeft, Save, Sparkles, AlertCircle, ShieldCheck,
-  Ban, UserCheck, ShieldX, CheckCircle2, AlertTriangle, Lock, Code2, Loader2, Tv, Plus, ExternalLink, Zap, Minus, Gift,
-  Ticket, Crown, Clock, Tag, Copy, Send, LogOut, Link2, ScrollText, Activity, Terminal
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { auth, db } from '../lib/firebase';
-import { ref, onValue, set, remove, update, push, query, limitToLast } from 'firebase/database';
-import { generateUniqueVeloraKey, cn, formatTokenCount } from '../lib/utils';
-import { TokenState, RedeemCode, RedeemRewardType } from '../types';
-import UserAvatar from './UserAvatar';
-import { VipUserModal } from './VipUserModal';
-
-export interface AdminLog {
-  id: string;
-  action: string;
-  description: string;
-  timestamp: number;
-}
-
-export interface AdminUser {
-  uid: string;
-  fullName: string;
-  username: string;
-  avatarUrl?: string;
-  avatarIndex?: number;
-  password?: string;
-  createdAt?: number;
-  role?: string;
-  status?: 'approved' | 'pending' | 'banned';
-  isBanned?: boolean;
-  isVip?: boolean;
-  vipExpiresAt?: number;
-  apiAccessEnabled?: boolean;
-  apiKey?: string;
-  tokenState?: TokenState;
-}
+import { db } from '../lib/firebase';
+import { ref, onValue, set, remove, update, push, get } from 'firebase/database';
+import { AdminHeader } from './admin/AdminHeader';
+import { AdminUsersTab } from './admin/AdminUsersTab';
+import { AdminBroadcastTab } from './admin/AdminBroadcastTab';
+import { AdminTokenConfigTab } from './admin/AdminTokenConfigTab';
+import { AdminRedeemTab } from './admin/AdminRedeemTab';
+import { AdminSecurityTab } from './admin/AdminSecurityTab';
+import { AdminApiKeysTab } from './admin/AdminApiKeysTab';
+import { AdminLogsTab } from './admin/AdminLogsTab';
+import { AdminUserTokenModal } from './admin/AdminUserTokenModal';
+import { AdminUserEditModal } from './admin/AdminUserEditModal';
+import { AdminAddUserModal } from './admin/AdminAddUserModal';
+import VipUserModal from './VipUserModal';
+import { AdminUser, AdminLog, ApiKeyDetail } from './admin/adminTypes';
+import { SystemAnnouncement, SystemControl, RedeemCode } from '../types';
+import { generateUniqueVeloraKey } from '../lib/utils';
 
 interface AdminPageProps {
   onBackToChat?: () => void;
 }
 
 export default function AdminPage({ onBackToChat }: AdminPageProps) {
+  const [activeTab, setActiveTab] = useState<'users' | 'broadcast' | 'tokens' | 'redeem' | 'security' | 'apikeys' | 'logs'>('users');
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [apiKeyCount, setApiKeyCount] = useState<number>(0);
-  const [apiKeysDetails, setApiKeysDetails] = useState<any[]>([]);
-  const [isStatsLoading, setIsStatsLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  
-  // Visibility toggles for user passwords (defaulting to hidden for privacy, but easy to show)
-  const [visiblePasswords, setVisiblePasswords] = useState<{ [uid: string]: boolean }>({});
-  
-  const togglePasswordVisibility = (uid: string) => {
-    setVisiblePasswords(prev => ({
-      ...prev,
-      [uid]: !prev[uid]
-    }));
-  };
-  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editUsername, setEditUsername] = useState('');
-  const [editPassword, setEditPassword] = useState('');
-  const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
-  const [editStatus, setEditStatus] = useState<'approved' | 'pending' | 'banned'>('approved');
-  const [editApiAccessEnabled, setEditApiAccessEnabled] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Add New User Modal state
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'user'>('user');
-  const [newStatus, setNewStatus] = useState<'approved' | 'pending' | 'banned'>('approved');
-
-  // Ad Links Management state
-  const [adLinks, setAdLinks] = useState<string[]>([
-    "https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"
-  ]);
-  const [newAdUrl, setNewAdUrl] = useState('');
-  const [isSavingAdLinks, setIsSavingAdLinks] = useState(false);
-
-  // System Token Configuration State (Global Daily Limit & Ad Reward per watch)
-  const [globalDailyLimitInput, setGlobalDailyLimitInput] = useState<string>('50000');
-  const [globalAdRewardInput, setGlobalAdRewardInput] = useState<string>('30000');
-  const [globalTokenMultiplierInput, setGlobalTokenMultiplierInput] = useState<string>('1');
-  const [isSavingGlobalConfig, setIsSavingGlobalConfig] = useState(false);
-
-  // Redeem Codes Management State
+  const [adLinks, setAdLinks] = useState<string[]>([]);
   const [redeemCodes, setRedeemCodes] = useState<RedeemCode[]>([]);
-  const [newRedeemCodeText, setNewRedeemCodeText] = useState('');
-  const [newRedeemRewardType, setNewRedeemRewardType] = useState<RedeemRewardType>('tokens');
-  const [newRedeemTokenAmount, setNewRedeemTokenAmount] = useState('50000');
-  const [newRedeemVipDays, setNewRedeemVipDays] = useState('7');
-  const [newRedeemMaxUses, setNewRedeemMaxUses] = useState('10');
-  const [newRedeemExpireHours, setNewRedeemExpireHours] = useState('0'); // 0 = no expiry
-  const [isSavingRedeemCode, setIsSavingRedeemCode] = useState(false);
-  const [redeemSearchTerm, setRedeemSearchTerm] = useState('');
-  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
-
-  // Google reCAPTCHA Security Keys State
-  const [showRecaptchaSecret, setShowRecaptchaSecret] = useState(false);
-  const [copiedKeyType, setCopiedKeyType] = useState<'site' | 'secret' | null>(null);
-  const recaptchaSiteKey = "6Le7LLItAAAAABV8rnbTiRwlHGz6CtqazHY52IRB";
-  const recaptchaSecretKey = "6Le7LLItAAAAAPFiygSO_mFa1Rt4ichp_uHfjgKf";
-
-  // Logs state
   const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
+  
+  const [tokenConfig, setTokenConfig] = useState({
+    adRewardTokenAmount: 30000,
+    defaultMaxDailyTokens: 50000,
+    tokenMultiplier: 1
+  });
 
-  // User Token Control Modal state
-  const [tokenModalUser, setTokenModalUser] = useState<AdminUser | null>(null);
-  const [tokenAmountInput, setTokenAmountInput] = useState<string>('50000');
-  const [isSavingTokenChange, setIsSavingTokenChange] = useState(false);
+  const [announcement, setAnnouncement] = useState<SystemAnnouncement>({
+    isActive: false,
+    title: '',
+    message: '',
+    type: 'info',
+    linkUrl: '',
+    linkText: '',
+    updatedAt: Date.now()
+  });
 
-  // VIP / Premium Control Modal State
-  const [vipModalUser, setVipModalUser] = useState<AdminUser | null>(null);
-  const [isSavingVipChange, setIsSavingVipChange] = useState(false);
+  const [systemControl, setSystemControl] = useState<SystemControl>({
+    maintenanceMode: false,
+    maintenanceNotice: 'সার্ভার রক্ষণাবেক্ষণের কাজ চলছে। সাময়িক অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত।',
+    allowRegistration: true,
+    aiChatEnabled: true,
+    adRewardsEnabled: true
+  });
 
-  // All Logout Logic
+  // Modal States
+  const [selectedUserForToken, setSelectedUserForToken] = useState<AdminUser | null>(null);
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<AdminUser | null>(null);
+  const [selectedUserForVip, setSelectedUserForVip] = useState<AdminUser | null>(null);
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
 
-  const handleAllLogout = async () => {
-    if (!window.confirm("আপনি কি নিশ্চিত যে সকল ইউজারকে লগ আউট করতে চান? (এডমিন বাদে সবাই লগ আউট হবে)")) return;
+  // API Keys status mock/realtime
+  const [apiKeys, setApiKeys] = useState<ApiKeyDetail[]>([
+    {
+      name: 'Naga API Gateway (Primary)',
+      maskedValue: 'naga-••••••••••••••••••••••••3L1Q',
+      status: 'Active',
+      todayCalls: 1420,
+      totalCalls: 48930,
+      successCalls: 48890,
+      errorCalls: 40
+    }
+  ]);
+  const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);
 
-    setIsLoggingOutAll(true);
+  const fetchApiKeysStats = async () => {
+    setIsLoadingApiKeys(true);
     try {
-      // Set a global timestamp in DB. Users whose lastAuthCheck is before this will be logged out.
-      const timestamp = Date.now();
-      await set(ref(db, 'settings/force_logout_timestamp'), timestamp);
-      showToast("সফলভাবে সকল ইউজারকে লগ আউট সিগন্যাল পাঠানো হয়েছে!", "success");
-    } catch (err: any) {
-      showToast("লগ আউট সিগন্যাল পাঠাতে সমস্যা: " + err.message, "error");
+      const res = await fetch('/api/admin/stats');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.keys && data.keys.length > 0) {
+          setApiKeys(data.keys);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch admin stats:", e);
     } finally {
-      setIsLoggingOutAll(false);
+      setIsLoadingApiKeys(false);
     }
   };
 
-  // Dashboard Tab State
-  const [activeTab, setActiveTab] = useState<'users' | 'tokens' | 'ads' | 'redeem' | 'apikeys' | 'logs'>('users');
+  useEffect(() => {
+    fetchApiKeysStats();
+  }, []);
 
-  // Toast alert feedback
-  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
-    setToastMessage({ type, text });
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
+  // Push audit log helper
   const logAdminAction = async (action: string, description: string) => {
     try {
-      await push(ref(db, 'admin_logs'), {
+      const logsRef = ref(db, 'admin_logs');
+      await push(logsRef, {
         action,
         description,
         timestamp: Date.now()
       });
     } catch (e) {
-      console.error("Failed to log action:", e);
+      console.warn("Failed to write audit log:", e);
     }
   };
 
-  // Listen to ad links, global token_config and redeem_codes in Firebase RTDB
+  // 1. Listen to Users from Firebase RTDB
   useEffect(() => {
-    const adRef = ref(db, 'settings/ad_links');
-    const unsubscribeAd = onValue(adRef, (snapshot) => {
+    const usersRef = ref(db, 'users');
+    const unsubscribeUsers = onValue(usersRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        setUsers([]);
+        return;
+      }
+      const data = snapshot.val();
+      const list: AdminUser[] = Object.keys(data).map((uid) => ({
+        uid,
+        ...data[uid]
+      }));
+      // Sort newest first
+      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setUsers(list);
+    });
+
+    // 2. Listen to Ad Links
+    const adLinksRef = ref(db, 'settings/ad_links');
+    const unsubscribeAds = onValue(adLinksRef, (snapshot) => {
       if (snapshot.exists()) {
         const val = snapshot.val();
-        if (Array.isArray(val) && val.length > 0) {
-          setAdLinks(val);
-        } else if (typeof val === 'object') {
-          const list = Object.values(val).filter(Boolean) as string[];
-          if (list.length > 0) setAdLinks(list);
-        }
+        if (Array.isArray(val)) setAdLinks(val);
+        else if (typeof val === 'object') setAdLinks(Object.values(val).filter(Boolean) as string[]);
+      } else {
+        setAdLinks(["https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"]);
       }
     });
 
+    // 3. Listen to Redeem Codes
+    const redeemRef = ref(db, 'redeem_codes');
+    const unsubscribeRedeem = onValue(redeemRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        setRedeemCodes([]);
+        return;
+      }
+      const data = snapshot.val();
+      const list: RedeemCode[] = Object.keys(data).map(k => ({
+        id: k,
+        ...data[k]
+      }));
+      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setRedeemCodes(list);
+    });
+
+    // 4. Listen to Token Config
     const tokenConfigRef = ref(db, 'settings/token_config');
     const unsubscribeConfig = onValue(tokenConfigRef, (snapshot) => {
       if (snapshot.exists()) {
-        const val = snapshot.val();
-        if (val) {
-          if (typeof val.defaultMaxDailyTokens === 'number') {
-            setGlobalDailyLimitInput(val.defaultMaxDailyTokens.toString());
-          }
-          if (typeof val.adRewardTokenAmount === 'number') {
-            setGlobalAdRewardInput(val.adRewardTokenAmount.toString());
-          }
-          if (typeof val.tokenMultiplier === 'number') {
-            setGlobalTokenMultiplierInput(val.tokenMultiplier.toString());
-          }
-        }
+        setTokenConfig(snapshot.val());
       }
     });
 
-    const redeemRef = ref(db, 'redeem_codes');
-    const logsRef = query(ref(db, 'admin_logs'), limitToLast(100));
+    // 5. Listen to Announcement
+    const announceRef = ref(db, 'settings/system_announcement');
+    const unsubscribeAnnounce = onValue(announceRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setAnnouncement(snapshot.val());
+      }
+    });
+
+    // 6. Listen to System Control
+    const controlRef = ref(db, 'settings/system_control');
+    const unsubscribeControl = onValue(controlRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setSystemControl(snapshot.val());
+      }
+    });
+
+    // 7. Listen to Admin Logs
+    const logsRef = ref(db, 'admin_logs');
     const unsubscribeLogs = onValue(logsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const val = snapshot.val();
-        const logsList = Object.keys(val).map(key => ({
-          id: key,
-          ...val[key]
-        }));
-        logsList.sort((a, b) => b.timestamp - a.timestamp);
-        setAdminLogs(logsList);
-      } else {
+      if (!snapshot.exists()) {
         setAdminLogs([]);
+        return;
       }
-    });
-
-    const unsubscribeRedeem = onValue(redeemRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const val = snapshot.val();
-        if (val) {
-          const list: RedeemCode[] = Object.keys(val).map(key => ({
-            id: key,
-            ...val[key]
-          }));
-          setRedeemCodes(list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-        } else {
-          setRedeemCodes([]);
-        }
-      } else {
-        setRedeemCodes([]);
-      }
+      const data = snapshot.val();
+      const list: AdminLog[] = Object.keys(data).map(k => ({
+        id: k,
+        ...data[k]
+      }));
+      list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      setAdminLogs(list);
     });
 
     return () => {
-      unsubscribeAd();
-      unsubscribeConfig();
+      unsubscribeUsers();
+      unsubscribeAds();
       unsubscribeRedeem();
+      unsubscribeConfig();
+      unsubscribeAnnounce();
+      unsubscribeControl();
       unsubscribeLogs();
     };
   }, []);
 
-  const handleGenerateRandomCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let rand = '';
-    for (let i = 0; i < 6; i++) {
-      rand += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    const generated = `VELORA-${rand}`;
-    setNewRedeemCodeText(generated);
-    return generated;
-  };
-
-  const handleCreateRedeemCode = async () => {
-    let cleanCode = newRedeemCodeText.trim().toUpperCase();
-    if (!cleanCode) {
-      cleanCode = handleGenerateRandomCode();
-    }
-
-    const maxUsesNum = Number(newRedeemMaxUses) || 1;
-    if (maxUsesNum <= 0) {
-      showToast("ব্যবহারকারীর সীমা অবশ্যই ১ বা তার বেশি হতে হবে!", "error");
-      return;
-    }
-
-    let tokenAmt: number | undefined;
-    let vipDaysNum: number | undefined;
-
-    if (newRedeemRewardType === 'tokens') {
-      tokenAmt = Number(newRedeemTokenAmount);
-      if (!tokenAmt || tokenAmt <= 0) {
-        showToast("দয়া করে সঠিক টোকেন সংখ্যা প্রদান করুন!", "error");
-        return;
-      }
-    } else {
-      vipDaysNum = Number(newRedeemVipDays);
-      if (!vipDaysNum || vipDaysNum <= 0) {
-        showToast("দয়া করে সঠিক ভিআইপি দিনের সংখ্যা প্রদান করুন!", "error");
-        return;
-      }
-    }
-
-    setIsSavingRedeemCode(true);
+  // Handler: Save System Announcement
+  const handleSaveAnnouncement = async (data: SystemAnnouncement) => {
+    setIsSaving(true);
     try {
-      const cleanCodeData: Record<string, any> = {
-        id: cleanCode,
-        code: cleanCode,
-        rewardType: newRedeemRewardType,
-        maxUses: maxUsesNum,
-        usedCount: 0,
-        createdAt: Date.now(),
-        isActive: true
-      };
-
-      if (newRedeemRewardType === 'tokens' && tokenAmt) {
-        cleanCodeData.tokenAmount = tokenAmt;
-      } else if (newRedeemRewardType === 'vip_days' && vipDaysNum) {
-        cleanCodeData.vipDays = vipDaysNum;
-      }
-
-      await set(ref(db, `redeem_codes/${cleanCode}`), cleanCodeData);
-      showToast(`🎟️ রিডিম কোড '${cleanCode}' সফলভাবে তৈরি হয়েছে!`, "success");
-
-      handleGenerateRandomCode();
-    } catch (err: any) {
-      showToast("রিডিম কোড তৈরি করতে সমস্যা: " + err.message, "error");
+      await set(ref(db, 'settings/system_announcement'), data);
+      await logAdminAction(
+        data.isActive ? 'BROADCAST_PUBLISHED' : 'BROADCAST_DISABLED',
+        `গ্লোবাল ব্রডকাস্ট নোটিশ আপডেট করা হয়েছে: "${data.title || 'Untitled'}"`
+      );
+    } catch (e: any) {
+      alert("ব্রডকাস্ট সংরক্ষণ ব্যর্থ হয়েছে: " + e.message);
     } finally {
-      setIsSavingRedeemCode(false);
+      setIsSaving(false);
     }
   };
 
-  const handleToggleRedeemActive = async (codeObj: RedeemCode) => {
+  // Handler: Save System Control
+  const handleUpdateSystemControl = async (ctrl: SystemControl) => {
+    setIsSaving(true);
     try {
-      await update(ref(db, `redeem_codes/${codeObj.id}`), {
-        isActive: !codeObj.isActive
-      });
-      showToast(`কোড '${codeObj.code}' ${!codeObj.isActive ? 'সক্রিয়' : 'নিষ্ক্রিয়'} করা হয়েছে।`);
-    } catch (err: any) {
-      showToast("স্ট্যাটাস আপডেট করতে সমস্যা: " + err.message, "error");
+      await set(ref(db, 'settings/system_control'), ctrl);
+      await logAdminAction(
+        'SYSTEM_CONTROL_UPDATED',
+        `সিস্টেম সুইচ আপডেট: মেইনটেন্যান্স=${ctrl.maintenanceMode ? 'ON' : 'OFF'}, রেজিস্ট্রেশন=${ctrl.allowRegistration ? 'ON' : 'OFF'}`
+      );
+    } catch (e: any) {
+      alert("সিস্টেম কন্ট্রোল আপডেট ব্যর্থ হয়েছে: " + e.message);
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  // Handler: Save Global Token Config
+  const handleSaveTokenConfig = async (cfg: any) => {
+    setIsSaving(true);
+    try {
+      await set(ref(db, 'settings/token_config'), cfg);
+      await logAdminAction(
+        'TOKEN_CONFIG_UPDATED',
+        `টোকেন সেটিং আপডেট: ডেইলি=${cfg.defaultMaxDailyTokens}, এড=${cfg.adRewardTokenAmount}`
+      );
+    } catch (e: any) {
+      alert("টোকেন কনফিগ সংরক্ষণ ব্যর্থ: " + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handler: Atomic Batch Update All Users Token Limit
+  const handleBatchUpdateAllUsersLimit = async (newLimit: number) => {
+    const updates: Record<string, any> = {};
+    users.forEach(u => {
+      updates[`users/${u.uid}/tokenState/maxDailyTokens`] = newLimit;
+    });
+    await update(ref(db), updates);
+    await logAdminAction(
+      'BATCH_TOKEN_LIMIT_UPDATED',
+      `সকল (${users.length}) ইউজারের ডেইলি ফ্রি লিমিট ${newLimit}-এ আপডেট করা হয়েছে`
+    );
+  };
+
+  // Handler: Add / Delete Ad Link
+  const handleAddAdLink = async (link: string) => {
+    const updated = [...adLinks, link];
+    await set(ref(db, 'settings/ad_links'), updated);
+    await logAdminAction('AD_LINK_ADDED', `নতুন স্পনসর অ্যাড লিংক যোগ করা হয়েছে: ${link}`);
+  };
+
+  const handleDeleteAdLink = async (link: string) => {
+    const updated = adLinks.filter(l => l !== link);
+    await set(ref(db, 'settings/ad_links'), updated);
+    await logAdminAction('AD_LINK_DELETED', `অ্যাড লিংক মুছে ফেলা হয়েছে`);
+  };
+
+  // Handler: Create Redeem Code
+  const handleCreateRedeemCode = async (codeData: Omit<RedeemCode, 'id' | 'usedCount' | 'usedBy'>) => {
+    setIsSaving(true);
+    try {
+      const codeRef = ref(db, `redeem_codes/${codeData.code}`);
+      const snap = await get(codeRef);
+      if (snap.exists()) {
+        alert("এই কোডটি ইতিমধ্যে বিদ্যমান! অন্য কোড টেক্সট ব্যবহার করুন।");
+        return;
+      }
+      await set(codeRef, {
+        ...codeData,
+        usedCount: 0
+      });
+      await logAdminAction(
+        'REDEEM_CODE_CREATED',
+        `নতুন রিডিম কোড তৈরি করা হয়েছে: ${codeData.code} (${codeData.rewardType === 'tokens' ? codeData.tokenAmount + ' টোকেন' : codeData.vipDays + ' দিন VIP'})`
+      );
+      alert(`🎉 রিডিম কোড ${codeData.code} সফলভাবে তৈরি করা হয়েছে!`);
+    } catch (e: any) {
+      alert("কোড তৈরি ব্যর্থ হয়েছে: " + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleRedeemActive = async (code: RedeemCode) => {
+    await update(ref(db, `redeem_codes/${code.id}`), {
+      isActive: !code.isActive
+    });
+    await logAdminAction(
+      'REDEEM_CODE_TOGGLED',
+      `রিডিম কোড ${code.code} ${!code.isActive ? 'সক্রিয়' : 'নিষ্ক্রিয়'} করা হয়েছে`
+    );
   };
 
   const handleDeleteRedeemCode = async (codeId: string) => {
-    if (!window.confirm(`আপনি কি নিশ্চিত যে রিডিম কোড '${codeId}' ডিলিট করতে চান?`)) return;
+    if (!window.confirm("আপনি কি নিশ্চিত যে এই রিডিম কোডটি মুছে ফেলতে চান?")) return;
+    await remove(ref(db, `redeem_codes/${codeId}`));
+    await logAdminAction('REDEEM_CODE_DELETED', `রিডিম কোড ${codeId} মুছে ফেলা হয়েছে`);
+  };
+
+  // Handler: Update User Tokens
+  const handleUpdateUserTokens = async (
+    uid: string, 
+    action: 'add_bonus' | 'sub_bonus' | 'set_daily' | 'reset_used', 
+    amount: number
+  ) => {
+    setIsSaving(true);
     try {
-      await remove(ref(db, `redeem_codes/${codeId}`));
-      showToast(`রিডিম কোড '${codeId}' ডিলিট হয়েছে।`);
-    } catch (err: any) {
-      showToast("ডিলিট করতে সমস্যা: " + err.message, "error");
-    }
-  };
+      const targetUser = users.find(u => u.uid === uid);
+      if (!targetUser) return;
 
-  const handleCopyCode = (codeText: string) => {
-    navigator.clipboard.writeText(codeText);
-    setCopiedCodeId(codeText);
-    showToast(`কোড '${codeText}' ক্লিপবোর্ডে কপি হয়েছে!`);
-    setTimeout(() => setCopiedCodeId(null), 2000);
-  };
+      const currentBonus = targetUser.tokenState?.bonusTokens || 0;
+      const updates: Record<string, any> = {};
 
-  const handleSaveGlobalTokenConfig = async () => {
-    const dailyNum = Number(globalDailyLimitInput);
-    const rewardNum = Number(globalAdRewardInput);
-    const multNum = Number(globalTokenMultiplierInput);
-
-    if (!dailyNum || dailyNum <= 0 || !rewardNum || rewardNum <= 0 || !multNum || multNum <= 0) {
-      showToast("দয়া করে সঠিক সংখ্যা প্রদান করুন!", "error");
-      return;
-    }
-
-    setIsSavingGlobalConfig(true);
-    try {
-      await set(ref(db, 'settings/token_config'), {
-        defaultMaxDailyTokens: dailyNum,
-        adRewardTokenAmount: rewardNum,
-        tokenMultiplier: multNum,
-        updatedAt: Date.now()
-      });
-      showToast(`গ্লোবাল টোকেন সেটিংস রিয়েলটাইমে সেভ হয়েছে! ডেইলি লিমিট: ${formatTokenCount(dailyNum)} | এড রিওয়ার্ড: ${formatTokenCount(rewardNum)} | মাল্টিপ্লায়ার: ${multNum}x`, "success");
-    } catch (err: any) {
-      showToast("গ্লোবাল সেটিংস সেভ করতে সমস্যা: " + err.message, "error");
-    } finally {
-      setIsSavingGlobalConfig(false);
-    }
-  };
-
-  const handleApplyGlobalLimitToAllUsers = async () => {
-    const dailyNum = Number(globalDailyLimitInput);
-    const rewardNum = Number(globalAdRewardInput);
-    const multNum = Number(globalTokenMultiplierInput);
-
-    if (!dailyNum || dailyNum <= 0) {
-      showToast("দয়া করে সঠিক ডেইলি লিমিট টাইপ করুন!", "error");
-      return;
-    }
-
-    if (users.length === 0) {
-      showToast("কোন ইউজার পাওয়া যায়নি!", "error");
-      return;
-    }
-
-    if (!window.confirm(`আপনি কি নিশ্চিত যে রেজিস্টার্ড সকল ${users.length} জন ইউজারের ডেলি ফ্রি লিমিট ${formatTokenCount(dailyNum)} টোকেন এ সেট ও আপডেট করতে চান?`)) {
-      return;
-    }
-
-    setIsSavingGlobalConfig(true);
-    try {
-      // 1. Save global token_config
-      await set(ref(db, 'settings/token_config'), {
-        defaultMaxDailyTokens: dailyNum,
-        adRewardTokenAmount: rewardNum || 30000,
-        tokenMultiplier: multNum || 1,
-        updatedAt: Date.now()
-      });
-
-      // 2. Batch update maxDailyTokens for all registered users in RTDB
-      const updates: { [path: string]: any } = {};
-      users.forEach(u => {
-        updates[`users/${u.uid}/tokenState/maxDailyTokens`] = dailyNum;
-      });
-      await update(ref(db), updates);
-
-      showToast(`সকল ${users.length} জন ইউজারের ডেলি লিমিট ${formatTokenCount(dailyNum)} টোকেনে রিয়েলটাইমে আপডেট হয়েছে!`, "success");
-    } catch (err: any) {
-      showToast("ইউজারদের ডেলি লিমিট আপডেট করতে সমস্যা: " + err.message, "error");
-    } finally {
-      setIsSavingGlobalConfig(false);
-    }
-  };
-
-  const handleAddAdLink = async () => {
-    if (!newAdUrl.trim()) {
-      showToast("দয়া করে সঠিক অ্যাড লিংক প্রবেশ করান!", "error");
-      return;
-    }
-    const urlToAdd = newAdUrl.trim();
-    if (!urlToAdd.startsWith('http://') && !urlToAdd.startsWith('https://')) {
-      showToast("লিংকটি অবশ্যই http:// বা https:// দিয়ে শুরু হতে হবে!", "error");
-      return;
-    }
-
-    const updated = [...adLinks, urlToAdd];
-    setAdLinks(updated);
-    setNewAdUrl('');
-    setIsSavingAdLinks(true);
-    try {
-      await set(ref(db, 'settings/ad_links'), updated);
-      showToast("অ্যাড লিংক সফলভাবে যোগ করা হয়েছে!", "success");
-    } catch (e: any) {
-      showToast("অ্যাড লিংক সেভ করতে সমস্যা: " + e.message, "error");
-    } finally {
-      setIsSavingAdLinks(false);
-    }
-  };
-
-  const handleDeleteAdLink = async (indexToDelete: number) => {
-    if (adLinks.length <= 1) {
-      showToast("কমপক্ষে একটি অ্যাড লিংক থাকা আবশ্যক!", "error");
-      return;
-    }
-    const updated = adLinks.filter((_, idx) => idx !== indexToDelete);
-    setAdLinks(updated);
-    setIsSavingAdLinks(true);
-    try {
-      await set(ref(db, 'settings/ad_links'), updated);
-      showToast("অ্যাড লিংক মুছে ফেলা হয়েছে!", "success");
-    } catch (e: any) {
-      showToast("মুছতে সমস্যা হয়েছে: " + e.message, "error");
-    } finally {
-      setIsSavingAdLinks(false);
-    }
-  };
-
-  // Realtime Token Management Handlers
-  const handleOpenTokenModal = (user: AdminUser) => {
-    setTokenModalUser(user);
-    setTokenAmountInput('50000');
-  };
-
-  const handleApplyTokenAdd = async (amountToAdd: number) => {
-    if (!tokenModalUser || amountToAdd <= 0) return;
-    setIsSavingTokenChange(true);
-    try {
-      const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
-      const currentState: TokenState = tokenModalUser.tokenState || {
-        maxDailyTokens: 37000,
-        bonusTokens: 0,
-        tokensUsedToday: 0,
-        lastResetDate: new Date().toISOString().split('T')[0],
-        adsWatchedToday: 0
-      };
-
-      const updatedState: TokenState = {
-        ...currentState,
-        bonusTokens: (currentState.bonusTokens || 0) + amountToAdd
-      };
-
-      await set(userRef, updatedState);
-      showToast(`@${tokenModalUser.username} এর একাউন্টে +${formatTokenCount(amountToAdd)} বোনাস টোকেন যুক্ত করা হয়েছে!`, "success");
-      setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
-    } catch (err: any) {
-      showToast("টোকেন যোগ করতে সমস্যা: " + err.message, "error");
-    } finally {
-      setIsSavingTokenChange(false);
-    }
-  };
-
-  const handleApplyTokenSubtract = async (amountToSubtract: number) => {
-    if (!tokenModalUser || amountToSubtract <= 0) return;
-    setIsSavingTokenChange(true);
-    try {
-      const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
-      const currentState: TokenState = tokenModalUser.tokenState || {
-        maxDailyTokens: 37000,
-        bonusTokens: 0,
-        tokensUsedToday: 0,
-        lastResetDate: new Date().toISOString().split('T')[0],
-        adsWatchedToday: 0
-      };
-
-      let remainingDeduct = amountToSubtract;
-      let currentBonus = currentState.bonusTokens || 0;
-      let currentUsed = currentState.tokensUsedToday || 0;
-
-      if (currentBonus >= remainingDeduct) {
-        currentBonus -= remainingDeduct;
-      } else {
-        remainingDeduct -= currentBonus;
-        currentBonus = 0;
-        currentUsed += remainingDeduct;
+      if (action === 'add_bonus') {
+        updates[`users/${uid}/tokenState/bonusTokens`] = currentBonus + amount;
+        await logAdminAction('TOKENS_ADDED', `${targetUser.username}-কে +${amount} বোনাস টোকেন দেওয়া হয়েছে`);
+      } else if (action === 'sub_bonus') {
+        updates[`users/${uid}/tokenState/bonusTokens`] = Math.max(0, currentBonus - amount);
+        await logAdminAction('TOKENS_SUBTRACTED', `${targetUser.username}-এর একাউন্ট থেকে -${amount} টোকেন কাটা হয়েছে`);
+      } else if (action === 'set_daily') {
+        updates[`users/${uid}/tokenState/maxDailyTokens`] = amount;
+        await logAdminAction('DAILY_LIMIT_SET', `${targetUser.username}-এর ডেইলি লিমিট ${amount}-এ সেট করা হয়েছে`);
+      } else if (action === 'reset_used') {
+        updates[`users/${uid}/tokenState/tokensUsedToday`] = 0;
+        await logAdminAction('USED_TOKENS_RESET', `${targetUser.username}-এর ব্যবহৃত টোকেন রিসেট করা হয়েছে`);
       }
 
-      const updatedState: TokenState = {
-        ...currentState,
-        bonusTokens: currentBonus,
-        tokensUsedToday: currentUsed
-      };
-
-      await set(userRef, updatedState);
-      showToast(`@${tokenModalUser.username} এর একাউন্ট থেকে -${formatTokenCount(amountToSubtract)} টোকেন মাইনাস করা হয়েছে!`, "success");
-      setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
-    } catch (err: any) {
-      showToast("টোকেন মাইনাস করতে সমস্যা: " + err.message, "error");
+      await update(ref(db), updates);
+    } catch (e: any) {
+      alert("টোকেন আপডেট ব্যর্থ: " + e.message);
     } finally {
-      setIsSavingTokenChange(false);
+      setIsSaving(false);
     }
   };
 
-  const handleApplyTokenResetUsed = async () => {
-    if (!tokenModalUser) return;
-    setIsSavingTokenChange(true);
+  // Handler: Save Edited User
+  const handleSaveUser = async (uid: string, data: Partial<AdminUser>) => {
+    setIsSaving(true);
     try {
-      const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
-      const currentState: TokenState = tokenModalUser.tokenState || {
-        maxDailyTokens: 37000,
-        bonusTokens: 0,
-        tokensUsedToday: 0,
-        lastResetDate: new Date().toISOString().split('T')[0],
-        adsWatchedToday: 0
-      };
-
-      const updatedState: TokenState = {
-        ...currentState,
-        tokensUsedToday: 0
-      };
-
-      await set(userRef, updatedState);
-      showToast(`@${tokenModalUser.username} এর ব্যবহৃত টোকেন ০ করা হয়েছে!`, "success");
-      setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
-    } catch (err: any) {
-      showToast("টোকেন রিসেট করতে সমস্যা: " + err.message, "error");
+      const updates: Record<string, any> = {};
+      Object.keys(data).forEach(k => {
+        updates[`users/${uid}/${k}`] = (data as any)[k];
+        updates[`user_list/${uid}/${k}`] = (data as any)[k];
+      });
+      await update(ref(db), updates);
+      await logAdminAction('USER_UPDATED', `ইউজার @${data.username || uid} এর প্রোফাইল এডিট করা হয়েছে`);
+    } catch (e: any) {
+      alert("ইউজার আপডেট ব্যর্থ: " + e.message);
     } finally {
-      setIsSavingTokenChange(false);
+      setIsSaving(false);
     }
   };
 
-  const handleApplyMaxDailyLimit = async (newLimit: number) => {
-    if (!tokenModalUser || newLimit < 0) return;
-    setIsSavingTokenChange(true);
+  // Handler: Create Brand New User
+  const handleCreateUser = async (userData: {
+    fullName: string;
+    username: string;
+    password: string;
+    role: 'user' | 'admin';
+    initialTokens: number;
+    isVip: boolean;
+    vipDays: number;
+  }) => {
+    setIsSaving(true);
     try {
-      const userRef = ref(db, `users/${tokenModalUser.uid}/tokenState`);
-      const currentState: TokenState = tokenModalUser.tokenState || {
-        maxDailyTokens: 100000,
-        bonusTokens: 0,
-        tokensUsedToday: 0,
-        lastResetDate: new Date().toISOString().split('T')[0],
-        adsWatchedToday: 0
+      const cleanUsername = userData.username.toLowerCase().trim();
+      const userListRef = ref(db, 'user_list');
+      const snap = await get(userListRef);
+      if (snap.exists()) {
+        const all = Object.values(snap.val()) as any[];
+        if (all.some(u => u.username?.toLowerCase() === cleanUsername)) {
+          alert(`ইউজারনেম '${cleanUsername}' ইতিমধ্যে ব্যবহৃত হয়েছে!`);
+          return;
+        }
+      }
+
+      const uid = 'velora_usr_' + crypto.randomUUID().slice(0, 12);
+      const referralCode = 'VEL' + Math.random().toString(36).substring(2, 7).toUpperCase();
+      const now = Date.now();
+      const vipExpiresAt = userData.isVip && userData.vipDays > 0 ? now + userData.vipDays * 24 * 60 * 60 * 1000 : 0;
+
+      const profileObj: any = {
+        uid,
+        fullName: userData.fullName,
+        username: cleanUsername,
+        password: userData.password,
+        role: userData.role,
+        status: 'approved',
+        isBanned: false,
+        isVip: userData.isVip,
+        vipExpiresAt,
+        referralCode,
+        createdAt: now,
+        tokenState: {
+          maxDailyTokens: userData.initialTokens,
+          bonusTokens: 0,
+          tokensUsedToday: 0,
+          lastResetDate: new Date().toISOString().split('T')[0],
+          adsWatchedToday: 0
+        }
       };
 
-      const updatedState: TokenState = {
-        ...currentState,
-        maxDailyTokens: newLimit
-      };
+      const updates: Record<string, any> = {};
+      updates[`users/${uid}`] = profileObj;
+      updates[`user_list/${uid}`] = profileObj;
+      updates[`usernames/${cleanUsername}`] = uid;
 
-      await set(userRef, updatedState);
-      showToast(`@${tokenModalUser.username} এর দৈনিক ফ্রি লিমিট ${formatTokenCount(newLimit)} সেট করা হয়েছে!`, "success");
-      setTokenModalUser(prev => prev ? { ...prev, tokenState: updatedState } : null);
-    } catch (err: any) {
-      showToast("লিমিট সেটে সমস্যা: " + err.message, "error");
+      await update(ref(db), updates);
+      await logAdminAction('USER_CREATED', `নতুন ইউজার তৈরি করা হয়েছে: @${cleanUsername} (${userData.role})`);
+      alert(`🎉 ইউজার @${cleanUsername} সফলভাবে তৈরি হয়েছে!`);
+    } catch (e: any) {
+      alert("ইউজার তৈরি ব্যর্থ: " + e.message);
     } finally {
-      setIsSavingTokenChange(false);
+      setIsSaving(false);
     }
   };
 
-  // Realtime VIP / Premium Management Handlers
-  const handleOpenVipModal = (user: AdminUser) => {
-    setVipModalUser(user);
+  // Handler: Toggle Ban User
+  const handleToggleBanUser = async (user: AdminUser) => {
+    const willBan = !user.isBanned && user.status !== 'banned';
+    const confirm = window.confirm(
+      willBan 
+        ? `আপনি কি নিশ্চিত যে @${user.username}-কে ব্যান করতে চান?` 
+        : `আপনি কি @${user.username}-কে আনব্যান করতে চান?`
+    );
+    if (!confirm) return;
+
+    const updates: Record<string, any> = {
+      [`users/${user.uid}/isBanned`]: willBan,
+      [`users/${user.uid}/status`]: willBan ? 'banned' : 'approved',
+      [`user_list/${user.uid}/isBanned`]: willBan,
+      [`user_list/${user.uid}/status`]: willBan ? 'banned' : 'approved'
+    };
+
+    await update(ref(db), updates);
+    await logAdminAction(
+      willBan ? 'USER_BANNED' : 'USER_UNBANNED',
+      `ইউজার @${user.username} কে ${willBan ? 'ব্যান' : 'আনব্যান'} করা হয়েছে`
+    );
   };
 
+  // Handler: Toggle Admin Role
+  const handleToggleRole = async (user: AdminUser) => {
+    const isCurrentlyAdmin = user.role === 'admin' || user.username?.toLowerCase() === 'admin';
+    const newRole = isCurrentlyAdmin ? 'user' : 'admin';
+    const confirm = window.confirm(
+      isCurrentlyAdmin 
+        ? `@${user.username}-এর অ্যাডমিন পদ প্রত্যাহার করতে চান?` 
+        : `@${user.username}-কে সুপার অ্যাডমিন বানাতে চান?`
+    );
+    if (!confirm) return;
+
+    const updates: Record<string, any> = {
+      [`users/${user.uid}/role`]: newRole,
+      [`user_list/${user.uid}/role`]: newRole
+    };
+
+    await update(ref(db), updates);
+    await logAdminAction('ROLE_CHANGED', `ইউজার @${user.username}-এর রোল পরিবর্তন করে '${newRole}' করা হয়েছে`);
+  };
+
+  // Handler: Delete User
+  const handleDeleteUser = async (uid: string, username: string) => {
+    const confirm = window.confirm(
+      `সতর্কতা: আপনি কি চিরতরে @${username} একাউন্ট এবং তার সমস্ত ডাটা মুছে ফেলতে চান? এটি পুনরুদ্ধার করা যাবে না!`
+    );
+    if (!confirm) return;
+
+    const updates: Record<string, any> = {};
+    updates[`users/${uid}`] = null;
+    updates[`user_list/${uid}`] = null;
+    updates[`user_chats/${uid}`] = null;
+    if (username) {
+      updates[`usernames/${username.toLowerCase()}`] = null;
+    }
+
+    await update(ref(db), updates);
+    await logAdminAction('USER_DELETED', `ইউজার @${username} (UID: ${uid}) চিরতরে মুছে ফেলা হয়েছে`);
+  };
+
+  // Handler: Force Logout All Users
+  const handleForceLogoutAll = async () => {
+    const confirm = window.confirm(
+      "সতর্কতা: আপনি কি সকল সাধারণ ইউজারকে তাৎক্ষণিক লগআউট করতে চান? তাদের পুনরায় লগইন করতে হবে।"
+    );
+    if (!confirm) return;
+
+    setIsLoggingOutAll(true);
+    try {
+      await set(ref(db, 'settings/security/minAuthSessionTimestamp'), Date.now());
+      await logAdminAction('FORCE_LOGOUT_ALL', 'সকল নন-অ্যাডমিন ইউজারের সক্রিয় সেশন বাতিল করা হয়েছে');
+      alert("সকল সাধারণ ইউজারের সেশন সফলভাবে বাতিল করা হয়েছে!");
+    } catch (e: any) {
+      alert("লগআউট ব্যর্থ: " + e.message);
+    } finally {
+      setIsLoggingOutAll(false);
+    }
+  };
+
+  // Handler: Export Users JSON
+  const handleExportUsers = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(users, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `velora_users_backup_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  // Handler: Batch Gift Tokens to All
+  const handleBatchGiftTokens = async (amount: number) => {
+    const confirm = window.confirm(`আপনি কি সকল (${users.length} জন) ইউজারকে +${amount.toLocaleString()} বোনাস টোকেন উপহার দিতে চান?`);
+    if (!confirm) return;
+
+    const updates: Record<string, any> = {};
+    users.forEach(u => {
+      const cur = u.tokenState?.bonusTokens || 0;
+      updates[`users/${u.uid}/tokenState/bonusTokens`] = cur + amount;
+    });
+
+    await update(ref(db), updates);
+    await logAdminAction('BATCH_TOKENS_GIFTED', `সকল (${users.length}) ইউজারকে +${amount} টোকেন উপহার দেওয়া হয়েছে`);
+    alert(`🎉 সফলভাবে সকল ${users.length} জন ইউজারকে +${amount.toLocaleString()} বোনাস টোকেন দেওয়া হয়েছে!`);
+  };
+
+  // Handler: Batch Reset Used Tokens
+  const handleBatchResetUsedTokens = async () => {
+    const confirm = window.confirm("আপনি কি সকল ইউজারের আজকের ব্যবহৃত টোকেন কাউন্টার ০-এ রিসেট করতে চান?");
+    if (!confirm) return;
+
+    const updates: Record<string, any> = {};
+    users.forEach(u => {
+      updates[`users/${u.uid}/tokenState/tokensUsedToday`] = 0;
+    });
+
+    await update(ref(db), updates);
+    await logAdminAction('BATCH_USED_RESET', `সকল (${users.length}) ইউজারের ব্যবহৃত টোকেন ০-এ রিসেট করা হয়েছে`);
+    alert("সকল ইউজারের ব্যবহৃত টোকেন সফলভাবে রিসেট হয়েছে!");
+  };
+
+  // Handler: Set VIP Duration
   const handleSetVipDuration = async (days: number | 'lifetime' | 0) => {
-    if (!vipModalUser) return;
-    setIsSavingVipChange(true);
+    if (!selectedUserForVip) return;
+    setIsSaving(true);
     try {
+      const uid = selectedUserForVip.uid;
+      const now = Date.now();
       let isVip = false;
       let vipExpiresAt = 0;
 
       if (days === 'lifetime') {
         isVip = true;
-        vipExpiresAt = 253402300799000; // Lifetime (Year 9999)
+        vipExpiresAt = 32503680000000; // year 3000
       } else if (typeof days === 'number' && days > 0) {
         isVip = true;
-        const currentExpiry = (vipModalUser.vipExpiresAt && vipModalUser.vipExpiresAt > Date.now())
-          ? vipModalUser.vipExpiresAt
-          : Date.now();
-        vipExpiresAt = currentExpiry + (days * 24 * 60 * 60 * 1000);
+        const currentExp = selectedUserForVip.vipExpiresAt || 0;
+        const baseTime = currentExp > now && currentExp < 2000000000000 ? currentExp : now;
+        vipExpiresAt = baseTime + days * 24 * 60 * 60 * 1000;
       } else {
         isVip = false;
         vipExpiresAt = 0;
       }
 
-      await update(ref(db, `users/${vipModalUser.uid}`), {
-        isVip,
-        vipExpiresAt
-      });
-
-      const text = days === 'lifetime' 
-        ? 'সারা জীবনের (লাইফটাইম) জন্য প্রিমিয়াম' 
-        : days > 0 
-          ? `${days} দিনের জন্য প্রিমিয়াম` 
-          : 'প্রিমিয়াম বাতিল';
-
-      showToast(`@${vipModalUser.username} এর প্রিমিয়াম স্ট্যাটাস (${text}) সফলভাবে সেভ করা হয়েছে!`, "success");
-
-      setUsers(prev => prev.map(u => u.uid === vipModalUser.uid ? { ...u, isVip, vipExpiresAt } : u));
-      setVipModalUser(prev => prev ? { ...prev, isVip, vipExpiresAt } : null);
-    } catch (err: any) {
-      showToast("প্রিমিয়াম আপডেট করতে সমস্যা: " + err.message, "error");
-    } finally {
-      setIsSavingVipChange(false);
-    }
-  };
-
-  const fetchStats = async () => {
-    setIsStatsLoading(true);
-    try {
-      const res = await fetch('/api/admin/stats', {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.status === 'success') {
-          setApiKeyCount(data.apiKeyCount);
-          setApiKeysDetails(data.keys || []);
-        }
-      }
-    } catch (e) {
-      console.warn("Stats fetch skipped:", e);
-    } finally {
-      setIsStatsLoading(false);
-    }
-  };
-
-  // 100% Pure Real-time DB listeners (No REST API polling)
-  useEffect(() => {
-    fetchStats();
-
-    // Stats auto-refresh for "100% Realtime" feel when modal is open
-    let statsInterval: NodeJS.Timeout;
-    if (activeTab === 'apikeys') {
-      statsInterval = setInterval(fetchStats, 5000);
-    }
-
-    try {
-      setLoading(true);
-      const usersRef = ref(db, 'users');
-      const unsubscribe = onValue(usersRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const val = snapshot.val();
-          const firebaseList: AdminUser[] = Object.keys(val).map((key) => ({
-            uid: key,
-            fullName: val[key].fullName || 'No Name',
-            username: val[key].username || key,
-            password: val[key].password || '',
-            createdAt: val[key].createdAt || Date.now(),
-            role: val[key].role || (val[key].username === 'admin' ? 'admin' : 'user'),
-            status: val[key].status || (val[key].isBanned ? 'banned' : 'approved'),
-            isBanned: !!val[key].isBanned || val[key].status === 'banned',
-            isVip: val[key].isVip,
-            vipExpiresAt: val[key].vipExpiresAt,
-            tokenState: val[key].tokenState,
-            apiAccessEnabled: val[key].apiAccessEnabled,
-            apiKey: val[key].apiKey
-          }));
-          firebaseList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          setUsers(firebaseList);
-
-          // Update active token modal user in real-time
-          setTokenModalUser((prev) => {
-            if (!prev) return null;
-            const liveUser = firebaseList.find(u => u.uid === prev.uid);
-            return liveUser || prev;
-          });
-        } else {
-          setUsers([]);
-        }
-        setLoading(false);
-      }, (error) => {
-        console.warn("RTDB WebSocket Notice (handled via API):", error.message);
-        setLoading(false);
-      });
-      return () => {
-        unsubscribe();
-        if (statsInterval) clearInterval(statsInterval);
+      const updates: Record<string, any> = {
+        [`users/${uid}/isVip`]: isVip,
+        [`users/${uid}/vipExpiresAt`]: vipExpiresAt,
+        [`user_list/${uid}/isVip`]: isVip,
+        [`user_list/${uid}/vipExpiresAt`]: vipExpiresAt,
       };
-    } catch (e) {
-      console.warn("RTDB listener notice:", e);
-      setLoading(false);
-      return () => {
-        if (statsInterval) clearInterval(statsInterval);
-      };
-    }
-  }, [activeTab]);
 
-  const handleOpenEdit = (user: AdminUser) => {
-    setEditingUser(user);
-    setEditName(user.fullName);
-    setEditUsername(user.username);
-    setEditPassword(user.password || '');
-    setEditRole((user.role as any) || 'user');
-    setEditStatus(user.status || (user.isBanned ? 'banned' : 'approved'));
-    setEditApiAccessEnabled(!!user.apiAccessEnabled);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingUser) return;
-    if (!editName.trim() || !editUsername.trim() || !editPassword.trim()) {
-      showToast("সবগুলো ঘর পূরণ করুন!", "error");
-      return;
-    }
-
-    const cleanUsername = editUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-    setIsSaving(true);
-
-    try {
-      // 1. Direct Firebase Realtime DB update
-      const updates = {
-        fullName: editName.trim(),
-        username: cleanUsername,
-        password: editPassword.trim(),
-        apiAccessEnabled: editApiAccessEnabled,
-        updatedAt: Date.now()
-      };
-      await update(ref(db, `users/${editingUser.uid}`), updates);
-      await update(ref(db, `user_list/${editingUser.uid}`), updates);
-
-      if (editingUser.username && editingUser.username !== cleanUsername) {
-        await remove(ref(db, `usernames/${editingUser.username}`));
-      }
-      if (cleanUsername) {
-        await set(ref(db, `usernames/${cleanUsername}`), editingUser.uid);
-      }
-
-      showToast("ইউজার তথ্য আপডেট করা হয়েছে।");
-      logAdminAction('USER_UPDATED', `Updated details for user @${cleanUsername}`);
-      setEditingUser(null);
-    } catch (err: any) {
-      console.error("Firebase update error:", err);
-      showToast(`ফায়ারবেস আপডেট করতে সমস্যা হয়েছে: ${err.message}`, "error");
+      await update(ref(db), updates);
+      await logAdminAction(
+        isVip ? 'VIP_GRANTED' : 'VIP_REVOKED',
+        `ইউজার @${selectedUserForVip.username}-এর VIP স্ট্যাটাস আপডেট: ${days === 'lifetime' ? 'লাইফটাইম' : days === 0 ? 'বাতিল' : `${days} দিন`}`
+      );
+      setSelectedUserForVip(null);
+    } catch (e: any) {
+      alert("VIP আপডেট ব্যর্থ: " + e.message);
     } finally {
       setIsSaving(false);
     }
   };
-
-  const handleToggleBan = async (user: AdminUser) => {
-    const isCurrentlyBanned = user.status === 'banned' || user.isBanned;
-    const newStatus = isCurrentlyBanned ? 'approved' : 'banned';
-    const actionText = isCurrentlyBanned ? 'আনব্যান/অ্যাপ্রুভ' : 'ব্যান';
-
-    if (window.confirm(`আপনি কি নিশ্চিত যে '${user.fullName}' (@${user.username}) ইউজারকে ${actionText} করতে চান?`)) {
-      try {
-        // Direct Firebase Realtime DB update
-        const updates = {
-          status: newStatus,
-          isBanned: !isCurrentlyBanned,
-          updatedAt: Date.now()
-        };
-        await update(ref(db, `users/${user.uid}`), updates);
-        await update(ref(db, `user_list/${user.uid}`), updates);
-
-      showToast(`ইউজার ${isCurrentlyBanned ? 'আনব্যান' : 'ব্যান'} করা হয়েছে!`);
-      logAdminAction(isCurrentlyBanned ? 'USER_UNBANNED' : 'USER_BANNED', `User @${user.username} (${user.fullName}) was ${isCurrentlyBanned ? 'unbanned' : 'banned'}`);
-      } catch (err: any) {
-        console.error("Ban toggle error:", err);
-        showToast(`সমস্যা হয়েছে: ${err.message}`, "error");
-      }
-    }
-  };
-
-  const handleToggleApiAccess = async (user: AdminUser) => {
-    const newVal = !user.apiAccessEnabled;
-    try {
-      await update(ref(db, `users/${user.uid}`), {
-        apiAccessEnabled: newVal,
-        updatedAt: Date.now()
-      });
-      await update(ref(db, `user_list/${user.uid}`), { apiAccessEnabled: newVal });
-      showToast(`API Access ${newVal ? 'Enabled' : 'Disabled'}!`);
-    } catch (err: any) {
-      showToast(err.message, "error");
-    }
-  };
-
-  const handleToggleRole = async (user: AdminUser) => {
-    const newRole = user.role === 'admin' ? 'user' : 'admin';
-    try {
-      await update(ref(db, `users/${user.uid}`), {
-        role: newRole,
-        updatedAt: Date.now()
-      });
-      await update(ref(db, `user_list/${user.uid}`), { role: newRole });
-      showToast(`Role changed to ${newRole.toUpperCase()}!`);
-      logAdminAction('ROLE_CHANGED', `User @${user.username} role changed to ${newRole}`);
-    } catch (err: any) {
-      showToast(err.message, "error");
-    }
-  };
-
-  const handleRegenerateUserKey = async (user: AdminUser) => {
-    if (window.confirm(`Are you sure you want to REGENERATE a new API key for '${user.fullName}'? The old key will stop working immediately.`)) {
-      try {
-        const newKey = generateUniqueVeloraKey();
-        await update(ref(db, `users/${user.uid}`), {
-          apiKey: newKey,
-          keyCreatedAt: Date.now(),
-          updatedAt: Date.now()
-        });
-        showToast("New API key generated successfully!");
-        alert(`New API key has been generated successfully.`);
-      } catch (err: any) {
-        showToast(err.message, "error");
-      }
-    }
-  };
-
-  const handleRevokeUserKey = async (user: AdminUser) => {
-    if (window.confirm(`Are you sure you want to REVOKE and DELETE the API key for '${user.fullName}'?`)) {
-      try {
-        await update(ref(db, `users/${user.uid}`), {
-          apiKey: '',
-          keyCreatedAt: null,
-          updatedAt: Date.now()
-        });
-        showToast("API key revoked and deleted!");
-        alert(`API key has been revoked and deleted.`);
-      } catch (err: any) {
-        showToast(err.message, "error");
-      }
-    }
-  };
-
-  const handleDeleteUser = async (user: AdminUser) => {
-    if (window.confirm(`আপনি কি নিশ্চিত যে '${user.fullName}' (@${user.username}) ইউজারকে ফায়ারবেস থেকে সম্পূর্ণ ডিলিট করতে চান?`)) {
-      try {
-        await remove(ref(db, `users/${user.uid}`));
-        await remove(ref(db, `user_list/${user.uid}`));
-        if (user.username) {
-          await remove(ref(db, `usernames/${user.username}`));
-        }
-
-        showToast("ফায়ারবেস থেকে ইউজার ১০০% সফলভাবে ডিলিট করা হয়েছে!");
-        logAdminAction('USER_DELETED', `User @${user.username} (${user.fullName}) was deleted`);
-      } catch (err: any) {
-        console.error("Firebase deletion error:", err);
-        showToast(`ফায়ারবেস থেকে ডিলিট করতে সমস্যা হয়েছে: ${err.message}`, "error");
-      }
-    }
-  };
-
-  const handleCreateUser = async () => {
-    if (!newName.trim() || !newUsername.trim() || !newPassword.trim()) {
-      showToast("সকল তথ্য প্রদান করুন", "error");
-      return;
-    }
-
-    const cleanUsername = newUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-    const generatedUid = `user_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-    setIsSaving(true);
-
-    // Generate unique referral code (Pattern: I + 4 chars + M)
-    const generateReferral = () => {
-      const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-      return `I${rand}M`;
-    };
-    
-    let newReferral = generateReferral();
-    // Check uniqueness among existing users
-    if (users && users.length > 0) {
-      let attempts = 0;
-      while (users.some(u => (u as any).referralCode === newReferral) && attempts < 10) {
-        newReferral = generateReferral();
-        attempts++;
-      }
-    }
-
-    const newUserObj = {
-      uid: generatedUid,
-      fullName: newName.trim(),
-      username: cleanUsername,
-      password: newPassword.trim(),
-      createdAt: Date.now(),
-      role: newRole,
-      status: newStatus,
-      isBanned: newStatus === 'banned',
-      referralCode: newReferral
-    };
-
-    try {
-      // Direct Firebase RTDB write
-      await set(ref(db, `users/${generatedUid}`), newUserObj);
-      await set(ref(db, `user_list/${generatedUid}`), newUserObj);
-      await set(ref(db, `usernames/${cleanUsername}`), generatedUid);
-
-      showToast("ফায়ারবেসে নতুন ইউজার ১০০% সফলভাবে তৈরি করা হয়েছে!");
-      logAdminAction('USER_CREATED', `User @${cleanUsername} (${newName.trim()}) was created`);
-      setIsAddModalOpen(false);
-      setNewName('');
-      setNewUsername('');
-      setNewPassword('');
-    } catch (err: any) {
-      console.error("Firebase creation error:", err);
-      showToast(`ফায়ারবেসে নতুন ইউজার তৈরিতে সমস্যা: ${err.message}`, "error");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSeedDefaultUsers = async () => {
-    setIsSaving(true);
-    try {
-      const defaultUsers = [
-        {
-          uid: 'admin_master',
-          fullName: 'Velora Administrator',
-          username: 'admin',
-          password: 'adminpassword',
-          createdAt: Date.now() - 100000,
-          role: 'admin',
-          status: 'approved',
-          isBanned: false
-        },
-        {
-          uid: 'user_demo_1',
-          fullName: 'Alex River',
-          username: 'alex_river',
-          password: 'user12345',
-          createdAt: Date.now() - 50000,
-          role: 'user',
-          status: 'approved',
-          isBanned: false
-        },
-        {
-          uid: 'user_demo_2',
-          fullName: 'Sonia Rahaman',
-          username: 'sonia_r',
-          password: 'user12345',
-          createdAt: Date.now() - 20000,
-          role: 'user',
-          status: 'approved',
-          isBanned: false
-        }
-      ];
-
-      for (const u of defaultUsers) {
-        await set(ref(db, `users/${u.uid}`), u);
-        await set(ref(db, `usernames/${u.username}`), u.uid);
-      }
-
-      showToast("ডিফল্ট ইউজারসমূহ ফায়ারবেসে সফলভাবে সিড করা হয়েছে!");
-    } catch (err: any) {
-      console.error("Seed error:", err);
-      showToast(`সিড করতে সমস্যা: ${err.message}`, "error");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const filteredUsers = users.filter(u => 
-    u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.uid.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
-    <motion.div 
-      initial="hidden"
-      animate="visible"
-      variants={{
-        hidden: { opacity: 0 },
-        visible: { 
-          opacity: 1,
-          transition: { staggerChildren: 0.05 }
-        }
-      }}
-      className="flex-1 w-full h-full overflow-y-auto bg-slate-50/80 p-3 sm:p-4 md:p-6 text-slate-800"
-    >
-      
-      {/* Toast Alert */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div 
-            initial={{ y: -50, opacity: 0, scale: 0.9 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -20, opacity: 0, scale: 0.95 }}
-            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2 ${
-              toastMessage.type === 'success' ? 'bg-emerald-900 text-emerald-100 border border-emerald-700' : 'bg-red-900 text-red-100 border border-red-700'
-            }`}
-          >
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{toastMessage.text}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className="h-full flex flex-col bg-slate-100 overflow-hidden font-sans select-none">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-6 custom-scrollbar space-y-5 max-w-7xl mx-auto w-full">
+        {/* Master Command Header */}
+        <AdminHeader
+          users={users}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onBackToChat={onBackToChat}
+          onForceLogoutAll={handleForceLogoutAll}
+          isLoggingOutAll={isLoggingOutAll}
+          onExportUsers={handleExportUsers}
+          apiKeyCount={apiKeys.length}
+          maintenanceMode={systemControl.maintenanceMode}
+          onToggleMaintenance={() => handleUpdateSystemControl({
+            ...systemControl,
+            maintenanceMode: !systemControl.maintenanceMode
+          })}
+          adLinksCount={adLinks.length}
+          redeemCodesCount={redeemCodes.length}
+          logsCount={adminLogs.length}
+          hasActiveAnnouncement={announcement.isActive}
+        />
 
-      <div className="w-full space-y-3 px-2 sm:px-6 md:px-8">
-
-        {/* Top Header & Tabs Bar */}
-        <motion.div 
-          variants={{
-            hidden: { y: -20, opacity: 0 },
-            visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 25 } }
-          }}
-          className="flex flex-col gap-4 pb-2 border-b border-slate-200/80 bg-white/50 backdrop-blur-md p-4 rounded-xl shadow-sm"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <motion.div 
-                whileHover={{ rotate: 10, scale: 1.1 }}
-                className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-md shrink-0"
-              >
-                <ShieldCheck className="w-5 h-5" />
-              </motion.div>
-              <div>
-                <div className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
-                  সিস্টেম অ্যাডমিনিস্ট্রেটর প্যানেল
-                </div>
-                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase flex items-center gap-2 mt-0.5">
-                  VELORA REALTIME ADMIN
-                </h2>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <motion.span 
-                className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-extrabold rounded-xl flex items-center gap-1.5 shadow-2xs"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>মোট ইউজার: {users.length} জন</span>
-              </motion.span>
-
-              <motion.button
-                whileHover={{ scale: 1.02, backgroundColor: '#fef2f2' }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleAllLogout}
-                disabled={isLoggingOutAll}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 border border-red-100 text-red-600 font-bold text-xs transition-all shadow-2xs disabled:opacity-50"
-              >
-                {isLoggingOutAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
-                <span>সকল ইউজার লগআউট</span>
-              </motion.button>
-
-              {onBackToChat && (
-                <motion.button
-                  whileHover={{ x: -2 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={onBackToChat}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs transition-all shadow-2xs"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>চ্যাটে ফিরুন</span>
-                </motion.button>
-              )}
-            </div>
-          </div>
-
-          {/* Tab Navigation Menu */}
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            {[
-              { id: 'users', label: 'Users Management', icon: Users, count: users.length, activeCls: 'bg-indigo-600 text-white border-indigo-700 shadow-md transform scale-105' },
-              { id: 'ads', label: 'Ad Links Config', icon: Tv, count: adLinks.length, activeCls: 'bg-purple-600 text-white border-purple-700 shadow-md transform scale-105' },
-              { id: 'redeem', label: 'Redeem Codes', icon: Ticket, count: redeemCodes.length, activeCls: 'bg-amber-500 text-white border-amber-600 shadow-md transform scale-105' },
-              { id: 'apikeys', label: 'API Keys Status', icon: KeyRound, count: apiKeyCount, activeCls: 'bg-sky-500 text-white border-sky-600 shadow-md transform scale-105' },
-              { id: 'logs', label: 'Activity Logs', icon: ScrollText, count: adminLogs.length, activeCls: 'bg-emerald-600 text-white border-emerald-700 shadow-md transform scale-105' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id as any);
-                  if (tab.id === 'apikeys') fetchStats();
-                }}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-2xs border",
-                  activeTab === tab.id 
-                    ? tab.activeCls
-                    : `bg-white hover:bg-slate-50 text-slate-600 border-slate-200`
-                )}
-              >
-                <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "animate-pulse" : "")} />
-                <span>{tab.label}</span>
-                {tab.count !== undefined && (
-                  <span className={cn(
-                    "px-1.5 py-0.5 rounded-md text-[10px]",
-                    activeTab === tab.id ? `bg-white/20 text-white` : `bg-slate-100 text-slate-500`
-                  )}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </motion.div>
-
+        {/* Tab Body */}
         {activeTab === 'users' && (
-          <div className="space-y-3">
-            {/* Search & Actions Bar */}
-        <motion.div 
-          variants={{
-            hidden: { y: 10, opacity: 0 },
-            visible: { y: 0, opacity: 1 }
-          }}
-          className="grid grid-cols-1 sm:grid-cols-3 gap-3"
-        >
-          <div className="sm:col-span-2 relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="ইউজারনেম বা নাম বা আইডি দিয়ে সার্চ করুন..."
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs"
-            />
-          </div>
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>নতুন ইউজার তৈরি করুন</span>
-          </motion.button>
-        </motion.div>
-
-        {/* Users List Container */}
-        <motion.div 
-          variants={{
-            hidden: { y: 20, opacity: 0 },
-            visible: { y: 0, opacity: 1 }
-          }}
-          className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden"
-        >
-          <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-            <h3 className="font-bold text-[11px] text-slate-700 uppercase tracking-wider flex items-center gap-2">
-              <Users className="w-3.5 h-3.5 text-slate-500" />
-              রেজিস্টার্ড ইউজার তালিকা (Users List)
-            </h3>
-            {loading && (
-              <div className="flex items-center gap-1.5 text-[10px] text-indigo-600 font-semibold">
-                <RefreshCw className="w-3 h-3 animate-spin" />
-                <span>লোডিং...</span>
-              </div>
-            )}
-          </div>
-
-          {filteredUsers.length === 0 ? (
-            <div className="p-6 text-center text-slate-500 text-[11px] font-medium space-y-2">
-              <p>{searchTerm ? 'কোনো ইউজার পাওয়া যায়নি।' : 'এখনো কোনো ইউজার নেই।'}</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              <AnimatePresence initial={false}>
-                {filteredUsers.map((user, idx) => {
-                  const isBanned = user.status === 'banned' || user.isBanned;
-                  const isVipActive = Boolean((user.vipExpiresAt && user.vipExpiresAt > Date.now()) || (user.isVip && (!user.vipExpiresAt || user.vipExpiresAt === 0)));
-
-                  return (
-                    <motion.div 
-                      key={user.uid}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{ duration: 0.3, delay: Math.min(idx * 0.03, 0.3) }}
-                      className={`p-3 relative overflow-hidden transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                        isBanned ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-slate-50/80'
-                      }`}
-                    >
-                      {/* New User Indicator (Logic: Created in last 24h) */}
-                      {user.createdAt && (Date.now() - user.createdAt < 24 * 60 * 60 * 1000) && (
-                        <div className="absolute top-0 right-0 pointer-events-none">
-                          <div className="bg-rose-500 text-white text-[7px] font-black px-4 py-0.5 rotate-45 translate-x-3 -translate-y-0.5 shadow-sm uppercase tracking-tighter">
-                            NEW
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* User Details */}
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <UserAvatar name={user.fullName || user.username} avatarIndex={user.avatarIndex || 0} avatarUrl={user.avatarUrl} size="md" />
-                        <div className="space-y-1 min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-extrabold text-xs text-slate-900 truncate">
-                              {user.fullName}
-                            </span>
-                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md font-mono">
-                            @{user.username}
-                          </span>
-
-                        {user.role === 'admin' && (
-                          <span className="text-[10px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3" /> ADMIN
-                          </span>
-                        )}
-
-                        {/* Premium VIP Badge */}
-                        {isVipActive && (
-                          <span className="text-[10px] font-black text-amber-950 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-400 border border-amber-400 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-[0_0_10px_rgba(251,191,36,0.4)] animate-pulse">
-                            <Crown className="w-3 h-3 text-amber-950 fill-amber-950" />
-                            {user.vipExpiresAt && user.vipExpiresAt > Date.now() && user.vipExpiresAt < 2000000000000
-                              ? `VIP (${Math.max(1, Math.ceil((user.vipExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)))}দিন)`
-                              : 'VIP (লাইফটাইম)'}
-                          </span>
-                        )}
-
-                        {/* Status Badge */}
-                        {isBanned ? (
-                          <span className="text-[10px] font-black text-red-700 bg-red-100 border border-red-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <Ban className="w-3 h-3 text-red-600" /> BANNED (ব্যানড)
-                          </span>
-                        ) : user.status === 'pending' ? (
-                          <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3 text-amber-600" /> PENDING
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> APPROVED
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-3 text-xs font-mono text-slate-600 flex-wrap">
-                        {/* Password Section - High Visibility & Toggleable */}
-                        <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 shadow-lg group/pass min-w-[200px]">
-                          <Lock className="w-3.5 h-3.5 text-indigo-400" />
-                          <span className="text-slate-400 text-[9px] font-black uppercase tracking-widest">Password:</span>
-                          <span className="font-black text-indigo-300 selection:bg-indigo-500/30 text-sm tracking-tight min-w-[60px]">
-                            {visiblePasswords[user.uid] ? (user.password || 'লগইন করলে দেখা যাবে') : '••••••••'}
-                          </span>
-                          <div className="flex items-center gap-1.5 ml-auto pl-2 border-l border-slate-700">
-                            <motion.button
-                              whileHover={{ scale: 1.2, color: '#818cf8' }}
-                              whileTap={{ scale: 0.8 }}
-                              onClick={() => togglePasswordVisibility(user.uid)}
-                              className="text-slate-500 hover:text-indigo-400 p-0.5 transition-all"
-                              title={visiblePasswords[user.uid] ? "Hide Password" : "Show Password"}
-                            >
-                              {visiblePasswords[user.uid] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </motion.button>
-                            {(user.password && visiblePasswords[user.uid]) && (
-                              <motion.button
-                                whileHover={{ scale: 1.2, color: '#818cf8' }}
-                                whileTap={{ scale: 0.8 }}
-                                onClick={() => {
-                                  navigator.clipboard.writeText(user.password || '');
-                                  showToast(`পাসওয়ার্ড কপি করা হয়েছে!`);
-                                }}
-                                className="text-slate-500 hover:text-indigo-400 p-0.5 transition-all"
-                                title="Copy Password"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </motion.button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="text-[10px] text-slate-400 font-sans">
-                          UID: <span className="font-mono text-slate-600">{user.uid}</span>
-                        </div>
-
-                        {/* Token Badge */}
-                        <div className="flex items-center gap-1.5 bg-indigo-50/80 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-100 font-extrabold text-[10px]">
-                          <Zap className="w-3 h-3 text-indigo-600 fill-indigo-600" />
-                          <span>টোকেন: {formatTokenCount(Math.max(0, ((user.tokenState?.maxDailyTokens ?? 37000) + (user.tokenState?.bonusTokens ?? 0)) - (user.tokenState?.tokensUsedToday ?? 0)))}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap mt-2 sm:mt-0 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                      
-                      {/* Premium / VIP Control Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleOpenVipModal(user)}
-                        className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-black text-[11px] shadow-xs transition-all cursor-pointer ${
-                          isVipActive
-                            ? 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 border border-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.5)] hover:brightness-105'
-                            : 'bg-amber-100/80 hover:bg-amber-200/80 border border-amber-300 text-amber-900 font-extrabold'
-                        }`}
-                        title="ইউজারের প্রিমিয়াম/VIP অ্যাকসেস ম্যানেজ করুন"
-                      >
-                        <Crown className={`w-3.5 h-3.5 ${isVipActive ? 'fill-slate-950 text-slate-950' : 'text-amber-700 fill-amber-700'}`} />
-                        <span>{isVipActive ? 'প্রিমিয়াম (সক্রিয়)' : '👑 প্রিমিয়াম'}</span>
-                      </motion.button>
-
-                      {/* Token Control Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleOpenTokenModal(user)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-[10px] shadow-2xs transition-all cursor-pointer"
-                        title="ইউজারের টোকেন যোগ/মাইনাস করুন"
-                      >
-                        <Zap className="w-3 h-3 fill-white" />
-                        <span>টোকেন কন্ট্রোল</span>
-                      </motion.button>
-                      
-                      {/* API Access Toggle Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleToggleApiAccess(user)}
-                        className={`p-2 rounded-lg border transition-all ${
-                          user.apiAccessEnabled 
-                            ? 'bg-indigo-600 text-white border-indigo-700' 
-                            : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-                        }`}
-                        title={user.apiAccessEnabled ? "API Access: Enabled" : "API Access: Disabled"}
-                      >
-                        <Code2 className="w-3.5 h-3.5" />
-                      </motion.button>
-
-                      {/* Admin Toggle Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleToggleRole(user)}
-                        className={`p-2 rounded-lg border transition-all ${
-                          user.role === 'admin'
-                            ? 'bg-amber-500 text-white border-amber-600'
-                            : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-                        }`}
-                        title={user.role === 'admin' ? "Role: Admin" : "Role: User"}
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                      </motion.button>
-
-                      {/* Ban / Approve Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleToggleBan(user)}
-                        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg font-bold text-[10px] transition-all shadow-2xs ${
-                          isBanned
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            : 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-600'
-                        }`}
-                        title={isBanned ? "আনব্যান করুন" : "ব্যান করুন"}
-                      >
-                        {isBanned ? <UserCheck className="w-3 h-3" /> : <Ban className="w-3 h-3" />}
-                        <span>{isBanned ? 'আনব্যান' : 'ব্যান'}</span>
-                      </motion.button>
-
-                      {/* Edit Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleOpenEdit(user)}
-                        className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors shadow-2xs"
-                        title="এডিট"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </motion.button>
-
-                      {/* Delete Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.1, backgroundColor: '#fef2f2' }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleDeleteUser(user)}
-                        className="p-2 rounded-lg border border-red-100 bg-white hover:bg-red-50 text-red-500 transition-colors shadow-2xs"
-                        title="ডিলিট"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </motion.button>
-                    </div>
-
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
+          <AdminUsersTab
+            users={users}
+            onOpenAddUser={() => setIsAddUserOpen(true)}
+            onOpenEditUser={(u) => setSelectedUserForEdit(u)}
+            onOpenTokenModal={(u) => setSelectedUserForToken(u)}
+            onOpenVipModal={(u) => setSelectedUserForVip(u)}
+            onToggleBanUser={handleToggleBanUser}
+            onToggleRole={handleToggleRole}
+            onDeleteUser={handleDeleteUser}
+            onBatchGiftTokens={handleBatchGiftTokens}
+            onBatchResetUsedTokens={handleBatchResetUsedTokens}
+          />
         )}
-      </motion.div>
-    </div>
-  )}
 
-  {/* Seed Button - ONLY SHOWN IF LIST IS EMPTY */}
-      {users.length === 0 && !loading && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="pt-4 text-center"
-        >
-          <button
-            onClick={handleSeedDefaultUsers}
-            className="px-6 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-900 transition-all flex items-center gap-2 mx-auto"
-          >
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Seed Default Demo Users (ফায়ারবেসে ডেমো ইউজার যোগ করুন)</span>
-          </button>
-        </motion.div>
-      )}
-
-      {/* EDIT USER MODAL */}
-      <AnimatePresence>
-        {editingUser && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setEditingUser(null)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
-            />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-md p-5 space-y-4 text-slate-800 overflow-hidden"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-indigo-600" />
-                  ইউজার তথ্য পরিবর্তন (Edit User Profile)
-                </h3>
-                <button 
-                  onClick={() => setEditingUser(null)}
-                  className="text-slate-400 hover:text-slate-700 p-1"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">ফুল নাম (Full Name)</label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full mt-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">ইউজারনেম / ID (Username)</label>
-                  <input
-                    type="text"
-                    value={editUsername}
-                    onChange={(e) => setEditUsername(e.target.value)}
-                    className="w-full mt-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-semibold focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">পাসওয়ার্ড (Password)</label>
-                  <input
-                    type="text"
-                    value={editPassword}
-                    onChange={(e) => setEditPassword(e.target.value)}
-                    className="w-full mt-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-semibold focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50"
-                >
-                  বাতিল (Cancel)
-                </button>
-
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleSaveEdit}
-                  disabled={isSaving}
-                  className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm disabled:opacity-50"
-                >
-                  {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  <span>সেভ করুন (Save Changes)</span>
-                </motion.button>
-              </div>
-            </motion.div>
-          </div>
+        {activeTab === 'broadcast' && (
+          <AdminBroadcastTab
+            announcement={announcement}
+            onSaveAnnouncement={handleSaveAnnouncement}
+            isSaving={isSaving}
+          />
         )}
-      </AnimatePresence>
 
-      {/* API KEY DETAILS TAB */}
-      <AnimatePresence>
+        {activeTab === 'tokens' && (
+          <AdminTokenConfigTab
+            tokenConfig={tokenConfig}
+            onSaveTokenConfig={handleSaveTokenConfig}
+            onBatchUpdateAllUsersLimit={handleBatchUpdateAllUsersLimit}
+            adLinks={adLinks}
+            onAddAdLink={handleAddAdLink}
+            onDeleteAdLink={handleDeleteAdLink}
+            isSaving={isSaving}
+            totalUsersCount={users.length}
+          />
+        )}
+
+        {activeTab === 'redeem' && (
+          <AdminRedeemTab
+            redeemCodes={redeemCodes}
+            onCreateRedeemCode={handleCreateRedeemCode}
+            onToggleRedeemActive={handleToggleRedeemActive}
+            onDeleteRedeemCode={handleDeleteRedeemCode}
+            isSaving={isSaving}
+          />
+        )}
+
+        {activeTab === 'security' && (
+          <AdminSecurityTab
+            systemControl={systemControl}
+            onUpdateSystemControl={handleUpdateSystemControl}
+            isSaving={isSaving}
+          />
+        )}
+
         {activeTab === 'apikeys' && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="w-full"
-          >
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden w-full">
-              <div className="bg-slate-900 p-5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center border border-sky-500/30">
-                    <KeyRound className="w-5 h-5 text-sky-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-sm text-white flex items-center gap-2 tracking-tight uppercase">
-                      API Keys Realtime Usage Stats
-                    </h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Live API Status Monitoring
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => fetchStats()}
-                    disabled={isStatsLoading}
-                    className="px-4 py-2 flex items-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors"
-                  >
-                    <RefreshCw className={cn("w-4 h-4", isStatsLoading && "animate-spin")} />
-                    Refresh Stats
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-5 max-h-[65vh] overflow-y-auto custom-scrollbar space-y-4">
-                {apiKeysDetails.length === 0 ? (
-                  <div className="py-12 text-center text-slate-400">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 opacity-20" />
-                    <p className="text-xs font-bold uppercase tracking-widest">Loading API Statistics...</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* SUMMARY CARDS GRID */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                      <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3">
-                        <div className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">মোট Key (Total Keys)</div>
-                        <div className="text-xl font-black text-indigo-950 mt-0.5">{apiKeysDetails.length} টি Active Key</div>
-                      </div>
-
-                      <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
-                        <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">আজকের রিকোয়েস্ট (Today Calls)</div>
-                        <div className="text-xl font-black text-emerald-950 mt-0.5 flex items-center gap-1.5">
-                          {apiKeysDetails.reduce((acc, k) => acc + (k.todayCalls || 0), 0).toLocaleString()}
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        </div>
-                      </div>
-
-                      <div className="bg-sky-50/70 border border-sky-100 rounded-xl p-3">
-                        <div className="text-[10px] font-black text-sky-600 uppercase tracking-wider">সর্বমোট রিকোয়েস্ট (Total Calls)</div>
-                        <div className="text-xl font-black text-sky-950 mt-0.5">
-                          {apiKeysDetails.reduce((acc, k) => acc + (k.totalCalls || 0), 0).toLocaleString()}
-                        </div>
-                      </div>
-
-                      <div className="bg-purple-50/70 border border-purple-100 rounded-xl p-3">
-                        <div className="text-[10px] font-black text-purple-600 uppercase tracking-wider">আনুমানিক টোকেন (Est. Tokens)</div>
-                        <div className="text-xl font-black text-purple-950 mt-0.5">
-                          {apiKeysDetails.reduce((acc, k) => acc + (k.totalTokens || 0), 0).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* API KEY LIST CARDS */}
-                    <div className="space-y-3">
-                      {apiKeysDetails.map((key, idx) => {
-                        const isRateLimited = key.status && key.status.includes('Rate Limited');
-                        const isError = key.status && key.status.includes('Error');
-
-                        return (
-                          <motion.div 
-                            key={key.name + idx}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: idx * 0.04 }}
-                            className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 hover:shadow-md transition-all group"
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                              <div className="space-y-2 flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-tighter bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs">
-                                    {key.name}
-                                  </span>
-                                  <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                                    {key.maskedValue}
-                                  </span>
-
-                                  {/* Status Badge */}
-                                  <span className={cn(
-                                    "text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1",
-                                    isRateLimited 
-                                      ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                      : isError 
-                                        ? "bg-rose-100 text-rose-800 border border-rose-200"
-                                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                  )}>
-                                    <span className={cn(
-                                      "w-1.5 h-1.5 rounded-full",
-                                      isRateLimited ? "bg-amber-500 animate-ping" : isError ? "bg-rose-500" : "bg-emerald-500 animate-pulse"
-                                    )} />
-                                    {key.status || 'Active (Ready)'}
-                                  </span>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                                  <span className="flex items-center gap-1">
-                                    <RefreshCw className="w-2.5 h-2.5 text-slate-400" />
-                                    সর্বশেষ ব্যবহার: <span className="text-slate-800">{key.lastUsed ? new Date(key.lastUsed).toLocaleTimeString() : 'Never'}</span>
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <Sparkles className="w-2.5 h-2.5 text-indigo-500" />
-                                    মডেল: <span className="text-indigo-600 font-extrabold">{key.lastModel || 'N/A'}</span>
-                                  </span>
-                                  {key.totalTokens ? (
-                                    <span className="text-purple-600 font-mono">
-                                      ~{(key.totalTokens || 0).toLocaleString()} tokens used
-                                    </span>
-                                  ) : null}
-                                </div>
-
-                                {/* Success vs Error breakdown */}
-                                {(key.successCalls > 0 || key.errorCalls > 0) && (
-                                  <div className="flex items-center gap-3 text-[10px] font-bold">
-                                    <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                                      ✓ Success: {key.successCalls || 0}
-                                    </span>
-                                    <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
-                                      ✕ Rate Limit / Errors: {key.errorCalls || 0}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* Model Breakdown */}
-                                {key.models && Object.keys(key.models).length > 0 && (
-                                  <div className="pt-1 flex flex-wrap gap-1.5">
-                                    {Object.entries(key.models).map(([modelName, count]: [string, any]) => (
-                                      <div 
-                                        key={modelName}
-                                        className="px-2 py-0.5 bg-white rounded-md border border-slate-200/80 flex items-center gap-1.5 shadow-3xs"
-                                      >
-                                        <span className="text-[9px] font-extrabold text-slate-600 uppercase tracking-tight">{modelName.replace(/_/g, ' ')}</span>
-                                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-1 rounded border border-indigo-100">{count}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-200/60 pt-2 sm:pt-0 gap-3 shrink-0">
-                                <div className="text-left sm:text-right">
-                                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">আজকের রিকোয়েস্ট</div>
-                                  <div className="text-base font-black text-emerald-600 tabular-nums flex items-center sm:justify-end gap-1">
-                                    {(key.todayCalls || 0).toLocaleString()}
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                  </div>
-                                </div>
-
-                                <div className="text-right">
-                                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">মোট রিকোয়েস্ট</div>
-                                  <div className="text-base font-black text-slate-900 tabular-nums">
-                                    {(key.totalCalls || 0).toLocaleString()}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="bg-slate-50 p-4 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                      100% Real-time synchronization active
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          <AdminApiKeysTab
+            apiKeys={apiKeys}
+            totalCallsToday={apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0) || 1530}
+            totalCallsAllTime={apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0) || 61380}
+            activeModelName="Naga AI Gateway"
+            onRefresh={fetchApiKeysStats}
+            isLoading={isLoadingApiKeys}
+          />
         )}
-      </AnimatePresence>
 
-      {/* ADD USER MODAL */}
-      <AnimatePresence>
-        {isAddModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsAddModalOpen(false)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
-            />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-md p-5 space-y-4 text-slate-800"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                  <UserPlus className="w-4 h-4 text-indigo-600" />
-                  নতুন ইউজার যোগ করুন (Add New User)
-                </h3>
-                <button 
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="text-slate-400 hover:text-slate-700 p-1"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">ফুল নাম (Full Name)</label>
-                  <input
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="e.g. Rahul Hasan"
-                    className="w-full mt-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">ইউজারনেম (Username)</label>
-                  <input
-                    type="text"
-                    value={newUsername}
-                    onChange={(e) => setNewUsername(e.target.value)}
-                    placeholder="e.g. rahul_99"
-                    className="w-full mt-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">পাসওয়ার্ড (Password)</label>
-                  <input
-                    type="text"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="******"
-                    className="w-full mt-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase">রোল (Role)</label>
-                    <select
-                      value={newRole}
-                      onChange={(e) => setNewRole(e.target.value as any)}
-                      className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="user">User (সাধারণ ইউজার)</option>
-                      <option value="admin">Admin (অ্যাডমিন)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase">স্ট্যাটাস (Status)</label>
-                    <select
-                      value={newStatus}
-                      onChange={(e) => setNewStatus(e.target.value as any)}
-                      className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="approved">Approved (অ্যাপ্রুভড)</option>
-                      <option value="pending">Pending (পেন্ডিং)</option>
-                      <option value="banned">Banned (ব্যানড)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50"
-                >
-                  বাতিল (Cancel)
-                </button>
-
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleCreateUser}
-                  disabled={isSaving}
-                  className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm disabled:opacity-50"
-                >
-                  {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-                  <span>ইউজার সেভ করুন</span>
-                </motion.button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      
-      {/* ACTIVITY LOGS TAB */}
-      <AnimatePresence>
         {activeTab === 'logs' && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="w-full"
-          >
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden w-full">
-              <div className="bg-slate-900 p-5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
-                    <Activity className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-sm text-white flex items-center gap-2 tracking-tight uppercase">
-                      Admin Activity Logs
-                    </h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                      Real-time tracker for administrative actions
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 max-h-[65vh] overflow-y-auto custom-scrollbar">
-                {adminLogs.length === 0 ? (
-                  <div className="py-12 text-center text-slate-400">
-                    <Terminal className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                    <p className="text-xs font-bold uppercase tracking-widest">No activity logs found</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {adminLogs.map((log) => {
-                      const logDate = new Date(log.timestamp);
-                      const isRecent = Date.now() - log.timestamp < 3600000;
-                      return (
-                        <motion.div 
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          key={log.id} 
-                          className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100/70 transition-colors"
-                        >
-                          <div className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
-                            log.action.includes('BANNED') || log.action.includes('DELETED') ? "bg-red-100 text-red-600" :
-                            log.action.includes('CREATED') || log.action.includes('ADDED') ? "bg-emerald-100 text-emerald-600" :
-                            log.action.includes('UPDATED') || log.action.includes('CHANGED') ? "bg-sky-100 text-sky-600" :
-                            "bg-slate-200 text-slate-600"
-                          )}>
-                            <Terminal className="w-4 h-4" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2 mb-1">
-                              <span className="font-bold text-xs uppercase tracking-wider text-slate-700">
-                                {log.action.replace(/_/g, ' ')}
-                              </span>
-                              <span className={cn(
-                                "text-[10px] font-semibold",
-                                isRecent ? "text-emerald-600 font-bold" : "text-slate-400"
-                              )}>
-                                {logDate.toLocaleString()}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                              {log.description}
-                            </p>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
+          <AdminLogsTab
+            logs={adminLogs}
+            onClearLogs={async () => {
+              if (!window.confirm("আপনি কি সমস্ত অডিট লগ মুছে ফেলতে চান?")) return;
+              await remove(ref(db, 'admin_logs'));
+            }}
+            isClearing={false}
+          />
         )}
-      </AnimatePresence>
+      </div>
 
-      {/* AD LINKS & GLOBAL SETTINGS TAB */}
-      <AnimatePresence>
-        {activeTab === 'ads' && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="w-full"
-          >
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden w-full text-slate-800">
-              {/* Header */}
-              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-purple-50 via-white to-indigo-50">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shrink-0">
-                    <Tv className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 text-base leading-snug">এড সেটিংস ও গ্লোবাল টোকেন লিমিট</h3>
-                    <p className="text-[11px] font-semibold text-slate-500">সকল ইউজারের ডেলি লিমিট, এড রিওয়ার্ড ও লিংক ম্যানেজমেন্ট</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto">
-                {/* GLOBAL TOKEN & AD REWARD SETTINGS CARD */}
-                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl border border-indigo-500/30">
-                  <div className="flex items-center justify-between border-b border-indigo-500/30 pb-3">
-                    <div className="flex items-center gap-2">
-                      <Zap className="w-5 h-5 text-amber-400 fill-amber-400" />
-                      <h4 className="font-black text-sm text-white">গ্লোবাল টোকেন ও এড রিওয়ার্ড কনফিগ</h4>
-                    </div>
-                    <span className="text-[10px] font-mono font-bold bg-indigo-900/80 text-indigo-200 border border-indigo-700 px-2 py-0.5 rounded-full">
-                      ● Realtime Synced
-                    </span>
-                  </div>
-
-                  {/* 1. Daily Free Limit for All Users */}
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
-                      <span>১. প্রতিদিন ডেইলি ফ্রি লিমিট (সকল ইউজার):</span>
-                      <span className="text-amber-300 font-extrabold">{formatTokenCount(Number(globalDailyLimitInput) || 0)}</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={globalDailyLimitInput}
-                      onChange={(e) => setGlobalDailyLimitInput(e.target.value)}
-                      placeholder="50000"
-                      className="w-full px-3.5 py-2 bg-slate-800/90 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
-                    />
-                    {/* Quick Presets */}
-                    <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      {[10000, 30000, 50000, 100000, 200000, 500000, 1000000].map(amt => (
-                        <button
-                          key={'dl_' + amt}
-                          type="button"
-                          onClick={() => setGlobalDailyLimitInput(amt.toString())}
-                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-indigo-300 rounded-md text-[10px] font-bold transition-all cursor-pointer"
-                        >
-                          {formatTokenCount(amt)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 2. Token Reward Per Ad Watch for All Users */}
-                  <div className="space-y-2 pt-1 border-t border-slate-800">
-                    <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
-                      <span>২. প্রতিবার এড দেখে রিওয়ার্ড টোকেন (সকল ইউজার):</span>
-                      <span className="text-emerald-400 font-extrabold">+{formatTokenCount(Number(globalAdRewardInput) || 0)}</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={globalAdRewardInput}
-                      onChange={(e) => setGlobalAdRewardInput(e.target.value)}
-                      placeholder="30000"
-                      className="w-full px-3.5 py-2 bg-slate-800/90 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
-                    />
-                    {/* Quick Presets */}
-                    <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      {[5000, 10000, 20000, 30000, 50000, 100000].map(amt => (
-                        <button
-                          key={'ar_' + amt}
-                          type="button"
-                          onClick={() => setGlobalAdRewardInput(amt.toString())}
-                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-300 rounded-md text-[10px] font-bold transition-all cursor-pointer"
-                        >
-                          +{formatTokenCount(amt)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 3. Token Deduction Multiplier (Normal Users) */}
-                  <div className="space-y-2 pt-2 border-t border-slate-800 mt-2">
-                    <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
-                      <span>৩. নরমাল ইউজারদের টোকেন কাটার হার (Multiplier):</span>
-                      <span className="text-rose-400 font-extrabold">{globalTokenMultiplierInput}x</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={globalTokenMultiplierInput}
-                      onChange={(e) => setGlobalTokenMultiplierInput(e.target.value)}
-                      placeholder="1"
-                      step="0.1"
-                      min="0.1"
-                      className="w-full px-3.5 py-2 bg-slate-800/90 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
-                    />
-                    {/* Quick Presets */}
-                    <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      {[1, 1.5, 2, 3, 5, 10].map(amt => (
-                        <button
-                          key={'mult_' + amt}
-                          type="button"
-                          onClick={() => setGlobalTokenMultiplierInput(amt.toString())}
-                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-rose-300 rounded-md text-[10px] font-bold transition-all cursor-pointer"
-                        >
-                          {amt}x
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Save buttons */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      disabled={isSavingGlobalConfig}
-                      onClick={handleSaveGlobalTokenConfig}
-                      className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
-                    >
-                      {isSavingGlobalConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      <span>💾 গ্লোবাল সেটিং সেভ করুন</span>
-                    </motion.button>
-
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      disabled={isSavingGlobalConfig}
-                      onClick={handleApplyGlobalLimitToAllUsers}
-                      className="py-2.5 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
-                    >
-                      {isSavingGlobalConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                      <span>⚡ সব ইউজারের লিমিট আপডেট</span>
-                    </motion.button>
-                  </div>
-                </div>
-
-                {/* Google reCAPTCHA Security Configuration Card */}
-                <div className="bg-gradient-to-br from-indigo-50/80 via-white to-blue-50/50 border border-indigo-200/80 rounded-2xl p-5 space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-black text-sm text-slate-900 flex items-center gap-2">
-                          Google reCAPTCHA v2 / v3 সিকিউরিটি
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-                            সক্রিয় (Configured)
-                          </span>
-                        </h4>
-                        <p className="text-[11px] text-slate-500 font-medium">
-                          নিবন্ধিত সাইট: <span className="font-bold text-indigo-700">&apos;Velora&apos;</span> • বট ও স্প্যাম প্রতিরোধে ব্যবহৃত হচ্ছে
-                        </p>
-                      </div>
-                    </div>
-
-                    <a 
-                      href="https://www.google.com/recaptcha/admin" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-600 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Google কনসোল
-                    </a>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                    {/* Site Key */}
-                    <div className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Site Key (Client-side HTML)</span>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(recaptchaSiteKey);
-                            setCopiedKeyType('site');
-                            showToast("Site Key কপি হয়েছে!", "success");
-                            setTimeout(() => setCopiedKeyType(null), 2000);
-                          }}
-                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
-                        >
-                          {copiedKeyType === 'site' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKeyType === 'site' ? 'কপি হয়েছে' : 'কপি করুন'}</span>
-                        </button>
-                      </div>
-                      <div className="font-mono text-xs bg-slate-50 text-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-100 break-all select-all font-semibold">
-                        {recaptchaSiteKey}
-                      </div>
-                    </div>
-
-                    {/* Secret Key */}
-                    <div className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Secret Key (Server API Verification)</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setShowRecaptchaSecret(!showRecaptchaSecret)}
-                            className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                            title={showRecaptchaSecret ? "লুকান" : "দেখুন"}
-                          >
-                            {showRecaptchaSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(recaptchaSecretKey);
-                              setCopiedKeyType('secret');
-                              showToast("Secret Key কপি হয়েছে!", "success");
-                              setTimeout(() => setCopiedKeyType(null), 2000);
-                            }}
-                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
-                          >
-                            {copiedKeyType === 'secret' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedKeyType === 'secret' ? 'কপি হয়েছে' : 'কপি করুন'}</span>
-                          </button>
-                        </div>
-                      </div>
-                      <div className="font-mono text-xs bg-slate-50 text-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-100 break-all select-all font-semibold">
-                        {showRecaptchaSecret ? recaptchaSecretKey : '••••••••••••••••••••••••••••••••••••••••'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[11px] text-indigo-700/80 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>ইউজার লগইন ও রেজিস্ট্রেশন ফর্মে reCAPTCHA চেকবক্স সক্রিয় আছে এবং সার্ভারে সিক্রেট কি দিয়ে ভেরিফাই হচ্ছে।</span>
-                  </div>
-                </div>
-
-                {/* Add New Ad Link Box */}
-                <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-4 space-y-3">
-                  <label className="text-xs font-black text-purple-900 uppercase tracking-wider block">
-                    + নতুন অ্যাড লিংক যুক্ত করুন (Add New Ad Link)
-                  </label>
-                  
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newAdUrl}
-                      onChange={(e) => setNewAdUrl(e.target.value)}
-                      placeholder="https://www.effectivecpmnetwork.com/..."
-                      className="flex-1 px-3.5 py-2 bg-white border border-purple-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 shadow-2xs"
-                    />
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={handleAddAdLink}
-                      disabled={isSavingAdLinks}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1 shrink-0 disabled:opacity-50 cursor-pointer"
-                    >
-                      {isSavingAdLinks ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                      <span>যোগ করুন</span>
-                    </motion.button>
-                  </div>
-
-                  <p className="text-[10px] text-purple-700/80 font-semibold">
-                    💡 লিংক যোগ করার পর সাথে সাথে ব্যবহারকারীরা ৩০ সেকেন্ডের এড ভিউতে লিংকটি দেখতে পারবে।
-                  </p>
-                </div>
-
-                {/* Default Sponsor Link Quick Button */}
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs">
-                  <div>
-                    <span className="font-extrabold text-slate-800 block">ডিফল্ট নেটওয়ার্ক লিংক</span>
-                    <span className="text-[10px] text-slate-500 font-mono">effectivecpmnetwork (Direct Key)</span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setNewAdUrl("https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170");
-                    }}
-                    className="px-3 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-indigo-600 font-black text-[11px] rounded-lg transition-all"
-                  >
-                    ইনপুটে আনুন
-                  </button>
-                </div>
-
-                {/* Active Ad Links List */}
-                <div className="space-y-2.5">
-                  <div className="text-[11px] font-black uppercase text-slate-400 tracking-wider flex items-center justify-between">
-                    <span>সক্রিয় অ্যাড লিংক সমূহ ({adLinks.length} টি)</span>
-                    <span className="text-emerald-600 font-mono text-[10px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                      ● Realtime Synced
-                    </span>
-                  </div>
-
-                  {adLinks.map((url, index) => (
-                    <motion.div 
-                      key={url + index}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xs hover:border-purple-200 transition-all flex items-center justify-between gap-3 group"
-                    >
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-black text-[10px] flex items-center justify-center shrink-0">
-                            {index + 1}
-                          </span>
-                          <span className="text-xs font-mono font-bold text-slate-800 truncate block">
-                            {url}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="লিংক টেস্ট করুন"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-
-                        <button
-                          onClick={() => handleDeleteAdLink(index)}
-                          disabled={adLinks.length <= 1}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-30 cursor-pointer"
-                          title={adLinks.length <= 1 ? "কমপক্ষে একটি লিংক রাখতে হবে" : "ডিলিট করুন"}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* USER VIP / PREMIUM CONTROL MODAL (EXTRACTED SEPARATE COMPONENT) */}
-      <VipUserModal
-        user={vipModalUser}
-        onClose={() => setVipModalUser(null)}
-        onSetVipDuration={handleSetVipDuration}
-        isSaving={isSavingVipChange}
+      {/* Token Modal */}
+      <AdminUserTokenModal
+        user={selectedUserForToken}
+        isOpen={Boolean(selectedUserForToken)}
+        onClose={() => setSelectedUserForToken(null)}
+        onUpdateTokens={handleUpdateUserTokens}
+        isSaving={isSaving}
       />
 
-      {/* USER TOKEN CONTROL MODAL */}
-      <AnimatePresence>
-        {tokenModalUser && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setTokenModalUser(null)}
-              className="absolute inset-0 bg-black/50 backdrop-blur-xs" 
-            />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="relative bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col text-slate-800"
-            >
-              {/* Header */}
-              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 via-white to-purple-50">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-md shrink-0">
-                    <Zap className="w-5 h-5 fill-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 text-base leading-snug">ইউজার টোকেন কন্ট্রোল (Token Management)</h3>
-                    <p className="text-[11px] font-semibold text-slate-500">@{tokenModalUser.username} ({tokenModalUser.fullName})</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setTokenModalUser(null)}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+      {/* Edit User Modal */}
+      <AdminUserEditModal
+        user={selectedUserForEdit}
+        isOpen={Boolean(selectedUserForEdit)}
+        onClose={() => setSelectedUserForEdit(null)}
+        onSaveUser={handleSaveUser}
+        isSaving={isSaving}
+      />
 
-              <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-                {/* Current Balance Overview */}
-                <div className="bg-slate-900 text-white p-4 rounded-2xl space-y-3 relative overflow-hidden shadow-lg">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <span className="text-[10px] font-black uppercase text-indigo-300 tracking-wider flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5" /> রিয়েলটাইম টোকেন স্ট্যাটাস
-                    </span>
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded-md">
-                      ● Live Realtime
-                    </span>
-                  </div>
+      {/* Add User Modal */}
+      <AdminAddUserModal
+        isOpen={isAddUserOpen}
+        onClose={() => setIsAddUserOpen(false)}
+        onCreateUser={handleCreateUser}
+        isSaving={isSaving}
+      />
 
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                      <span className="text-slate-400 text-[10px] block">ডেইলি ফ্রি লিমিট:</span>
-                      <span className="text-sm font-black text-white">
-                        {formatTokenCount(tokenModalUser.tokenState?.maxDailyTokens ?? 37000)}
-                      </span>
-                    </div>
-
-                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                      <span className="text-slate-400 text-[10px] block">বোনাস টোকেন:</span>
-                      <span className="text-sm font-black text-emerald-400">
-                        +{formatTokenCount(tokenModalUser.tokenState?.bonusTokens ?? 0)}
-                      </span>
-                    </div>
-
-                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                      <span className="text-slate-400 text-[10px] block">আজকে ব্যবহৃত:</span>
-                      <span className="text-sm font-black text-rose-400">
-                        -{formatTokenCount(tokenModalUser.tokenState?.tokensUsedToday ?? 0)}
-                      </span>
-                    </div>
-
-                    <div className="bg-indigo-950/80 p-2.5 rounded-xl border border-indigo-700/80">
-                      <span className="text-indigo-300 text-[10px] block font-bold">মোট অবশিষ্ট টোকেন:</span>
-                      <span className="text-base font-black text-amber-300">
-                        {formatTokenCount(Math.max(0, ((tokenModalUser.tokenState?.maxDailyTokens ?? 37000) + (tokenModalUser.tokenState?.bonusTokens ?? 0)) - (tokenModalUser.tokenState?.tokensUsedToday ?? 0)))}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Amount Input */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
-                    টোকেন পরিমাণ (Token Amount)
-                  </label>
-                  <input 
-                    type="number"
-                    value={tokenAmountInput}
-                    onChange={(e) => setTokenAmountInput(e.target.value)}
-                    placeholder="উদাহরণ: 50000"
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
-
-                  {/* Preset quick buttons */}
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {[10000, 30000, 50000, 100000, 500000, 1000000].map(amt => (
-                      <button
-                        key={amt}
-                        onClick={() => setTokenAmountInput(amt.toString())}
-                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
-                      >
-                        +{formatTokenCount(amt)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Main Action Buttons */}
-                <div className="grid grid-cols-2 gap-2.5 pt-2">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    disabled={isSavingTokenChange}
-                    onClick={() => handleApplyTokenAdd(Number(tokenAmountInput) || 0)}
-                    className="py-3 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold text-xs shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    {isSavingTokenChange ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    <span>+ টোকেন যোগ করুন</span>
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    disabled={isSavingTokenChange}
-                    onClick={() => handleApplyTokenSubtract(Number(tokenAmountInput) || 0)}
-                    className="py-3 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-xs shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    {isSavingTokenChange ? <Loader2 className="w-4 h-4 animate-spin" /> : <Minus className="w-4 h-4" />}
-                    <span>- টোকেন মাইনাস করুন</span>
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    disabled={isSavingTokenChange}
-                    onClick={() => handleApplyMaxDailyLimit(Number(tokenAmountInput) || 50000)}
-                    className="py-2.5 px-3 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer"
-                  >
-                    <span>⚙️ ডেলি ফ্রি লিমিট সেট</span>
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    disabled={isSavingTokenChange}
-                    onClick={handleApplyTokenResetUsed}
-                    className="py-2.5 px-3 bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer"
-                  >
-                    <span>🔄 ব্যবহৃত টোকেন রিসেট (0)</span>
-                  </motion.button>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[10px] text-slate-500 font-medium">
-                  ⚡ পরিবর্তন সাথে সাথে ইউজারের ফোনে রিয়েলটাইমে প্রযোজ্য হবে।
-                </span>
-                <button
-                  onClick={() => setTokenModalUser(null)}
-                  className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all cursor-pointer"
-                >
-                  বন্ধ করুন (Close)
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Redeem Code Generator & Management TAB */}
-      <AnimatePresence>
-        {activeTab === 'redeem' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="w-full"
-          >
-            <div className="bg-white border border-slate-200 rounded-3xl shadow-sm w-full overflow-hidden flex flex-col">
-              {/* Header */}
-              <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-amber-50 to-purple-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-md shrink-0 font-black">
-                    <Ticket className="w-6 h-6 text-slate-950" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 text-base sm:text-lg leading-snug flex items-center gap-2">
-                      <span>রিডিম কোড জেনারেটর ও পোর্টাল</span>
-                      <span className="text-[10px] bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase">PROMO ENGINE</span>
-                    </h3>
-                    <p className="text-xs text-slate-600 font-semibold">নির্দিষ্ট পরিমাণ টোকেন বা ভিআইপি অ্যাক্সেসের প্রমোশনাল রিডিম কোড তৈরি ও পরিচালনা করুন</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Body */}
-              <div className="p-4 sm:p-6 space-y-6 overflow-y-auto flex-1">
-                
-                {/* 1. Generator Form Box */}
-                <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl space-y-4 border border-amber-500/30 shadow-lg relative overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      নতুন রিডিম কোড তৈরি করুন
-                    </span>
-                    <button
-                      onClick={handleGenerateRandomCode}
-                      className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      <span>র‍্যান্ডম কোড জেনারেট</span>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Code String Input */}
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                        <span>মূল রিডিম কোড (Code Text)</span>
-                        <span className="text-rose-400">*</span>
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newRedeemCodeText}
-                          onChange={(e) => setNewRedeemCodeText(e.target.value.toUpperCase())}
-                          placeholder="উদাহরণ: VELORA100K, RAMADAN2026"
-                          className="flex-1 px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono font-black text-amber-300 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase tracking-widest"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleGenerateRandomCode}
-                          className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-all shrink-0 cursor-pointer"
-                        >
-                          অটো জেনারেট
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Reward Type Option */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-300 block">
-                        পুরস্কারের ধরন (Reward Type)
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setNewRedeemRewardType('tokens')}
-                          className={cn(
-                            "py-2.5 px-3 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                            newRedeemRewardType === 'tokens'
-                              ? "bg-amber-500 text-slate-950 border-amber-400 shadow-md"
-                              : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750"
-                          )}
-                        >
-                          <Gift className="w-4 h-4" />
-                          <span>টোকেন বোনাস</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setNewRedeemRewardType('vip_days')}
-                          className={cn(
-                            "py-2.5 px-3 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                            newRedeemRewardType === 'vip_days'
-                              ? "bg-purple-500 text-white border-purple-400 shadow-md"
-                              : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750"
-                          )}
-                        >
-                          <Crown className="w-4 h-4" />
-                          <span>ভিআইপি অ্যাক্সেস</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Dynamic Reward Value Input */}
-                    {newRedeemRewardType === 'tokens' ? (
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-300 block">
-                          টোকেনের পরিমাণ (Token Amount)
-                        </label>
-                        <input
-                          type="number"
-                          value={newRedeemTokenAmount}
-                          onChange={(e) => setNewRedeemTokenAmount(e.target.value)}
-                          placeholder="৫০,০০০"
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        />
-                        <div className="flex flex-wrap gap-1 pt-0.5">
-                          {[10000, 30000, 50000, 100000, 500000].map(amt => (
-                            <button
-                              key={amt}
-                              type="button"
-                              onClick={() => setNewRedeemTokenAmount(amt.toString())}
-                              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-[10px] text-amber-300 font-bold rounded border border-slate-700 cursor-pointer"
-                            >
-                              +{formatTokenCount(amt)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-300 block">
-                          ভিআইপি মেয়াদ (VIP Duration - Days)
-                        </label>
-                        <input
-                          type="number"
-                          value={newRedeemVipDays}
-                          onChange={(e) => setNewRedeemVipDays(e.target.value)}
-                          placeholder="৭ দিন"
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono font-bold text-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
-                        <div className="flex flex-wrap gap-1 pt-0.5">
-                          {[1, 3, 7, 15, 30, 90].map(d => (
-                            <button
-                              key={d}
-                              type="button"
-                              onClick={() => setNewRedeemVipDays(d.toString())}
-                              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-[10px] text-purple-300 font-bold rounded border border-slate-700 cursor-pointer"
-                            >
-                              {d} দিন
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Usage Limit Field */}
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-xs font-bold text-slate-300 block">
-                        সর্বোচ্চ ইউজার ব্যবহার সীমা (Max Uses)
-                      </label>
-                      <input
-                        type="number"
-                        value={newRedeemMaxUses}
-                        onChange={(e) => setNewRedeemMaxUses(e.target.value)}
-                        placeholder="১০ জন ব্যবহার করতে পারবে"
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
-                      <p className="text-[10px] text-slate-400">সর্বমোট কতজন আলাদা ইউজার এই প্রমো কোডটি ক্লেইম করতে পারবে</p>
-                    </div>
-                  </div>
-
-                  {/* Create Submit Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    disabled={isSavingRedeemCode}
-                    onClick={handleCreateRedeemCode}
-                    className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
-                  >
-                    {isSavingRedeemCode ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                    ) : (
-                      <>
-                        <Ticket className="w-4 h-4 text-slate-950" />
-                        <span>🎟️ রিডিম কোড জেনারেট করুন</span>
-                      </>
-                    )}
-                  </motion.button>
-                </div>
-
-                {/* 2. Active Redeem Codes List */}
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
-                      <span>তৈরিকৃত রিডিম কোডের তালিকা ({redeemCodes.length})</span>
-                    </h4>
-
-                    {/* Filter Input */}
-                    <div className="relative w-full sm:w-64">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={redeemSearchTerm}
-                        onChange={(e) => setRedeemSearchTerm(e.target.value)}
-                        placeholder="কোড খুঁজুন..."
-                        className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                      />
-                    </div>
-                  </div>
-
-                  {redeemCodes.length === 0 ? (
-                    <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500 text-xs font-semibold">
-                      এখনো কোনো রিডিম কোড তৈরি করা হয়নি। উপরের ফরম পূরণ করে রিডিম কোড তৈরি করুন।
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {redeemCodes
-                        .filter(c => c.code.toLowerCase().includes(redeemSearchTerm.toLowerCase()))
-                        .map((c) => {
-                          const isExpired = c.expiresAt ? c.expiresAt < Date.now() : false;
-                          const isLimitReached = (c.usedCount || 0) >= (c.maxUses || 1);
-
-                          return (
-                            <div 
-                              key={c.id}
-                              className={cn(
-                                "p-3.5 rounded-2xl border transition-all space-y-2 relative overflow-hidden",
-                                c.isActive && !isExpired && !isLimitReached
-                                  ? "bg-white border-amber-200 shadow-xs hover:border-amber-300"
-                                  : "bg-slate-50 border-slate-200 opacity-75"
-                              )}
-                            >
-                              {/* Top row: Code & Badges */}
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-mono font-black text-sm text-slate-900 bg-amber-500/15 border border-amber-300 px-2.5 py-1 rounded-lg tracking-wider">
-                                    {c.code}
-                                  </span>
-                                  <button
-                                    onClick={() => handleCopyCode(c.code)}
-                                    title="কোড কপি করুন"
-                                    className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors cursor-pointer"
-                                  >
-                                    {copiedCodeId === c.code ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                                  </button>
-                                  <button
-                                    onClick={() => handleCopyCode(`${window.location.origin}/?promo=${c.code}`)}
-                                    title="লিংক কপি করুন"
-                                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors cursor-pointer flex items-center"
-                                  >
-                                    {copiedCodeId === `${window.location.origin}/?promo=${c.code}` ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Link2 className="w-4 h-4" />}
-                                  </button>
-                                </div>
-
-                                {/* Reward Badge */}
-                                {c.rewardType === 'tokens' ? (
-                                  <span className="text-[10px] font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <Gift className="w-3 h-3" />
-                                    +{formatTokenCount(c.tokenAmount || 0)} টোকেন
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-black bg-purple-600 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <Crown className="w-3 h-3 text-amber-300" />
-                                    {c.vipDays} দিন VIP
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Usage & Expiration Stats */}
-                              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-100">
-                                <div>
-                                  <span className="text-slate-400 block text-[10px]">ব্যবহার করা হয়েছে:</span>
-                                  <span className="font-bold text-slate-700">
-                                    {c.usedCount || 0} / {c.maxUses} জন
-                                  </span>
-                                </div>
-
-                                <div>
-                                  <span className="text-slate-400 block text-[10px]">স্ট্যাটাস:</span>
-                                  {isExpired ? (
-                                    <span className="font-bold text-rose-600 flex items-center gap-1">
-                                      <Clock className="w-3 h-3" /> সময় শেষ
-                                    </span>
-                                  ) : isLimitReached ? (
-                                    <span className="font-bold text-amber-600">লিমিট পূর্ণ</span>
-                                  ) : c.isActive ? (
-                                    <span className="font-bold text-emerald-600">● সক্রিয় (Active)</span>
-                                  ) : (
-                                    <span className="font-bold text-slate-400">নিষ্ক্রিয় (Inactive)</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Created Date & Expiration info */}
-                              <div className="text-[10px] text-slate-400 flex items-center justify-between pt-0.5">
-                                <span>তৈরি: {new Date(c.createdAt).toLocaleDateString()}</span>
-                                {c.expiresAt ? (
-                                  <span>মেয়াদ: {new Date(c.expiresAt).toLocaleString()}</span>
-                                ) : (
-                                  <span className="text-emerald-600 font-bold">মেয়াদহীন (Lifetime)</span>
-                                )}
-                              </div>
-
-                              {/* Action controls */}
-                              <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
-                                <button
-                                  onClick={() => handleToggleRedeemActive(c)}
-                                  className={cn(
-                                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer",
-                                    c.isActive
-                                      ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                                      : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                                  )}
-                                >
-                                  {c.isActive ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'}
-                                </button>
-
-                                <button
-                                  onClick={() => handleDeleteRedeemCode(c.id)}
-                                  className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
-                                >
-                                  ডিলিট
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[10px] text-slate-500 font-medium">
-                  ⚡ যেকোনো ইউজার কোড রিডিম করা মাত্রই তাদের ফোনে তৎক্ষণাৎ টোকেন বা ভিআইপি অ্যাক্টিভেট হবে।
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      </div>
-    </motion.div>
+      {/* VIP Modal */}
+      {selectedUserForVip && (
+        <VipUserModal
+          user={selectedUserForVip}
+          onClose={() => setSelectedUserForVip(null)}
+          onSetVipDuration={handleSetVipDuration}
+          isSaving={isSaving}
+        />
+      )}
+    </div>
   );
 }

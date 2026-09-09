@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Menu, LogOut, ArrowLeft, User, Sparkles, BrainCircuit, Crown } from 'lucide-react';
 import { Chat, Message, UserProfile, TokenState } from './types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -25,6 +25,41 @@ const defaultTokenState: TokenState = {
   tokensUsedToday: 0,
   lastResetDate: getTodayStr(),
   adsWatchedToday: 0
+};
+
+// Ensure chat data conforms cleanly to Firebase RTDB without undefined fields
+const sanitizeChatsForDb = (chatList: Chat[]): any[] => {
+  if (!Array.isArray(chatList)) return [];
+  return chatList.map(chat => {
+    const cleanChat: any = {
+      id: chat.id || crypto.randomUUID(),
+      title: chat.title || 'New Chat',
+      updatedAt: typeof chat.updatedAt === 'number' ? chat.updatedAt : Date.now(),
+      messages: (chat.messages || []).map(m => {
+        const msg: any = {
+          id: m.id || crypto.randomUUID(),
+          role: m.role || 'user',
+          text: typeof m.text === 'string' ? m.text : '',
+          timestamp: typeof m.timestamp === 'number' ? m.timestamp : Date.now(),
+        };
+        if (m.thinking) msg.thinking = m.thinking;
+        if (m.attachments && Array.isArray(m.attachments) && m.attachments.length > 0) {
+          msg.attachments = m.attachments.map(att => {
+            const cleanAtt: any = {
+              id: att.id || crypto.randomUUID(),
+              type: att.type || 'file',
+              url: att.url || '',
+              name: att.name || 'attachment'
+            };
+            if (att.mimeType) cleanAtt.mimeType = att.mimeType;
+            return cleanAtt;
+          });
+        }
+        return msg;
+      })
+    };
+    return cleanChat;
+  });
 };
 
 export default function App() {
@@ -65,6 +100,8 @@ export default function App() {
   }, []);
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const activeUserUidRef = useRef<string | null>(null);
+  const isInitialChatSyncDoneRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [adLinks, setAdLinks] = useState<string[]>([
     "https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"
@@ -306,16 +343,30 @@ export default function App() {
 
   // Monitor Firebase Authentication state
   useEffect(() => {
+    let unsubscribeUserRef = () => {};
+    let unsubscribeChatsRef = () => {};
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // Clean up previous listeners
+      unsubscribeUserRef();
+      unsubscribeChatsRef();
+
       setUser(currentUser);
+
       if (currentUser) {
+        activeUserUidRef.current = currentUser.uid;
+        isInitialChatSyncDoneRef.current = null;
+
         // Local storage cache keys per user
         const localProfileKey = `velora-profile-${currentUser.uid}`;
         const localChatsKey = `velora-chats-${currentUser.uid}`;
         const localTokensKey = `velora-tokens-${currentUser.uid}`;
         const todayStr = getTodayStr();
 
-        // Load local fallback tokens
+        // 1. Immediately reset active chat view to prevent bleed-through
+        setCurrentChatId(null);
+
+        // 2. Load local fallback tokens
         const cachedTokens = localStorage.getItem(localTokensKey);
         if (cachedTokens) {
           try {
@@ -348,7 +399,7 @@ export default function App() {
           });
         }
 
-        // Load local fallback profile data
+        // 3. Load local fallback profile data
         const cachedProfile = localStorage.getItem(localProfileKey);
         const fallbackName = currentUser.email ? currentUser.email.split('@')[0] : 'User';
         let parsedProfile = null;
@@ -371,49 +422,76 @@ export default function App() {
         
         const defaultProfile: UserProfile = parsedProfile ? parsedProfile : {
           uid: currentUser.uid,
+          email: currentUser.email || `${fallbackName}@velora.app`,
           fullName: fallbackName,
           username: fallbackName,
           createdAt: Date.now()
         };
         setUserProfile(defaultProfile);
 
+        // 4. Load local chats cache first for instant UI response
         const cachedChats = localStorage.getItem(localChatsKey);
         if (cachedChats) {
           try {
             let parsedChats = JSON.parse(cachedChats);
-          if (Array.isArray(parsedChats)) {
-            const seenChats = new Set();
-            parsedChats = parsedChats.map(chat => {
-              if (!chat.messages) return chat;
-              if (seenChats.has(chat.id)) {
-                chat = { ...chat, id: crypto.randomUUID() };
-              }
-              seenChats.add(chat.id);
-              
-              const seen = new Set();
-              const newMessages = chat.messages.map(m => {
-                if (seen.has(m.id)) {
-                  return { ...m, id: crypto.randomUUID() };
-                }
-                seen.add(m.id);
-                return m;
-              });
-              return { ...chat, messages: newMessages };
-            });
-            setChats(parsedChats);
-          } else {
-            setChats(parsedChats);
-          }
+            if (Array.isArray(parsedChats)) {
+              setChats(parsedChats);
+            }
           } catch (e) {
             console.warn("Local chat cache parse warning:", e);
           }
+        } else {
+          setChats([]);
         }
 
-        // Fetch User Profile and subscribe to Realtime ban status
-        let unsubscribeUserRef = () => {};
+        // 5. Connect to Firebase Realtime Database for Cloud Chats (100% cloud sync per account)
+        try {
+          const userChatsRef = ref(db, `user_chats/${currentUser.uid}`);
+          unsubscribeChatsRef = onValue(userChatsRef, (snapshot) => {
+            if (activeUserUidRef.current !== currentUser.uid) return;
+
+            if (snapshot.exists()) {
+              const val = snapshot.val();
+              let cloudChats: Chat[] = [];
+              if (Array.isArray(val)) {
+                cloudChats = val;
+              } else if (typeof val === 'object' && val !== null) {
+                cloudChats = Object.values(val);
+              }
+              const seen = new Set();
+              const cleanCloudChats = cloudChats.filter(c => {
+                if (!c || !c.id || seen.has(c.id)) return false;
+                seen.add(c.id);
+                return true;
+              }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+              setChats(cleanCloudChats);
+              localStorage.setItem(localChatsKey, JSON.stringify(cleanCloudChats));
+              isInitialChatSyncDoneRef.current = currentUser.uid;
+            } else {
+              // Cloud is empty for this user. If local cache has chats, backup to cloud!
+              const localSaved = localStorage.getItem(localChatsKey);
+              if (localSaved) {
+                try {
+                  const parsed = JSON.parse(localSaved);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    const sanitized = sanitizeChatsForDb(parsed);
+                    set(userChatsRef, sanitized).catch(console.warn);
+                  }
+                } catch (err) {}
+              }
+              isInitialChatSyncDoneRef.current = currentUser.uid;
+            }
+          });
+        } catch (chatErr) {
+          console.warn("Error subscribing to user_chats:", chatErr);
+        }
+
+        // 6. Connect to User Profile in RTDB
         try {
           const userRef = ref(db, `users/${currentUser.uid}`);
           unsubscribeUserRef = onValue(userRef, async (snapshot) => {
+            if (activeUserUidRef.current !== currentUser.uid) return;
             if (snapshot.exists()) {
               const prof = snapshot.val();
               if (prof.status === 'banned' || prof.isBanned === true) {
@@ -474,6 +552,7 @@ export default function App() {
               const cleanUsername = currentUser.email ? currentUser.email.split('@')[0] : currentUser.uid;
               const initialProf: UserProfile = {
                 uid: currentUser.uid,
+                email: currentUser.email || `${cleanUsername}@velora.app`,
                 fullName: cleanUsername === 'admin' ? 'Velora Admin' : cleanUsername,
                 username: cleanUsername,
                 password: '',
@@ -497,13 +576,11 @@ export default function App() {
           console.warn("DB profile access notice (using local profile):", e);
         }
 
-        // Firebase chats sync removed. Relying entirely on localStorage.
         setAuthLoading(false);
-
-        return () => {
-          unsubscribeUserRef();
-        };
       } else {
+        activeUserUidRef.current = null;
+        isInitialChatSyncDoneRef.current = null;
+        setUser(null);
         setUserProfile(null);
         setChats([]);
         setCurrentChatId(null);
@@ -511,7 +588,11 @@ export default function App() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubscribeUserRef();
+      unsubscribeChatsRef();
+    };
   }, []);
 
   // Global Force Logout Listener
@@ -534,10 +615,22 @@ export default function App() {
     return () => unsubscribe();
   }, [user, userProfile]);
 
-  // Sync chats to localStorage per user
+  // Sync chats to localStorage and Firebase Realtime Database per user (100% account dedicated)
   useEffect(() => {
-    if (user) {
-      localStorage.setItem(`velora-chats-${user.uid}`, JSON.stringify(chats));
+    if (user && isInitialChatSyncDoneRef.current === user.uid && activeUserUidRef.current === user.uid) {
+      const localChatsKey = `velora-chats-${user.uid}`;
+      localStorage.setItem(localChatsKey, JSON.stringify(chats));
+
+      const timer = setTimeout(() => {
+        if (activeUserUidRef.current === user.uid) {
+          const sanitized = sanitizeChatsForDb(chats);
+          set(ref(db, `user_chats/${user.uid}`), sanitized.length > 0 ? sanitized : null).catch((e) => {
+            console.warn("Firebase chats cloud sync warning:", e);
+          });
+        }
+      }, 350);
+
+      return () => clearTimeout(timer);
     }
   }, [chats, user]);
 
@@ -548,6 +641,12 @@ export default function App() {
 
   const handleSignOut = async () => {
     try {
+      activeUserUidRef.current = null;
+      isInitialChatSyncDoneRef.current = null;
+      setChats([]);
+      setCurrentChatId(null);
+      setUserProfile(null);
+      setUser(null);
       await signOut(auth);
       setIsSidebarOpen(false);
     } catch (e) {
@@ -969,13 +1068,16 @@ export default function App() {
   };
 
   const handleDeleteChat = async (id: string) => {
-    setChats(prev => prev.filter(c => c.id !== id));
+    const updatedChats = chats.filter(c => c.id !== id);
+    setChats(updatedChats);
     if (currentChatId === id) {
       setCurrentChatId(null);
     }
     if (!user) return;
     try {
-      /* LocalStorage handles it */
+      localStorage.setItem(`velora-chats-${user.uid}`, JSON.stringify(updatedChats));
+      const sanitized = sanitizeChatsForDb(updatedChats);
+      await set(ref(db, `user_chats/${user.uid}`), sanitized.length > 0 ? sanitized : null);
     } catch (e) {
       console.error("Failed to delete chat:", e);
     }
@@ -983,13 +1085,13 @@ export default function App() {
 
   const handleClearAllChats = async () => {
     if (chats.length === 0) return;
-    if (window.confirm("আপনি কি নিশ্চিত যে পূর্বে তৈরি করা সকল চ্যাট মুছে ফেলতে চান?")) {
+    if (window.confirm("আপনি কি নিশ্চিত যে আপনার এই অ্যাকাউন্টের সকল চ্যাট মুছে ফেলতে চান?")) {
       setChats([]);
       setCurrentChatId(null);
       if (user) {
         localStorage.removeItem(`velora-chats-${user.uid}`);
         try {
-          /* LocalStorage handles it */
+          await set(ref(db, `user_chats/${user.uid}`), null);
         } catch (e) {
           console.error("Failed to clear all chats:", e);
         }

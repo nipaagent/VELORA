@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Lock, User, UserCheck, Sparkles, Loader2, LogIn, UserPlus, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, UserCheck, Sparkles, Loader2, LogIn, UserPlus, AlertCircle, ShieldCheck } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { ref, get, set, update } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
 import { Gift } from 'lucide-react';
-import RecaptchaWidget from './RecaptchaWidget';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -21,7 +20,6 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recaptchaToken, setRecaptchaToken] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -55,10 +53,31 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
     e.preventDefault();
     setError('');
 
-    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-    if (!cleanUsername || cleanUsername.length < 3) {
-      setError('Username must be at least 3 characters using letters, numbers or underscores.');
+    const rawInput = username.trim().toLowerCase();
+    if (!rawInput) {
+      setError('ইউজারনেম বা জিমেইল লিখুন।');
       return;
+    }
+
+    const isEmailInput = rawInput.includes('@');
+    let cleanEmail = '';
+    let cleanUsername = '';
+
+    if (isEmailInput) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawInput)) {
+        setError('অনুগ্রহ করে একটি সঠিক ইমেইল বা জিমেইল ঠিকানা দিন।');
+        return;
+      }
+      cleanEmail = rawInput;
+      const base = rawInput.split('@')[0].replace(/[^a-z0-9_]/g, '');
+      cleanUsername = base.length >= 3 ? base : `${base}_user`;
+    } else {
+      cleanUsername = rawInput.replace(/[^a-z0-9_]/g, '');
+      if (!cleanUsername || cleanUsername.length < 3) {
+        setError('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে (ইংরেজি অক্ষর, সংখ্যা বা আন্ডারস্কোর)।');
+        return;
+      }
+      cleanEmail = `${cleanUsername}@velora.app`;
     }
 
     const cleanPassword = password.trim();
@@ -75,39 +94,9 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
       }
     }
 
-    if (!recaptchaToken) {
-      setError("দয়া করে reCAPTCHA ভেরিফিকেশন (I'm not a robot) সম্পন্ন করুন।");
-      return;
-    }
-
-    const email = `${cleanUsername}@velora.app`;
-
     setLoading(true);
 
     try {
-      // Verify reCAPTCHA token with backend
-      try {
-        if (!recaptchaToken.startsWith('manual-verified-')) {
-          const verifyRes = await fetch('/api/verify-recaptcha', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: recaptchaToken })
-          });
-          const verifyData = await verifyRes.json();
-          if (verifyData && verifyData.success === false) {
-            // Only if it's explicitly duplicate or expired
-            if (verifyData['error-codes']?.includes('timeout-or-duplicate')) {
-              setError('reCAPTCHA ভেরিফিকেশন এর মেয়াদ শেষ হয়েছে। পুনরায় বক্সে টিক দিন বা নিচের বাটনে ক্লিক করুন।');
-              setRecaptchaToken('');
-              setLoading(false);
-              return;
-            }
-          }
-        }
-      } catch (captchaErr) {
-        console.warn('reCAPTCHA verification warning (handled):', captchaErr);
-      }
-
       if (isSignUp) {
         if (!fullName.trim()) {
           setError('Please enter your full name.');
@@ -116,15 +105,23 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
         }
 
         // Check if username exists before creating user
-        const usernameRef = await get(ref(db, `usernames/${cleanUsername}`));
-        if (usernameRef.exists()) {
-          setError("এই ইউজারনেমটি আগে থেকেই অন্য কেউ ব্যবহার করছে। নতুন ইউজারনেম দিন।");
-          setLoading(false);
-          return;
+        if (!isEmailInput) {
+          const usernameRef = await get(ref(db, `usernames/${cleanUsername}`));
+          if (usernameRef.exists()) {
+            setError("এই ইউজারনেমটি আগে থেকেই অন্য কেউ ব্যবহার করছে। নতুন ইউজারনেম দিন।");
+            setLoading(false);
+            return;
+          }
+        } else {
+          // If signup via real email, adjust username if collision exists
+          const usernameRef = await get(ref(db, `usernames/${cleanUsername}`));
+          if (usernameRef.exists()) {
+            cleanUsername = `${cleanUsername}_${Math.floor(100 + Math.random() * 900)}`;
+          }
         }
 
-        // Create Firebase Auth User first (Firebase Auth will check if email/username is already in use)
-        const userCredential = await createUserWithEmailAndPassword(auth, email, cleanPassword);
+        // Create Firebase Auth User first
+        const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPassword);
         const uid = userCredential.user.uid;
 
         // Referral logic
@@ -168,9 +165,10 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
         const initialBonus = referrerUid ? 100000 : 0;
         const vipExpiresAt = referrerUid ? Date.now() + (24 * 60 * 60 * 1000) : undefined;
 
-        // Now authenticated, save user profile
+        // Save isolated user profile with email and uid
         const newUserProfile = {
           uid,
+          email: cleanEmail,
           fullName: fullName.trim(),
           username: cleanUsername,
           password: cleanPassword,
@@ -228,8 +226,30 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
         }
 
       } else {
-        // Sign In
-        const userCredential = await signInWithEmailAndPassword(auth, email, cleanPassword);
+        // Sign In (Supports Email/Gmail directly or Username)
+        let userCredential;
+        try {
+          userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+        } catch (initialErr: any) {
+          // If entered username directly, check if the username is registered with an email
+          if (!isEmailInput) {
+            const usernameSnap = await get(ref(db, `usernames/${cleanUsername}`));
+            if (usernameSnap.exists()) {
+              const mappedUid = usernameSnap.val();
+              const userSnap = await get(ref(db, `users/${mappedUid}`));
+              if (userSnap.exists() && userSnap.val().email) {
+                userCredential = await signInWithEmailAndPassword(auth, userSnap.val().email, cleanPassword);
+              } else {
+                throw initialErr;
+              }
+            } else {
+              throw initialErr;
+            }
+          } else {
+            throw initialErr;
+          }
+        }
+
         const uid = userCredential.user.uid;
         
         // Save last login timestamp for force logout logic
@@ -243,9 +263,9 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
     } catch (err: any) {
       console.error("Auth error:", err);
       if (err.code === 'auth/email-already-in-use') {
-        setError('এই ইউজারনেমটি আগে থেকেই অন্য কেউ ব্যবহার করছে। নতুন ইউজারনেম দিন।');
+        setError('এই ইউজারনেম বা জিমেইলটি আগে থেকেই ব্যবহৃত হচ্ছে। অনুগ্রহ করে লগইন করুন অথবা অন্য জিমেইল দিন।');
       } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('Invalid username or password.');
+        setError('ভুল ইউজারনেম/জিমেইল অথবা পাসওয়ার্ড।');
       } else {
         setError(err.message || 'Authentication error. Please try again.');
       }
@@ -358,7 +378,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
             </AnimatePresence>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username or Gmail (ইউজারনেম বা জিমেইল)</label>
               <div className="relative group">
                 <UserCheck className="w-4 h-4 text-slate-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-indigo-600" />
                 <input
@@ -366,7 +386,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))}
-                  placeholder="e.g. alex_john"
+                  placeholder="e.g. alex_john or name@gmail.com"
                   className="w-full pl-11 pr-4 py-3 text-sm bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-medium placeholder:text-slate-300"
                 />
               </div>
@@ -401,6 +421,11 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
               )}
             </div>
 
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100/70 text-[11px] text-indigo-700 font-medium leading-relaxed">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-indigo-600" />
+              <span>প্রতিটি অ্যাকাউন্টের ডাটা ক্লাউডে ১০০% আলাদা ও সম্পূর্ণ নিজস্বভাবে সংরক্ষিত থাকে।</span>
+            </div>
+
             <AnimatePresence mode="wait">
               {isSignUp && (
                 <motion.div 
@@ -425,16 +450,6 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                 </motion.div>
               )}
             </AnimatePresence>
-
-            {/* Google reCAPTCHA v2 / v3 Security Widget */}
-            <RecaptchaWidget
-              onVerify={(token) => {
-                setRecaptchaToken(token);
-                setError('');
-              }}
-              onExpire={() => setRecaptchaToken('')}
-              resetTrigger={isSignUp}
-            />
 
             <button
               type="submit"
@@ -462,7 +477,6 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError('');
-                setRecaptchaToken('');
               }}
               className="text-[11px] text-slate-500 hover:text-indigo-600 font-bold transition-colors uppercase tracking-wider"
             >

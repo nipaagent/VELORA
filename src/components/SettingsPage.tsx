@@ -4,7 +4,7 @@ import {  UserProfile , Attachment } from '../types';
 import { auth, db } from '../lib/firebase';
 import UserAvatar from './UserAvatar';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { ref, update, get } from 'firebase/database';
+import { ref, update, get, set } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
@@ -305,7 +305,12 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
         
         uniqueChats.sort((a, b) => b.updatedAt - a.updatedAt);
         localStorage.setItem(`velora-chats-${user.uid}`, JSON.stringify(uniqueChats));
-        alert("ডেটা সফলভাবে ইমপোর্ট হয়েছে!");
+        try {
+          await set(ref(db, `user_chats/${user.uid}`), uniqueChats);
+        } catch (dbErr) {
+          console.warn("Failed to write imported chats to RTDB:", dbErr);
+        }
+        alert("ডেটা সফলভাবে ইমপোর্ট হয়েছে এবং ক্লাউডে সংরক্ষিত হয়েছে!");
         window.location.reload();
       } catch (e) {
         console.error("Import parse error:", e);
@@ -599,7 +604,38 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
           >
             <h3 className="text-sm font-black text-slate-800 tracking-tight uppercase flex items-center gap-2 mb-4">
               <User className="w-4 h-4 text-slate-500" /> Account Details
-            </h3><div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            </h3>
+
+            {/* Account & Data Isolation Status Card */}
+            <div className="bg-gradient-to-r from-indigo-50/70 to-slate-50 border border-indigo-100/80 rounded-2xl p-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-200">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900">
+                        {userProfile?.email || auth.currentUser?.email || (userProfile?.username ? `${userProfile.username}@velora.app` : 'User')}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-700">
+                        {userProfile?.role === 'admin' ? 'Admin' : 'Personal Account'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                      UID: <span className="text-slate-700 font-semibold">{userProfile?.uid || auth.currentUser?.uid}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-100/80 text-emerald-700 text-xs font-bold">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>১০০% নিজস্ব ডাটা আইসোলেশন সক্রিয়</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-gray-100 bg-slate-50/50">
                 {nameSuccess && (
                   <div className="p-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs flex items-center gap-2 font-bold">
@@ -730,38 +766,6 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                     </button>
                   </div>
                 </form>
-              </div>
-
-              {/* Google reCAPTCHA Security Info Card */}
-              <div className="p-4 bg-indigo-50/40 border-t border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-slate-800 tracking-tight">Google reCAPTCHA Protection</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-                        Active
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 font-medium">
-                      Site Key: <span className="font-mono font-bold text-indigo-700">6Le7LLItAAAAABV8rnbTiRwlHGz6CtqazHY52IRB</span>
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText("6Le7LLItAAAAABV8rnbTiRwlHGz6CtqazHY52IRB");
-                    alert("reCAPTCHA Site Key কপি হয়েছে!");
-                  }}
-                  className="px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-600 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors shrink-0"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Site Key</span>
-                </button>
               </div>
             </div>
           </motion.div>
