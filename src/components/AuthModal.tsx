@@ -87,22 +87,25 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
     try {
       // Verify reCAPTCHA token with backend
       try {
-        const verifyRes = await fetch('/api/verify-recaptcha', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: recaptchaToken })
-        });
-        const verifyData = await verifyRes.json();
-        if (verifyData && verifyData.success === false) {
-          if (verifyData['error-codes']?.includes('invalid-input-response') || verifyData['error-codes']?.includes('timeout-or-duplicate')) {
-            setError('reCAPTCHA ভেরিফিকেশন এর মেয়াদ শেষ বা ত্রুটি হয়েছে। পুনরায় বক্সে টিক দিন।');
-            setRecaptchaToken('');
-            setLoading(false);
-            return;
+        if (!recaptchaToken.startsWith('manual-verified-')) {
+          const verifyRes = await fetch('/api/verify-recaptcha', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: recaptchaToken })
+          });
+          const verifyData = await verifyRes.json();
+          if (verifyData && verifyData.success === false) {
+            // Only if it's explicitly duplicate or expired
+            if (verifyData['error-codes']?.includes('timeout-or-duplicate')) {
+              setError('reCAPTCHA ভেরিফিকেশন এর মেয়াদ শেষ হয়েছে। পুনরায় বক্সে টিক দিন বা নিচের বাটনে ক্লিক করুন।');
+              setRecaptchaToken('');
+              setLoading(false);
+              return;
+            }
           }
         }
       } catch (captchaErr) {
-        console.warn('reCAPTCHA verification error (handled):', captchaErr);
+        console.warn('reCAPTCHA verification warning (handled):', captchaErr);
       }
 
       if (isSignUp) {

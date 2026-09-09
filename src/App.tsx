@@ -997,7 +997,18 @@ export default function App() {
     }
   };
 
-  if (!user && !authLoading) {
+  if (authLoading) {
+    return (
+      <div className="flex h-[100dvh] w-full items-center justify-center bg-slate-50 font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading Velora...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
     return <AuthModal isOpen={true} initialReferralCode={urlReferralCode} />;
   }
 
