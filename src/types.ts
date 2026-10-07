@@ -94,3 +94,24 @@ export interface SystemControl {
   adRewardsEnabled: boolean;
   updatedAt?: number;
 }
+
+export interface PaymentTransaction {
+  id: string;
+  trxId: string;
+  orderId: string;
+  userId: string;
+  username?: string;
+  userEmail?: string;
+  packageId: string;
+  packageName: string;
+  type: 'vip' | 'tokens';
+  amount: number;
+  priceBdt: number;
+  priceSp: number;
+  cardNumberMasked: string;
+  status: 'completed' | 'failed' | 'pending';
+  gateway: string;
+  timestamp: number;
+  gatewayResponse?: any;
+}
+

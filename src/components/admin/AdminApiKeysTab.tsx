@@ -36,7 +36,7 @@ export const AdminApiKeysTab: React.FC<AdminApiKeysTabProps> = ({
                 AI গেটওয়ে ও API কী ম্যানেজমেন্ট ({apiKeys.length})
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Naga AI ক্লাউড গেটওয়ে ও API ক্লাস্টারের লাইভ স্টেটাস।
+                Unorouter ও Naga AI ক্লাউড গেটওয়ে এবং API ক্লাস্টারের লাইভ স্টেটাস।
               </p>
             </div>
           </div>

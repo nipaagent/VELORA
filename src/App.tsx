@@ -12,6 +12,7 @@ import AuthModal from './components/AuthModal';
 import SettingsPage from './components/SettingsPage';
 import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
+import SpCardPaymentModal from './components/SpCardPaymentModal';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { ref, onValue, set, remove, get, update } from 'firebase/database';
@@ -66,10 +67,17 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDeveloperOpen, setIsDeveloperOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState<'main' | 'profile' | 'referral' | 'data' | 'tips'>('main');
+  const [settingsView, setSettingsView] = useState<'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium'>('main');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+  const [isSpPaymentModalOpen, setIsSpPaymentModalOpen] = useState(false);
+  const [spPaymentInitialTab, setSpPaymentInitialTab] = useState<'vip' | 'tokens'>('vip');
   const [tokenState, setTokenState] = useState<TokenState>(defaultTokenState);
+
+  const handleOpenSpPayment = (tab: 'vip' | 'tokens' = 'vip') => {
+    setSpPaymentInitialTab(tab);
+    setIsSpPaymentModalOpen(true);
+  };
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [urlReferralCode, setUrlReferralCode] = useState<string>('');
@@ -103,9 +111,6 @@ export default function App() {
   const activeUserUidRef = useRef<string | null>(null);
   const isInitialChatSyncDoneRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [adLinks, setAdLinks] = useState<string[]>([
-    "https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"
-  ]);
   const [adRewardTokenAmount, setAdRewardTokenAmount] = useState<number>(30000);
   const [defaultMaxDailyTokens, setDefaultMaxDailyTokens] = useState<number>(50000);
 
@@ -287,21 +292,8 @@ export default function App() {
     document.documentElement.style.setProperty('--user-theme-color-border', `rgba(${r}, ${g}, ${b}, 0.2)`);
   }, [userProfile?.themeColor, userProfile?.themeGlow]);
 
-  // Sync ad links and system token config from Firebase RTDB in Realtime
+  // Sync system token config from Firebase RTDB in Realtime
   useEffect(() => {
-    const adRef = ref(db, 'settings/ad_links');
-    const unsubscribeAd = onValue(adRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const val = snapshot.val();
-        if (Array.isArray(val) && val.length > 0) {
-          setAdLinks(val);
-        } else if (typeof val === 'object') {
-          const list = Object.values(val).filter(Boolean) as string[];
-          if (list.length > 0) setAdLinks(list);
-        }
-      }
-    });
-
     const tokenConfigRef = ref(db, 'settings/token_config');
     const unsubscribeConfig = onValue(tokenConfigRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -323,7 +315,6 @@ export default function App() {
     });
 
     return () => {
-      unsubscribeAd();
       unsubscribeConfig();
     };
   }, []);
@@ -821,24 +812,43 @@ export default function App() {
                   
                   const thinkingStart = currentText.indexOf('<thinking>');
                   const thinkStart = currentText.indexOf('<think>');
+                  const thoughtStart = currentText.indexOf('<thought>');
                   
-                  const startIdx = thinkingStart !== -1 ? thinkingStart : (thinkStart !== -1 ? thinkStart : -1);
+                  let startIdx = -1;
+                  let tagType = '';
+                  
+                  if (thoughtStart !== -1) {
+                    startIdx = thoughtStart;
+                    tagType = 'thought';
+                  } else if (thinkingStart !== -1) {
+                    startIdx = thinkingStart;
+                    tagType = 'thinking';
+                  } else if (thinkStart !== -1) {
+                    startIdx = thinkStart;
+                    tagType = 'think';
+                  }
                   
                   if (startIdx !== -1) {
-                    const endIdx = currentText.indexOf('</thinking>');
-                    const endIdx2 = currentText.indexOf('</think>');
-                    
-                    const actualEndIdx = endIdx !== -1 ? endIdx : (endIdx2 !== -1 ? endIdx2 : -1);
-                    
-                    if (actualEndIdx !== -1) {
-                      const offset = endIdx !== -1 ? 11 : 8;
-                      const startOffset = thinkingStart !== -1 ? 10 : 7;
-                      
-                      currentThinking = currentText.substring(startIdx + startOffset, actualEndIdx).trim();
-                      currentText = currentText.substring(0, startIdx) + currentText.substring(actualEndIdx + offset);
+                    let endIdx = -1;
+                    let endTagLength = 0;
+                    let startTagLength = tagType === 'thought' ? 9 : (tagType === 'thinking' ? 10 : 7);
+
+                    if (tagType === 'thought') {
+                      endIdx = currentText.indexOf('</thought>');
+                      endTagLength = 10;
+                    } else if (tagType === 'thinking') {
+                      endIdx = currentText.indexOf('</thinking>');
+                      endTagLength = 11;
                     } else {
-                      const startOffset = thinkingStart !== -1 ? 10 : 7;
-                      currentThinking = currentText.substring(startIdx + startOffset).trim();
+                      endIdx = currentText.indexOf('</think>');
+                      endTagLength = 8;
+                    }
+                    
+                    if (endIdx !== -1) {
+                      currentThinking = currentText.substring(startIdx + startTagLength, endIdx).trim();
+                      currentText = currentText.substring(0, startIdx) + currentText.substring(endIdx + endTagLength);
+                    } else {
+                      currentThinking = currentText.substring(startIdx + startTagLength).trim();
                       currentText = currentText.substring(0, startIdx);
                     }
                   }
@@ -1337,6 +1347,7 @@ export default function App() {
                         onUpdateProfile={(updated) => setUserProfile(updated)} 
                         currentView={settingsView}
                         onNavigateView={(view) => setSettingsView(view)}
+                        onOpenPaymentModal={handleOpenSpPayment}
                         onOpenDeveloper={() => {
                           setIsDeveloperOpen(true);
                           setIsAdminOpen(false);
@@ -1396,12 +1407,12 @@ export default function App() {
         isOpen={isTokenModalOpen}
         onClose={() => setIsTokenModalOpen(false)}
         tokenState={tokenState}
-        adLinks={adLinks}
         adRewardTokenAmount={adRewardTokenAmount}
         defaultMaxDailyTokens={defaultMaxDailyTokens}
         userId={user?.uid}
         userProfile={userProfile}
         onUpdateProfile={(updated) => setUserProfile(updated)}
+        onOpenPaymentModal={handleOpenSpPayment}
         onOpenReferral={() => {
           setIsTokenModalOpen(false);
           setIsProfileOpen(true);
@@ -1422,6 +1433,45 @@ export default function App() {
               isVip: true,
               vipExpiresAt: expiresAt
             });
+          }
+        }}
+      />
+
+      {/* SP Wallet Virtual Card Payment Gateway Modal */}
+      <SpCardPaymentModal
+        isOpen={isSpPaymentModalOpen}
+        onClose={() => setIsSpPaymentModalOpen(false)}
+        userId={user?.uid}
+        userProfile={userProfile}
+        initialTab={spPaymentInitialTab}
+        onPaymentSuccess={(result) => {
+          if (result.packageType === 'vip') {
+            const currentExp = userProfile?.vipExpiresAt || 0;
+            const base = currentExp > Date.now() ? currentExp : Date.now();
+            const isLifetime = result.amount >= 36500;
+            const newExp = isLifetime ? 2000000000000 : base + (result.amount * 24 * 60 * 60 * 1000);
+            if (userProfile) {
+              const updatedProfile: UserProfile = {
+                ...userProfile,
+                isVip: true,
+                vipExpiresAt: newExp
+              };
+              setUserProfile(updatedProfile);
+            }
+          } else if (result.packageType === 'tokens') {
+            const currentBonus = tokenState.bonusTokens || 0;
+            const newBonus = currentBonus + result.amount;
+            const updatedTokenState: TokenState = {
+              ...tokenState,
+              bonusTokens: newBonus
+            };
+            updateTokenState(updatedTokenState);
+            if (userProfile) {
+              setUserProfile({
+                ...userProfile,
+                tokenState: updatedTokenState
+              });
+            }
           }
         }}
       />

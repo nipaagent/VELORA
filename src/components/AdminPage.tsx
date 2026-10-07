@@ -9,6 +9,7 @@ import { AdminRedeemTab } from './admin/AdminRedeemTab';
 import { AdminSecurityTab } from './admin/AdminSecurityTab';
 import { AdminApiKeysTab } from './admin/AdminApiKeysTab';
 import { AdminLogsTab } from './admin/AdminLogsTab';
+import { AdminPaymentsTab } from './admin/AdminPaymentsTab';
 import { AdminUserTokenModal } from './admin/AdminUserTokenModal';
 import { AdminUserEditModal } from './admin/AdminUserEditModal';
 import { AdminAddUserModal } from './admin/AdminAddUserModal';
@@ -22,7 +23,7 @@ interface AdminPageProps {
 }
 
 export default function AdminPage({ onBackToChat }: AdminPageProps) {
-  const [activeTab, setActiveTab] = useState<'users' | 'broadcast' | 'tokens' | 'redeem' | 'security' | 'apikeys' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'broadcast' | 'tokens' | 'redeem' | 'security' | 'apikeys' | 'logs'>('users');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [adLinks, setAdLinks] = useState<string[]>([]);
   const [redeemCodes, setRedeemCodes] = useState<RedeemCode[]>([]);
@@ -127,18 +128,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       setUsers(list);
     });
 
-    // 2. Listen to Ad Links
-    const adLinksRef = ref(db, 'settings/ad_links');
-    const unsubscribeAds = onValue(adLinksRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const val = snapshot.val();
-        if (Array.isArray(val)) setAdLinks(val);
-        else if (typeof val === 'object') setAdLinks(Object.values(val).filter(Boolean) as string[]);
-      } else {
-        setAdLinks(["https://www.effectivecpmnetwork.com/pqga5b64q?key=b284a9c6c1b29d340ea4c11c2e497170"]);
-      }
-    });
-
     // 3. Listen to Redeem Codes
     const redeemRef = ref(db, 'redeem_codes');
     const unsubscribeRedeem = onValue(redeemRef, (snapshot) => {
@@ -197,7 +186,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
     return () => {
       unsubscribeUsers();
-      unsubscribeAds();
       unsubscribeRedeem();
       unsubscribeConfig();
       unsubscribeAnnounce();
@@ -647,6 +635,10 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
           />
         )}
 
+        {activeTab === 'payments' && (
+          <AdminPaymentsTab />
+        )}
+
         {activeTab === 'broadcast' && (
           <AdminBroadcastTab
             announcement={announcement}
@@ -660,9 +652,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             tokenConfig={tokenConfig}
             onSaveTokenConfig={handleSaveTokenConfig}
             onBatchUpdateAllUsersLimit={handleBatchUpdateAllUsersLimit}
-            adLinks={adLinks}
-            onAddAdLink={handleAddAdLink}
-            onDeleteAdLink={handleDeleteAdLink}
             isSaving={isSaving}
             totalUsersCount={users.length}
           />
@@ -691,7 +680,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             apiKeys={apiKeys}
             totalCallsToday={apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0) || 1530}
             totalCallsAllTime={apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0) || 61380}
-            activeModelName="Naga AI Gateway"
+            activeModelName="VELORA Dual Engine (Unorouter + Naga)"
             onRefresh={fetchApiKeysStats}
             isLoading={isLoadingApiKeys}
           />

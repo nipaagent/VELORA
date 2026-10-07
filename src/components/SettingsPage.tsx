@@ -1,23 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import {   ArrowLeft, Lightbulb, Info, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database, Edit2, ChevronRight , FileText, UploadCloud , X } from 'lucide-react';
-import {  UserProfile , Attachment } from '../types';
+import { ArrowLeft, Lightbulb, Info, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database, Edit2, ChevronRight, FileText, UploadCloud, X, Crown, ExternalLink, CreditCard } from 'lucide-react';
+import { UserProfile, Attachment } from '../types';
 import { auth, db } from '../lib/firebase';
 import UserAvatar from './UserAvatar';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { ref, update, get, set } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { SP_GATEWAY_CONFIG, SP_VIP_PACKAGES, SP_TOKEN_PACKAGES } from '../lib/spPaymentConfig';
 
 interface SettingsPageProps {
   onBack: () => void;
   userProfile: UserProfile | null;
   onUpdateProfile: (updated: UserProfile) => void;
-  currentView: 'main' | 'profile' | 'referral' | 'data' | 'tips';
-  onNavigateView: (view: 'main' | 'profile' | 'referral' | 'data' | 'tips') => void;
+  currentView: 'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium';
+  onNavigateView: (view: 'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium') => void;
   onOpenDeveloper?: () => void;
+  onOpenPaymentModal?: (tab?: 'vip' | 'tokens') => void;
 }
 
-export default function SettingsPage({ onBack, userProfile, onUpdateProfile, currentView, onNavigateView, onOpenDeveloper }: SettingsPageProps) {
+export default function SettingsPage({ onBack, userProfile, onUpdateProfile, currentView, onNavigateView, onOpenDeveloper, onOpenPaymentModal }: SettingsPageProps) {
   const [fullName, setFullName] = useState('');
   const [selectedAvatarIndex, setSelectedAvatarIndex] = useState(0);
   const [savingName, setSavingName] = useState(false);
@@ -529,6 +531,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
 
   const tabs = [
     { id: 'profile', label: 'Account Details', icon: User },
+    { id: 'premium', label: 'Premium & VIP', icon: Crown },
     { id: 'referral', label: 'Refer & Earn', icon: Gift },
     { id: 'data', label: 'Data Export / Import', icon: Database },
     { id: 'developer', label: 'Developer Hub', icon: Code2 },
@@ -768,6 +771,175 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                 </form>
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {currentView === 'premium' && (
+          <motion.div 
+            key="premium"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+            className="flex-1 w-full max-w-3xl mx-auto p-4 sm:p-5 space-y-5"
+          >
+            <h3 className="text-sm font-black text-slate-800 tracking-tight uppercase flex items-center gap-2">
+              <Crown className="w-4 h-4 text-amber-500" /> SP Wallet ভার্চুয়াল কার্ড পেমেন্ট ও VIP
+            </h3>
+            
+            {/* VIP Banner */}
+            <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-amber-500/30 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 pointer-events-none">
+                <Crown className="w-36 h-36 rotate-12 text-amber-400" />
+              </div>
+              
+              <div className="relative z-10 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-black bg-gradient-to-r from-amber-500/30 to-amber-600/30 text-amber-300 border border-amber-400/40 flex items-center gap-1.5">
+                    <CreditCard className="w-3.5 h-3.5" />
+                    SP WALLET BD - VIRTUAL CARD GATEWAY
+                  </span>
+                  <span className="text-xs font-mono font-bold text-slate-300 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                    ১ SP = ৳৭.৭৭ BDT
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="font-black text-2xl sm:text-3xl tracking-tight text-white mb-2 flex items-center gap-2">
+                    <span>আনলিমিটেড VIP মেম্বারশিপ</span>
+                    <Crown className="w-6 h-6 text-amber-400 fill-amber-400" />
+                  </h3>
+                  <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-lg font-medium">
+                    ১৬-ডিজিট SP ভার্চুয়াল কার্ড ব্যবহার করে সরাসরি ডেবিট করুন। কোনো অ্যাড ছাড়া আজীবন বা মাসভিত্তিক আনলিমিটেড AI চ্যাট উপভোগ করুন।
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <button 
+                    onClick={() => onOpenPaymentModal?.('vip')}
+                    className="px-6 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-2xl font-black text-xs uppercase tracking-wider transition-all active:scale-95 shadow-lg flex items-center gap-2 cursor-pointer"
+                  >
+                    <Crown className="w-4 h-4 text-slate-950" />
+                    <span>👑 VIP মেম্বারশিপ কিনুন</span>
+                  </button>
+
+                  <button 
+                    onClick={() => onOpenPaymentModal?.('tokens')}
+                    className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 border border-indigo-400/30 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center gap-2 cursor-pointer"
+                  >
+                    <Zap className="w-4 h-4 text-indigo-400" />
+                    <span>⚡ টোকেন বান্ডেল কিনুন</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* VIP Package List */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Crown className="w-3.5 h-3.5 text-amber-500" />
+                উপলব্ধ VIP প্যাকেজসমূহ (Virtual Card Debit):
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {SP_VIP_PACKAGES.map((pkg) => (
+                  <div 
+                    key={pkg.id} 
+                    className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="font-black text-slate-900 text-sm">{pkg.name}</span>
+                        {pkg.badge && (
+                          <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase">
+                            {pkg.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium mb-3">{pkg.description}</p>
+                      
+                      <div className="space-y-1 mb-4">
+                        {pkg.features.map((f, i) => (
+                          <div key={i} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            <span>{f}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <div>
+                        <div className="font-black text-base text-slate-900">৳{pkg.priceBdt} BDT</div>
+                        <div className="text-[10px] font-mono text-slate-500 font-bold">{pkg.priceSp} SP Coins</div>
+                      </div>
+
+                      <button
+                        onClick={() => onOpenPaymentModal?.('vip')}
+                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                      >
+                        <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                        <span>কার্ডে কিনুন</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Token Packages */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-indigo-500" />
+                অতিরিক্ত টোকেন প্যাক (Virtual Card Debit):
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {SP_TOKEN_PACKAGES.map((pkg) => (
+                  <div 
+                    key={pkg.id} 
+                    className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="font-black text-slate-900 text-sm">{pkg.name}</span>
+                        {pkg.badge && (
+                          <span className="text-[10px] font-black bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full uppercase">
+                            {pkg.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium mb-3">{pkg.description}</p>
+                      
+                      <div className="space-y-1 mb-4">
+                        {pkg.features.map((f, i) => (
+                          <div key={i} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            <span>{f}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <div>
+                        <div className="font-black text-base text-slate-900">৳{pkg.priceBdt} BDT</div>
+                        <div className="text-[10px] font-mono text-slate-500 font-bold">{pkg.priceSp} SP Coins</div>
+                      </div>
+
+                      <button
+                        onClick={() => onOpenPaymentModal?.('tokens')}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                      >
+                        <CreditCard className="w-3.5 h-3.5 text-indigo-200" />
+                        <span>কার্ডে কিনুন</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </motion.div>
         )}
 

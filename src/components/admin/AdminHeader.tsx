@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   ShieldCheck, Users, Crown, Ban, Zap, 
   KeyRound, ArrowLeft, LogOut, Radio, 
-  FileDown, RefreshCw, AlertTriangle
+  FileDown, RefreshCw, AlertTriangle, CreditCard
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn, formatTokenCount } from '../../lib/utils';
@@ -55,6 +55,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
   const tabs = [
     { id: 'users', label: 'ইউজার ডিরেক্টরি', icon: Users, count: users.length, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+    { id: 'payments', label: 'SP Wallet পেমেন্ট', icon: CreditCard, color: 'text-amber-600 bg-amber-50 border-amber-200' },
     { id: 'broadcast', label: 'সিস্টেম ব্রডকাস্ট', icon: Radio, count: hasActiveAnnouncement ? 1 : 0, color: 'text-rose-600 bg-rose-50 border-rose-200', alert: hasActiveAnnouncement },
     { id: 'tokens', label: 'টোকেন ও এড কনফিগ', icon: Zap, count: adLinksCount, color: 'text-purple-600 bg-purple-50 border-purple-200' },
     { id: 'redeem', label: 'রিডিম কোডস', icon: Crown, count: redeemCodesCount, color: 'text-amber-600 bg-amber-50 border-amber-200' },
