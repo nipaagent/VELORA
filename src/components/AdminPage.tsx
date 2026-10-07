@@ -64,13 +64,22 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   // API Keys status mock/realtime
   const [apiKeys, setApiKeys] = useState<ApiKeyDetail[]>([
     {
-      name: 'NIPA API Gateway (Primary)',
-      maskedValue: 'nipa-••••••••••••••••••••••••3L1Q',
+      name: 'NIPA AI GATEWAY',
+      maskedValue: 'nipa-••••••••••••••••••••••••7777',
       status: 'Active',
-      todayCalls: 1420,
-      totalCalls: 48930,
-      successCalls: 48890,
-      errorCalls: 40
+      todayCalls: 0,
+      totalCalls: 0,
+      successCalls: 0,
+      errorCalls: 0
+    },
+    {
+      name: 'IMRAN BY NIPA GATEWAY',
+      maskedValue: 'imrn-••••••••••••••••••••••••NIPA',
+      status: 'Active',
+      todayCalls: 0,
+      totalCalls: 0,
+      successCalls: 0,
+      errorCalls: 0
     }
   ]);
   const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);

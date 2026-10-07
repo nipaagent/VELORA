@@ -247,6 +247,21 @@ console.log(data);`;
                 </p>
               </div>
             </div>
+
+            {/* Sub-gateways info */}
+            <div className="px-5 py-3 border-t border-slate-100 bg-white flex items-center gap-4">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Gateways:</div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">nipa_ai</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">imran_by_nipa</span>
+                </div>
+              </div>
+            </div>
           </section>
 
           {/* Authentication Section */}

@@ -1,5 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
+import { Readable } from "stream";
 
 dotenv.config();
 
@@ -43,79 +44,28 @@ const isKeyHealthy = (apiKey: string): boolean => {
   return true;
 };
 const getApiKeysInfo = async () => {
-  const keysMap = new Map<string, { name: string; type: 'unorouter' | 'naga'; customEndpoint?: string }>(); // value -> info
+  const keysMap = new Map<string, { name: string; type: 'unorouter' | 'naga'; customEndpoint?: string }>();
 
-  // 1. Default UNOROUTER key
-  const defaultUnorouterKey = "sk-0i4EG4pXYvWmy693v7yP48DtjwP00G42sHvRgqGWwXZe8lwk";
-  if (!keysMap.has(defaultUnorouterKey)) {
-    keysMap.set(defaultUnorouterKey, { name: "UNOROUTER_KEY_PRIMARY", type: "unorouter" });
-  }
+  // 1. Specifically look for NIPA_AI and IMRAN_BY_NIPA gateways
+  const gateways = [
+    { env: 'NIPA_AI', name: 'NIPA AI GATEWAY' },
+    { env: 'IMRAN_BY_NIPA', name: 'IMRAN BY NIPA GATEWAY' }
+  ];
 
-  // 2. Environment Variables UNOROUTER keys
-  Object.keys(process.env).forEach(envKey => {
-    if (
-      envKey.startsWith('UNOROUTER_API_KEY') ||
-      envKey.startsWith('UNOROUTER_KEY') ||
-      envKey.startsWith('UNOROUTER')
-    ) {
-      const val = process.env[envKey];
-      if (val && typeof val === 'string') {
-        const splitValues = val.split(/[\n,;\s]+/).map(k => k.trim()).filter(k => k.length > 5);
-        splitValues.forEach((k, idx) => {
-          keysMap.set(k, { name: splitValues.length > 1 ? `${envKey}_${idx + 1}` : envKey, type: 'unorouter' });
+  gateways.forEach(gw => {
+    const val = process.env[gw.env];
+    if (val && typeof val === 'string') {
+      const splitValues = val.split(/[\n,;\s]+/).map(k => k.trim()).filter(k => k.length > 5);
+      splitValues.forEach((k, idx) => {
+        // Detect type based on key prefix (sk- is Unorouter style, usually)
+        const type = k.startsWith('sk-') ? 'unorouter' : 'naga';
+        keysMap.set(k, { 
+          name: splitValues.length > 1 ? `${gw.name}_${idx + 1}` : gw.name, 
+          type 
         });
-      }
-    }
-  });
-
-  // 3. Environment Variables NAGA / CUSTOM keys
-  Object.keys(process.env).forEach(envKey => {
-    if (
-      envKey.startsWith('NAGA_API_KEY') ||
-      envKey.startsWith('NAGA_KEY') ||
-      envKey.startsWith('API_KEY') ||
-      envKey.startsWith('NAGA') ||
-      envKey.startsWith('VELORA_KEY')
-    ) {
-      const val = process.env[envKey];
-      if (val && typeof val === 'string') {
-        const splitValues = val.split(/[\n,;\s]+/).map(k => k.trim()).filter(k => k.length > 5);
-        splitValues.forEach((k, idx) => {
-          if (!keysMap.has(k)) {
-            keysMap.set(k, { name: splitValues.length > 1 ? `${envKey}_${idx + 1}` : envKey, type: 'naga' });
-          }
-        });
-      }
-    }
-  });
-
-  // 4. Fetch dynamic custom API keys saved in Firebase Realtime Database
-  try {
-    const res = await fetch(`${FIREBASE_DB_URL}/settings/api_keys.json`, { signal: AbortSignal.timeout(3000) });
-    const remoteKeys = await res.json();
-    if (Array.isArray(remoteKeys)) {
-      remoteKeys.forEach((item: any, idx: number) => {
-        const keyVal = typeof item === 'string' ? item : item?.key || item?.value;
-        const keyName = item?.name || `FIREBASE_KEY_${idx + 1}`;
-        const keyType = item?.type === 'unorouter' || keyVal?.startsWith('sk-') ? 'unorouter' : 'naga';
-        if (keyVal && typeof keyVal === 'string' && keyVal.trim().length > 5 && !keysMap.has(keyVal.trim())) {
-          keysMap.set(keyVal.trim(), { name: keyName, type: keyType, customEndpoint: item?.endpoint });
-        }
-      });
-    } else if (remoteKeys && typeof remoteKeys === 'object') {
-      Object.keys(remoteKeys).forEach((k) => {
-        const item = remoteKeys[k];
-        const keyVal = typeof item === 'string' ? item : item?.key || item?.value || k;
-        const keyName = item?.name || `FIREBASE_${k}`;
-        const keyType = item?.type === 'unorouter' || keyVal?.startsWith('sk-') ? 'unorouter' : 'naga';
-        if (keyVal && typeof keyVal === 'string' && keyVal.trim().length > 5 && !keysMap.has(keyVal.trim())) {
-          keysMap.set(keyVal.trim(), { name: keyName, type: keyType, customEndpoint: item?.endpoint });
-        }
       });
     }
-  } catch (err) {
-    // Non-blocking fallback if Firebase is unreachable
-  }
+  });
 
   const keys: { name: string; value: string; type: 'unorouter' | 'naga'; customEndpoint?: string }[] = [];
   keysMap.forEach((info, value) => {
@@ -267,8 +217,6 @@ CRITICAL RULES:
     const sortedKeys = [...candidateKeys].sort(() => Math.random() - 0.5);
 
     // Helper to format messages for models:
-    // Some vision models (like llama-3.2-11b-vision) strictly enforce at most 1 image in the entire prompt!
-    // And system prompts shouldn't have images attached unless required.
     const buildFormattedMessages = (targetModel: string) => {
       const isLlamaVision = targetModel.includes('llama') && targetModel.includes('vision');
       const isGemmaModel = targetModel.includes('gemma');
@@ -342,23 +290,21 @@ CRITICAL RULES:
       let candidateModels: string[];
       if (hasAttachments) {
         // High-performance vision models for image analysis
-        // Ordered: llama-3.2-11b-vision (tested & working with 1 image), gemma-4-26b (free & fast), qwen3.8-flash-next
         candidateModels = keyObj.type === 'unorouter'
           ? ["llama-3.2-11b-vision:free", "gemma-4-26b:free", "qwen3.8-flash-next:free"]
-          : ["ling-3.0-flash-sante:free", "gpt-4o-mini", "claude-3-5-sonnet", "sonar:free"];
+          : ["gpt-4o-mini", "claude-3-5-sonnet", "sonar:free"];
       } else {
+        // Optimized free model failover list
         candidateModels = keyObj.type === 'unorouter'
-          ? [modelName, "gemma-4-26b:free", "gemma-4-31b-it:free", "qwen3.6-plus:free", "nemotron-3.5-lightning:free"]
-          : [modelName, "nemotron-3.5-lightning:free", "nemotron-3-super-120b-a12b:free", "dots-3-note-preview:free", "sonar:free"];
+          ? [modelName, "gemma-4-26b:free", "qwen3.8-flash-next:free", "gemma-4-31b-it:free"]
+          : [modelName, "nemotron-3.5-lightning:free", "sonar:free", "dots-3-note-preview:free"];
       }
 
       const uniqueModels = Array.from(new Set(candidateModels));
 
       for (const currentModel of uniqueModels) {
-        const formattedMessages = buildFormattedMessages(currentModel);
-        const promptLength = formattedMessages.reduce((acc: number, m: any) => acc + (m.content ? (typeof m.content === 'string' ? m.content.length : 100) : 0), 0);
-        const estTokens = Math.max(50, Math.round(promptLength / 3.5));
         try {
+          const formattedMessages = buildFormattedMessages(currentModel);
           const response = await fetch(endpointUrl, {
             method: "POST",
             headers: {
@@ -368,16 +314,16 @@ CRITICAL RULES:
             body: JSON.stringify({
               model: currentModel,
               messages: formattedMessages,
-              temperature: 0.2,
-              max_tokens: 4000,
+              temperature: 0.3,
+              max_tokens: 4096,
               stream: isStreamRequested
             }),
-            signal: AbortSignal.timeout(25000)
+            signal: AbortSignal.timeout(35000) // Increased to 35s for slower models
           });
 
           if (response.ok && response.body) {
             markKeyHealthy(apiKey);
-            trackApiUsage(apiKey, currentModel, true, response.status, estTokens).catch(() => {});
+            trackApiUsage(apiKey, currentModel, true, response.status, 200).catch(() => {});
 
             if (isStreamRequested) {
               res.setHeader("Content-Type", "text/event-stream");
@@ -385,29 +331,45 @@ CRITICAL RULES:
               res.setHeader("Connection", "keep-alive");
 
               try {
-                for await (const chunk of response.body as any) {
-                  res.write(chunk);
+                // Safely pipe Web ReadableStream to Node WritableStream (res)
+                if (response.body) {
+                  const nodeStream = Readable.fromWeb(response.body as any);
+                  nodeStream.pipe(res);
+                  
+                  // Ensure we end correctly when upstream ends
+                  nodeStream.on('end', () => res.end());
+                  nodeStream.on('error', (err) => {
+                    console.error("Stream error:", err);
+                    res.end();
+                  });
+                  return; // EXIT loop and function, piping is handled!
                 }
               } catch (streamErr) {
-                console.error("Stream pipe error:", streamErr);
+                console.error("Stream pipe setup error:", streamErr);
+                res.end();
+                return;
               }
-              return res.end();
             } else {
               const data = await response.json();
               return res.json(data);
             }
           } else {
             lastErrorText = await response.text();
-            console.warn(`[AI Gateway] Key ${keyObj.name} (${keyObj.type}) with model ${currentModel} failed (${response.status}): ${lastErrorText}`);
-            markKeyUnhealthy(apiKey, response.status, lastErrorText);
+            console.warn(`[AI Gateway] Key ${keyObj.name} with model ${currentModel} failed (${response.status}): ${lastErrorText}`);
+            
+            // Only mark unhealthy if it's a structural error (auth/rate limit)
+            if (response.status === 401 || response.status === 403 || response.status === 429) {
+              markKeyUnhealthy(apiKey, response.status, lastErrorText);
+            }
+            
             trackApiUsage(apiKey, currentModel, false, response.status, 0).catch(() => {});
-
-            // If 401/403/402/400/404/500/503, try next candidate model or next key
             continue;
           }
         } catch (attemptError: any) {
           lastErrorText = attemptError.message || "Network error";
-          markKeyUnhealthy(apiKey, 500, lastErrorText);
+          if (lastErrorText.includes('timeout') || lastErrorText.includes('fetch')) {
+             markKeyUnhealthy(apiKey, 504, lastErrorText);
+          }
           trackApiUsage(apiKey, currentModel, false, 500, 0).catch(() => {});
         }
       }
