@@ -133,6 +133,15 @@ export default function TokenModal({
         await update(ref(db), updates);
 
         onRewardClaimed(addedTokens);
+        if (userProfile && onUpdateProfile) {
+          onUpdateProfile({
+            ...userProfile,
+            tokenState: {
+              ...(userProfile.tokenState || tokenState),
+              bonusTokens: newBonus
+            }
+          });
+        }
         setRedeemSuccess(`🎉 অভিনন্দন! +${formatTokenCount(addedTokens)} বোনাস টোকেন আপনার একাউন্টে যুক্ত হয়েছে!`);
       } else if (codeData.rewardType === 'vip_days') {
         const days = codeData.vipDays || 1;
@@ -147,6 +156,13 @@ export default function TokenModal({
 
         if (onVipClaimed) {
           onVipClaimed(days, newVipExp);
+        }
+        if (userProfile && onUpdateProfile) {
+          onUpdateProfile({
+            ...userProfile,
+            isVip: true,
+            vipExpiresAt: newVipExp
+          });
         }
         setRedeemSuccess(`🎉 অভিনন্দন! ${days} দিনের জন্য ভিআইপি আনলিমিটেড অ্যাক্সেস চালু হয়েছে!`);
       }
@@ -428,9 +444,8 @@ export default function TokenModal({
               </div>
             )}
 
-            {/* Redeem Promo Code Section */}
-            {!isVipActive && (
-              <div className="bg-gradient-to-br from-amber-500/10 via-amber-50/70 to-purple-50/70 border border-amber-200/90 rounded-2xl p-4 space-y-3 shadow-xs">
+            {/* Redeem Promo Code Section (Always available) */}
+            <div className="bg-gradient-to-br from-amber-500/10 via-amber-50/70 to-purple-50/70 border border-amber-200/90 rounded-2xl p-4 space-y-3 shadow-xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0">
@@ -481,7 +496,7 @@ export default function TokenModal({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleRedeemCode();
                   }}
-                  placeholder="কোড লিখুন (যেমন: VELORA100K)"
+                  placeholder="কোড লিখুন (যেমন: SAMI7 বা SAIMA7)"
                   className="flex-1 px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black tracking-widest text-slate-900 placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase shadow-xs"
                 />
                 <motion.button
@@ -502,7 +517,6 @@ export default function TokenModal({
                 </motion.button>
               </div>
             </div>
-          )}
         </div>
 
           {/* Footer Note */}

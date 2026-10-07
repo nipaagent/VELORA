@@ -12,8 +12,8 @@ export interface SpPaymentPackage {
 }
 
 export const SP_GATEWAY_CONFIG = {
-  appName: 'Velora',
-  appId: 'CARD_GW_velora_MUGCHQM0',
+  appName: 'NIPA',
+  appId: 'CARD_GW_nipa_MUGCHQM0',
   paymentChannel: 'ONLY VIRTUAL CARD (16-Digit Card Debit)',
   merchantSettlementWallet: '0199999999',
   publicClientApiKey: 'sp_card_pub_velora_r1usqx',

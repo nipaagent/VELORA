@@ -64,8 +64,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   // API Keys status mock/realtime
   const [apiKeys, setApiKeys] = useState<ApiKeyDetail[]>([
     {
-      name: 'Naga API Gateway (Primary)',
-      maskedValue: 'naga-••••••••••••••••••••••••3L1Q',
+      name: 'NIPA API Gateway (Primary)',
+      maskedValue: 'nipa-••••••••••••••••••••••••3L1Q',
       status: 'Active',
       todayCalls: 1420,
       totalCalls: 48930,
@@ -387,8 +387,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         }
       }
 
-      const uid = 'velora_usr_' + crypto.randomUUID().slice(0, 12);
-      const referralCode = 'VEL' + Math.random().toString(36).substring(2, 7).toUpperCase();
+      const uid = 'nipa_usr_' + crypto.randomUUID().slice(0, 12);
+      const referralCode = 'NIP' + Math.random().toString(36).substring(2, 7).toUpperCase();
       const now = Date.now();
       const vipExpiresAt = userData.isVip && userData.vipDays > 0 ? now + userData.vipDays * 24 * 60 * 60 * 1000 : 0;
 
@@ -515,7 +515,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(users, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `velora_users_backup_${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute("download", `nipa_users_backup_${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -680,7 +680,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             apiKeys={apiKeys}
             totalCallsToday={apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0) || 1530}
             totalCallsAllTime={apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0) || 61380}
-            activeModelName="VELORA Dual Engine (Unorouter + Naga)"
+            activeModelName="NIPA AI Core (Unified Gateway)"
             onRefresh={fetchApiKeysStats}
             isLoading={isLoadingApiKeys}
           />

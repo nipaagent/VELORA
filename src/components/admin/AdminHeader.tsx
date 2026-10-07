@@ -88,7 +88,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                 </span>
               </div>
               <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2 mt-0.5">
-                VELORA MASTER CONTROL
+                NIPA MASTER CONTROL
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   v3.8 PRO
                 </span>

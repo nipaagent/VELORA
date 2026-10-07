@@ -5,16 +5,53 @@ dotenv.config();
 
 export const app = express();
 
-// Helper to get all available API keys (Unorouter, Naga, or Custom)
-const getApiKeysInfo = () => {
-  const keysMap = new Map<string, { name: string; type: 'unorouter' | 'naga' }>(); // value -> info
+// In-memory health tracker for API keys (Circuit breaker)
+// If a key fails (e.g., 401 Unauthorized, 403 Forbidden, 429 Rate Limit, invalid quota),
+// it is marked unhealthy with cooldown so user requests NEVER waste time on broken keys!
+const keyHealthTracker = new Map<string, { consecutiveErrors: number; cooldownUntil: number; lastError: string }>();
 
-  // Check UNOROUTER keys
+const markKeyHealthy = (apiKey: string) => {
+  keyHealthTracker.set(apiKey, { consecutiveErrors: 0, cooldownUntil: 0, lastError: "" });
+};
+
+const markKeyUnhealthy = (apiKey: string, statusCode: number, errorMsg: string) => {
+  const current = keyHealthTracker.get(apiKey) || { consecutiveErrors: 0, cooldownUntil: 0, lastError: "" };
+  const errors = current.consecutiveErrors + 1;
+  // If 401 or 403, key is bad/expired -> cooldown 1 hour
+  // If 429 rate limited -> cooldown 3 minutes
+  // Other server errors -> cooldown 45 seconds
+  let cooldownDuration = 45 * 1000;
+  if (statusCode === 401 || statusCode === 403) {
+    cooldownDuration = 60 * 60 * 1000; // 1 hour
+  } else if (statusCode === 429) {
+    cooldownDuration = 3 * 60 * 1000; // 3 minutes
+  }
+
+  keyHealthTracker.set(apiKey, {
+    consecutiveErrors: errors,
+    cooldownUntil: Date.now() + cooldownDuration,
+    lastError: errorMsg
+  });
+};
+
+const isKeyHealthy = (apiKey: string): boolean => {
+  const health = keyHealthTracker.get(apiKey);
+  if (!health) return true;
+  if (health.cooldownUntil && health.cooldownUntil > Date.now()) {
+    return false; // Still in cooldown, do NOT use this failing key!
+  }
+  return true;
+};
+const getApiKeysInfo = async () => {
+  const keysMap = new Map<string, { name: string; type: 'unorouter' | 'naga'; customEndpoint?: string }>(); // value -> info
+
+  // 1. Default UNOROUTER key
   const defaultUnorouterKey = "sk-0i4EG4pXYvWmy693v7yP48DtjwP00G42sHvRgqGWwXZe8lwk";
   if (!keysMap.has(defaultUnorouterKey)) {
     keysMap.set(defaultUnorouterKey, { name: "UNOROUTER_KEY_PRIMARY", type: "unorouter" });
   }
 
+  // 2. Environment Variables UNOROUTER keys
   Object.keys(process.env).forEach(envKey => {
     if (
       envKey.startsWith('UNOROUTER_API_KEY') ||
@@ -31,7 +68,7 @@ const getApiKeysInfo = () => {
     }
   });
 
-  // Check NAGA keys
+  // 3. Environment Variables NAGA / CUSTOM keys
   Object.keys(process.env).forEach(envKey => {
     if (
       envKey.startsWith('NAGA_API_KEY') ||
@@ -52,9 +89,37 @@ const getApiKeysInfo = () => {
     }
   });
 
-  const keys: { name: string; value: string; type: 'unorouter' | 'naga' }[] = [];
+  // 4. Fetch dynamic custom API keys saved in Firebase Realtime Database
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/settings/api_keys.json`, { signal: AbortSignal.timeout(3000) });
+    const remoteKeys = await res.json();
+    if (Array.isArray(remoteKeys)) {
+      remoteKeys.forEach((item: any, idx: number) => {
+        const keyVal = typeof item === 'string' ? item : item?.key || item?.value;
+        const keyName = item?.name || `FIREBASE_KEY_${idx + 1}`;
+        const keyType = item?.type === 'unorouter' || keyVal?.startsWith('sk-') ? 'unorouter' : 'naga';
+        if (keyVal && typeof keyVal === 'string' && keyVal.trim().length > 5 && !keysMap.has(keyVal.trim())) {
+          keysMap.set(keyVal.trim(), { name: keyName, type: keyType, customEndpoint: item?.endpoint });
+        }
+      });
+    } else if (remoteKeys && typeof remoteKeys === 'object') {
+      Object.keys(remoteKeys).forEach((k) => {
+        const item = remoteKeys[k];
+        const keyVal = typeof item === 'string' ? item : item?.key || item?.value || k;
+        const keyName = item?.name || `FIREBASE_${k}`;
+        const keyType = item?.type === 'unorouter' || keyVal?.startsWith('sk-') ? 'unorouter' : 'naga';
+        if (keyVal && typeof keyVal === 'string' && keyVal.trim().length > 5 && !keysMap.has(keyVal.trim())) {
+          keysMap.set(keyVal.trim(), { name: keyName, type: keyType, customEndpoint: item?.endpoint });
+        }
+      });
+    }
+  } catch (err) {
+    // Non-blocking fallback if Firebase is unreachable
+  }
+
+  const keys: { name: string; value: string; type: 'unorouter' | 'naga'; customEndpoint?: string }[] = [];
   keysMap.forEach((info, value) => {
-    keys.push({ name: info.name, value, type: info.type });
+    keys.push({ name: info.name, value, type: info.type, customEndpoint: info.customEndpoint });
   });
   
   return keys;
@@ -136,13 +201,13 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
     }
 
     let modelName = modelFromClient;
-    if (!modelName || modelName === 'velora-ai-core' || modelName.includes('gemini') || modelName.includes('550b') || modelName === 'sonar:free') {
+    if (!modelName || modelName === 'nipa-ai-core' || modelName.includes('gemini') || modelName.includes('550b') || modelName === 'sonar:free') {
       modelName = process.env.AI_MODEL || process.env.DEFAULT_MODEL || "gemma-4-26b:free";
     }
 
     const isStreamRequested = req.body?.stream === true || req.query?.stream === 'true';
 
-    let dynamicPrompt = `You are VELORA v2.7.
+    let dynamicPrompt = `You are NIPA v2.7.
 Identity: High-speed technical entity. You are a unified 100% powerful brain.
 CRITICAL RULES:
 1. ULTRA-FAST & CONCISE RESPONSE (STRICT 1-2 SECOND TARGET):
@@ -168,8 +233,9 @@ CRITICAL RULES:
 
     const systemPrompt = dynamicPrompt;
 
-    // ⚡ HIGH-SPEED GATEWAYS: Unorouter (Primary) + Naga (Secondary)
-    const allKeysInfo = getApiKeysInfo();
+    // ⚡ HIGH-SPEED GATEWAYS: Filter and prioritize ONLY HEALTHY keys!
+    // Broken, expired, or rate-limited keys are skipped instantly so users get fast, working responses.
+    const allKeysInfo = await getApiKeysInfo();
     if (allKeysInfo.length === 0) {
       const noKeyMsg = "AI গেটওয়ে API কী কনফিগার করা নেই। অনুগ্রহ করে Vercel বা এনভায়রনমেন্টে API কী সেট করুন।";
       if (req.body?.stream === true || req.query?.stream === 'true') {
@@ -193,53 +259,73 @@ CRITICAL RULES:
       return res.status(401).json({ error: noKeyMsg });
     }
 
-    // Sort to prioritize Unorouter keys first
-    const sortedKeys = [...allKeysInfo].sort((a, b) => {
-      if (a.type === 'unorouter' && b.type !== 'unorouter') return -1;
-      if (a.type !== 'unorouter' && b.type === 'unorouter') return 1;
-      return 0;
-    });
+    // Separate healthy keys from keys in cooldown/error state
+    const healthyKeys = allKeysInfo.filter(k => isKeyHealthy(k.value));
+    const candidateKeys = healthyKeys.length > 0 ? healthyKeys : allKeysInfo;
 
-    let systemContent: any = systemPrompt;
-    if (knowledgeBaseAttachments && knowledgeBaseAttachments.length > 0) {
-      systemContent = [
-        { type: "text", text: systemPrompt },
-        ...knowledgeBaseAttachments.map((att: any) => ({
-          type: "image_url",
-          image_url: { url: att.url }
-        }))
-      ];
-    }
+    // Load-balance across healthy keys (shuffle)
+    const sortedKeys = [...candidateKeys].sort(() => Math.random() - 0.5);
 
-    const formattedMessages = [
-      { role: "system", content: systemContent },
-      ...history.map((msg: any) => {
-        let content = msg.text || msg.content || "";
-        if (msg.attachments && msg.attachments.length > 0) {
-          content = [
-            { type: "text", text: msg.text || msg.content || "" },
-            ...msg.attachments.map((att: any) => ({
-              type: "image_url",
-              image_url: { url: att.url }
-            }))
-          ];
+    // Helper to format messages for models:
+    // Some vision models (like llama-3.2-11b-vision) strictly enforce at most 1 image in the entire prompt!
+    // And system prompts shouldn't have images attached unless required.
+    const buildFormattedMessages = (targetModel: string) => {
+      const isLlamaVision = targetModel.includes('llama') && targetModel.includes('vision');
+      const isGemmaModel = targetModel.includes('gemma');
+
+      // Collect all image attachments from current request first, then history
+      const reqImages: any[] = (req.body?.attachments || []).filter((a: any) => a && (a.url || a.type === 'image'));
+      
+      // Limit images for Llama vision strictly to 1 image to prevent 400 error: "At most 1 image(s) may be provided in one prompt"
+      const allowedReqImages = isLlamaVision ? reqImages.slice(0, 1) : reqImages;
+
+      return [
+        { role: "system", content: systemPrompt },
+        ...history.slice(-8).map((msg: any) => {
+          let content = msg.text || msg.content || "";
+          // Strip older images from history if using single-image vision model to avoid exceeding image quota
+          if (!isLlamaVision && msg.attachments && msg.attachments.length > 0) {
+            content = [
+              { type: "text", text: msg.text || msg.content || "" },
+              ...msg.attachments.map((att: any) => ({
+                type: "image_url",
+                image_url: { url: att.url }
+              }))
+            ];
+          }
+          return {
+            role: msg.role === "user" ? "user" : "assistant",
+            content: content
+          };
+        }),
+        { 
+          role: "user", 
+          content: allowedReqImages.length > 0 ? (
+            isGemmaModel ? [
+              { 
+                type: "text", 
+                text: `${message}\n\n[Attached Image: ${allowedReqImages[0].url}]` 
+              },
+              ...allowedReqImages.map((att: any) => ({
+                type: "image_url",
+                image_url: { url: att.url }
+              }))
+            ] : [
+              { type: "text", text: message },
+              ...allowedReqImages.map((att: any) => ({
+                type: "image_url",
+                image_url: { url: att.url }
+              }))
+            ]
+          ) : message
         }
-        return {
-          role: msg.role === "user" ? "user" : "assistant",
-          content: content
-        };
-      }),
-      { 
-        role: "user", 
-        content: (req.body?.attachments && req.body.attachments.length > 0) ? [
-          { type: "text", text: message },
-          ...req.body.attachments.map((att: any) => ({
-            type: "image_url",
-            image_url: { url: att.url }
-          }))
-        ] : message
-      }
-    ];
+      ];
+    };
+
+    // Detect if user sent any images/attachments
+    const hasAttachments = (req.body?.attachments && req.body.attachments.length > 0) ||
+      (knowledgeBaseAttachments && knowledgeBaseAttachments.length > 0) ||
+      history.some((m: any) => m.attachments && m.attachments.length > 0);
 
     let lastErrorText = "";
 
@@ -247,20 +333,31 @@ CRITICAL RULES:
       const keyObj = sortedKeys[i];
       const apiKey = keyObj.value;
 
-      const endpointUrl = keyObj.type === 'unorouter' 
-        ? "https://api.unorouter.com/v1/chat/completions"
-        : (process.env.GATEWAY_URL || "https://api.naga.ac/v1/chat/completions");
+      const endpointUrl = keyObj.customEndpoint 
+        ? keyObj.customEndpoint 
+        : (keyObj.type === 'unorouter' 
+            ? "https://api.unorouter.com/v1/chat/completions"
+            : (process.env.GATEWAY_URL || "https://api.naga.ac/v1/chat/completions"));
 
-      const candidateModels: string[] = keyObj.type === 'unorouter'
-        ? [modelName, "gemma-4-26b:free", "gemma-4-31b-it:free", "qwen3.6-plus:free", "nemotron-3.5-lightning:free"]
-        : [modelName, "sonar:free", "nemotron-3.5-lightning:free"];
+      let candidateModels: string[];
+      if (hasAttachments) {
+        // High-performance vision models for image analysis
+        // Ordered: llama-3.2-11b-vision (tested & working with 1 image), gemma-4-26b (free & fast), qwen3.8-flash-next
+        candidateModels = keyObj.type === 'unorouter'
+          ? ["llama-3.2-11b-vision:free", "gemma-4-26b:free", "qwen3.8-flash-next:free"]
+          : ["ling-3.0-flash-sante:free", "gpt-4o-mini", "claude-3-5-sonnet", "sonar:free"];
+      } else {
+        candidateModels = keyObj.type === 'unorouter'
+          ? [modelName, "gemma-4-26b:free", "gemma-4-31b-it:free", "qwen3.6-plus:free", "nemotron-3.5-lightning:free"]
+          : [modelName, "nemotron-3.5-lightning:free", "nemotron-3-super-120b-a12b:free", "dots-3-note-preview:free", "sonar:free"];
+      }
 
       const uniqueModels = Array.from(new Set(candidateModels));
 
-      const promptLength = formattedMessages.reduce((acc: number, m: any) => acc + (m.content ? (typeof m.content === 'string' ? m.content.length : 100) : 0), 0);
-      const estTokens = Math.max(50, Math.round(promptLength / 3.5));
-
       for (const currentModel of uniqueModels) {
+        const formattedMessages = buildFormattedMessages(currentModel);
+        const promptLength = formattedMessages.reduce((acc: number, m: any) => acc + (m.content ? (typeof m.content === 'string' ? m.content.length : 100) : 0), 0);
+        const estTokens = Math.max(50, Math.round(promptLength / 3.5));
         try {
           const response = await fetch(endpointUrl, {
             method: "POST",
@@ -279,6 +376,7 @@ CRITICAL RULES:
           });
 
           if (response.ok && response.body) {
+            markKeyHealthy(apiKey);
             trackApiUsage(apiKey, currentModel, true, response.status, estTokens).catch(() => {});
 
             if (isStreamRequested) {
@@ -301,13 +399,15 @@ CRITICAL RULES:
           } else {
             lastErrorText = await response.text();
             console.warn(`[AI Gateway] Key ${keyObj.name} (${keyObj.type}) with model ${currentModel} failed (${response.status}): ${lastErrorText}`);
+            markKeyUnhealthy(apiKey, response.status, lastErrorText);
             trackApiUsage(apiKey, currentModel, false, response.status, 0).catch(() => {});
 
-            // If 402/400/404/500/503, try next candidate model or next key
+            // If 401/403/402/400/404/500/503, try next candidate model or next key
             continue;
           }
         } catch (attemptError: any) {
           lastErrorText = attemptError.message || "Network error";
+          markKeyUnhealthy(apiKey, 500, lastErrorText);
           trackApiUsage(apiKey, currentModel, false, 500, 0).catch(() => {});
         }
       }
@@ -375,7 +475,7 @@ const handleModelsRequest = (req: express.Request, res: express.Response) => {
   res.json({
     object: "list",
     data: [
-      { id: "velora-ai-core", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
+      { id: "nipa-ai-core", object: "model", created: now, owned_by: "nipa", permission: defaultPerm },
       { id: "gemma-4-26b:free", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
       { id: "gemma-4-31b-it:free", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
       { id: "qwen3.6-plus:free", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
@@ -434,7 +534,7 @@ app.use((req, res, next) => {
 // Admin Stats
 app.get(["/api/admin/stats", "/admin/stats"], async (req, res) => {
   try {
-    const keysInfo = getApiKeysInfo();
+    const keysInfo = await getApiKeysInfo();
     const today = new Date().toISOString().split('T')[0];
     
     const response = await fetch(`${FIREBASE_DB_URL}/stats/api_keys.json`);
@@ -443,6 +543,15 @@ app.get(["/api/admin/stats", "/admin/stats"], async (req, res) => {
     const detailedKeys = keysInfo.map(info => {
       const keyHash = Buffer.from(info.value).toString('hex').slice(0, 16);
       const stats = statsData[keyHash] || {};
+      const isHealthy = isKeyHealthy(info.value);
+      const inMemHealth = keyHealthTracker.get(info.value);
+      
+      let computedStatus = isHealthy ? 'Active (Healthy)' : 'Cooldown / Error';
+      if (!isHealthy && inMemHealth?.cooldownUntil) {
+        const remainingSec = Math.ceil((inMemHealth.cooldownUntil - Date.now()) / 1000);
+        computedStatus = `Disabled/Cooldown (${remainingSec}s)`;
+      }
+
       return {
         name: info.name,
         maskedValue: stats.info?.maskedValue || `${info.value.slice(0, 6)}...${info.value.slice(-4)}`,
@@ -451,8 +560,9 @@ app.get(["/api/admin/stats", "/admin/stats"], async (req, res) => {
         successCalls: stats.success_calls || 0,
         errorCalls: stats.error_calls || 0,
         totalTokens: stats.total_tokens || 0,
-        status: stats.info?.status || 'Active',
-        lastStatusCode: stats.info?.lastStatusCode || 200,
+        status: computedStatus,
+        isHealthy: isHealthy,
+        lastStatusCode: inMemHealth?.lastError ? 500 : (stats.info?.lastStatusCode || 200),
         lastUsed: stats.info?.lastUsed || null,
         lastModel: stats.info?.lastModel || 'N/A',
         models: stats.models || {}
@@ -473,13 +583,13 @@ app.get(["/api/admin/stats", "/admin/stats"], async (req, res) => {
 
 // Health check
 app.get(["/api/v1/health", "/health", "/api/health"], (req, res) => {
-  res.json({ status: "ok", service: "VELORA AI API", version: "1.0.0" });
+  res.json({ status: "ok", service: "NIPA AI API", version: "1.0.0" });
 });
 
 // SP WALLET BD - Virtual Card Payment Gateway Credentials
 const SP_GATEWAY_CONFIG = {
-  appName: "Velora",
-  appId: "CARD_GW_velora_MUGCHQM0",
+  appName: "NIPA",
+  appId: "CARD_GW_nipa_MUGCHQM0",
   paymentChannel: "ONLY VIRTUAL CARD (16-Digit Card Debit)",
   merchantSettlementWallet: "0199999999",
   publicClientApiKey: "sp_card_pub_velora_r1usqx",
@@ -547,7 +657,7 @@ app.post(["/api/payment/sp-card-checkout", "/api/checkout/card-pay"], async (req
 
     const numPriceBdt = Number(priceBdt) || 0;
     const numPriceSp = Number(priceSp) || parseFloat((numPriceBdt / SP_GATEWAY_CONFIG.exchangeRateBdtPerSp).toFixed(2));
-    const orderId = `VELORA_SP_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const orderId = `NIPA_SP_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const maskedCard = `${cleanCard.slice(0, 4)} **** **** ${cleanCard.slice(-4)}`;
 
     const spPayload = {
@@ -725,7 +835,7 @@ app.post(["/api/payment/sp-card-checkout", "/api/checkout/card-pay"], async (req
         orderId: orderId,
         userId: userId,
         username: userDoc.username || userDoc.fullName || 'User',
-        userEmail: userDoc.email || `${userDoc.username || 'user'}@velora.app`,
+        userEmail: userDoc.email || `${userDoc.username || 'user'}@nipa.app`,
         packageId: packageId,
         packageName: packageName || (packageType === 'vip' ? `${amount} Days VIP` : `${amount} Tokens`),
         type: packageType,

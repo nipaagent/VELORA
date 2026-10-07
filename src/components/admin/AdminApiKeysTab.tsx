@@ -36,7 +36,7 @@ export const AdminApiKeysTab: React.FC<AdminApiKeysTabProps> = ({
                 AI গেটওয়ে ও API কী ম্যানেজমেন্ট ({apiKeys.length})
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Unorouter ও Naga AI ক্লাউড গেটওয়ে এবং API ক্লাস্টারের লাইভ স্টেটাস।
+                NIPA AI ক্লাউড গেটওয়ে এবং API ক্লাস্টারের লাইভ স্টেটাস।
               </p>
             </div>
           </div>
@@ -79,7 +79,7 @@ export const AdminApiKeysTab: React.FC<AdminApiKeysTabProps> = ({
               <Cpu className="w-4 h-4 text-emerald-500" />
             </div>
             <div className="text-base font-black text-emerald-700 mt-1 font-mono truncate">
-              {activeModelName || 'Naga AI Core'}
+              {activeModelName || 'NIPA AI Core'}
             </div>
           </div>
         </div>
@@ -109,7 +109,7 @@ export const AdminApiKeysTab: React.FC<AdminApiKeysTabProps> = ({
                 </div>
 
                 <div className="font-mono text-xs bg-slate-50 px-3 py-2 rounded-xl text-slate-600 border border-slate-100 flex items-center justify-between">
-                  <span>{key.maskedValue || 'naga-••••••••••••••••••••••••••'}</span>
+                  <span>{key.maskedValue || 'nipa-••••••••••••••••••••••••••'}</span>
                   <span className="text-[10px] text-slate-400">SECURE MASK</span>
                 </div>
 

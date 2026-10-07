@@ -9,7 +9,7 @@ import UserAvatar from './UserAvatar';
 
 interface ChatAreaProps {
   chat: Chat | undefined | null;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, attachments?: any[]) => void;
   onNewChat: () => void;
   isLoading: boolean;
   userProfile?: UserProfile | null;
@@ -50,6 +50,8 @@ function ThinkingSection({ thinking, isGenerating }: { thinking: string; isGener
 
 export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }: ChatAreaProps) {
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -70,12 +72,90 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
     }
   }, [chat?.messages, isLoading, isAutoScrollEnabled]);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) {
+        alert('অনুগ্রহ করে শুধুমাত্র ছবি (JPG, PNG, WebP) নির্বাচন করুন।');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert('ছবির আকার সর্বোচ্চ ১০MB হতে পারে।');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const base64Url = loadEvent.target?.result as string;
+        if (base64Url) {
+          setAttachments(prev => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              type: 'image',
+              url: base64Url,
+              name: file.name,
+              mimeType: file.type
+            }
+          ]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (loadEvent) => {
+            const base64Url = loadEvent.target?.result as string;
+            if (base64Url) {
+              setAttachments(prev => [
+                ...prev,
+                {
+                  id: crypto.randomUUID(),
+                  type: 'image',
+                  url: base64Url,
+                  name: `pasted-image-${Date.now()}.png`,
+                  mimeType: file.type
+                }
+              ]);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    }
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    const hasText = Boolean(input.trim());
+    const hasAtts = attachments.length > 0;
+    if ((!hasText && !hasAtts) || isLoading) return;
+
     setIsAutoScrollEnabled(true);
-    onSendMessage(input.trim());
+    const messageText = hasText ? input.trim() : (hasAtts ? 'এই ছবিটি বিশ্লেষণ করে বিস্তারিত ব্যাখ্যা দিন।' : '');
+    onSendMessage(messageText, attachments.length > 0 ? attachments : undefined);
     setInput('');
+    setAttachments([]);
   };
 
   const messages = chat?.messages || [];
@@ -92,7 +172,7 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
             <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 border border-slate-100 shadow-sm mx-auto">
               <Bot className="w-7 h-7 text-slate-800" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-1.5">Velora Assistant</h2>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-1.5">Nipa Assistant</h2>
             <p className="text-xs font-medium text-slate-500 max-w-sm mx-auto">High-performance AI assistant ready to write code, answer questions, and solve problems.</p>
           </div>
         ) : (
@@ -135,6 +215,22 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                           : 'bg-white border border-slate-200/90 text-slate-800 rounded-2xl rounded-tl-xs'
                       )}
                     >
+                      {/* Attached images preview */}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="mb-2.5 flex flex-wrap gap-2">
+                          {msg.attachments.map((att, aIdx) => (
+                            <div key={aIdx} className="relative rounded-xl overflow-hidden border border-white/20 bg-black/10 shadow-sm max-w-[260px]">
+                              <img 
+                                src={att.url} 
+                                alt={att.name || 'Attached image'} 
+                                className="max-h-56 max-w-full object-contain rounded-lg"
+                                loading="lazy"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       {!isUser && msg.thinking && (
                         <ThinkingSection 
                           thinking={msg.thinking} 
@@ -210,10 +306,29 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
             </div>
           )}
           
+          {/* Pending attachments strip */}
+          {attachments.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2 px-1">
+              {attachments.map((att) => (
+                <div key={att.id} className="relative group rounded-xl border border-indigo-200 bg-indigo-50/80 p-1.5 pr-7 flex items-center gap-2 shadow-xs">
+                  <img src={att.url} alt={att.name} className="w-9 h-9 object-cover rounded-lg border border-indigo-100" />
+                  <span className="text-xs font-semibold text-slate-700 max-w-[130px] truncate">{att.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(att.id)}
+                    className="absolute right-1.5 top-2 p-0.5 rounded-full text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          
           <form 
             onSubmit={handleSubmit}
             className={cn(
-              "flex items-center gap-2 bg-white rounded-2xl px-3.5 py-2 transition-all",
+              "flex items-center gap-2 bg-white rounded-2xl px-3 py-1.5 sm:px-3.5 sm:py-2 transition-all",
               isVipActive
                 ? "border-2 shadow-lg focus-within:ring-4"
                 : "border border-slate-200 shadow-md focus-within:border-indigo-500/80 focus-within:ring-2 focus-within:ring-indigo-500/10"
@@ -224,6 +339,27 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
               outlineColor: 'var(--user-theme-color)'
             } : {}}
           >
+            {/* Hidden File Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              multiple
+              className="hidden"
+            />
+
+            {/* Image Attach Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              title="ছবি নির্বাচন করুন এবং এনালাইসিস করুন (Upload Image for AI Analysis)"
+              className="p-2 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all shrink-0 cursor-pointer disabled:opacity-40"
+            >
+              <ImageIcon className="w-4.5 h-4.5" />
+            </button>
+
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -233,20 +369,20 @@ export default function ChatArea({ chat, onSendMessage, isLoading, userProfile }
                   handleSubmit(e);
                 }
               }}
-              placeholder="Type your message here..."
+              placeholder={attachments.length > 0 ? "ছবি নিয়ে আপনার প্রশ্ন লিখুন (বা সরাসরি পাঠান)..." : "Type your message or upload an image..."}
               className="flex-1 max-h-32 min-h-[38px] bg-transparent resize-none border-0 focus:ring-0 py-1.5 px-0 text-sm text-slate-800 placeholder-slate-400 leading-relaxed outline-none custom-scrollbar"
               rows={1}
             />
             <button 
               type="submit"
-              disabled={!input.trim() || isLoading}
+              disabled={(!input.trim() && attachments.length === 0) || isLoading}
               className={cn(
                 "p-2 rounded-xl shrink-0 transition-all outline-none",
-                input.trim() && !isLoading 
+                (input.trim() || attachments.length > 0) && !isLoading 
                   ? (isVipActive ? "text-white shadow-md" : "bg-slate-900 text-white hover:bg-slate-800 shadow-xs")
                   : "bg-slate-100 text-slate-300 cursor-not-allowed"
               )}
-              style={isVipActive && input.trim() && !isLoading ? { 
+              style={isVipActive && (input.trim() || attachments.length > 0) && !isLoading ? { 
                 backgroundColor: 'var(--user-theme-color)',
                 boxShadow: `0 4px 12px rgba(var(--user-theme-color-rgb), 0.3)`
               } : {}}

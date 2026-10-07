@@ -543,8 +543,8 @@ export default function App() {
               const cleanUsername = currentUser.email ? currentUser.email.split('@')[0] : currentUser.uid;
               const initialProf: UserProfile = {
                 uid: currentUser.uid,
-                email: currentUser.email || `${cleanUsername}@velora.app`,
-                fullName: cleanUsername === 'admin' ? 'Velora Admin' : cleanUsername,
+                email: currentUser.email || `${cleanUsername}@nipa.app`,
+                fullName: cleanUsername === 'admin' ? 'NIPA Admin' : cleanUsername,
                 username: cleanUsername,
                 password: '',
                 createdAt: Date.now(),
@@ -1114,7 +1114,7 @@ export default function App() {
       <div className="flex h-[100dvh] w-full items-center justify-center bg-slate-50 font-sans">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading Velora...</span>
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading NIPA...</span>
         </div>
       </div>
     );
@@ -1265,7 +1265,7 @@ export default function App() {
                             filter: `drop-shadow(0 0 1px var(--user-theme-color-border))`
                           } : {}}
                         >
-                          VELORA
+                          NIPA
                         </h1>
                       </>
                     );

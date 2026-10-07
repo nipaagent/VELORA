@@ -29,7 +29,7 @@ export const getSequentialSuffix = (index: number): string => {
 };
 
 export const generateUniqueVeloraKey = (): string => {
-  const PREFIX = "VELORA";
+  const PREFIX = "NIPA";
 
   let usedKeys: string[] = [];
   try {

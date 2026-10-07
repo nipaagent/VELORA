@@ -75,14 +75,14 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
     
     setIsGenerating(true);
     try {
-      // Format: VELORA + 6 random uppercase alphanumeric characters (total 12 chars)
+      // Format: NIPA + 6 random uppercase alphanumeric characters (total 10 chars)
       const generateKeyString = () => {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
         for (let i = 0; i < 6; i++) {
           result += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-        return `VELORA${result}`;
+        return `NIPA${result}`;
       };
 
       const newKey = generateKeyString();
@@ -119,7 +119,7 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'velora-ai-core',
+          model: 'nipa-ai-core',
           messages: [{ role: "user", content: testMessage }],
           stream: false
         })
@@ -142,7 +142,7 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
   -H "Authorization: Bearer ${apiKey || 'YOUR_API_KEY'}" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "velora-ai-core",
+    "model": "nipa-ai-core",
     "messages": [{"role": "user", "content": "Hello"}],
     "stream": false
   }'`;
@@ -154,7 +154,7 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    model: "velora-ai-core",
+    model: "nipa-ai-core",
     messages: [{"role": "user", "content": "Hello"}],
     stream: false
   })
@@ -197,7 +197,7 @@ console.log(data);`;
               <div>
                 <h3 className="text-sm font-bold text-amber-900">API Access Disabled</h3>
                 <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                  Your developer API access is currently disabled. Please contact the administrator to request API access. You cannot make external requests to the VELORA API without an active key.
+                  Your developer API access is currently disabled. Please contact the administrator to request API access. You cannot make external requests to the NIPA API without an active key.
                 </p>
               </div>
             </div>
@@ -209,7 +209,7 @@ console.log(data);`;
               <div>
                 <h3 className="text-sm font-bold text-emerald-900">API Access Enabled</h3>
                 <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
-                  Your developer account is active. You have full access to the VELORA REST API. Keep your API key secure and do not share it publicly.
+                  Your developer account is active. You have full access to the NIPA REST API. Keep your API key secure and do not share it publicly.
                 </p>
               </div>
             </div>
@@ -222,8 +222,8 @@ console.log(data);`;
                 <Globe className="w-4 h-4 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-slate-800">Base API Endpoint</h2>
-                <p className="text-xs text-slate-500 mt-0.5">The root URL for all VELORA AI platform requests</p>
+                <h2 className="text-sm font-bold text-slate-800">NIPA AI Gateway Endpoint</h2>
+                <p className="text-xs text-slate-500 mt-0.5">The root URL for all NIPA AI platform requests</p>
               </div>
             </div>
             
@@ -326,7 +326,7 @@ console.log(data);`;
               </div>
               <div>
                 <h2 className="text-sm font-bold text-slate-800">Build Your Own AI Applications</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Use your Velora API key to power any custom application, tool, or integration.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Use your Nipa API key to power any custom application, tool, or integration.</p>
               </div>
             </div>
             

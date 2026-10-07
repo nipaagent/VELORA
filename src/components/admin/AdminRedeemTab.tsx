@@ -32,7 +32,7 @@ export const AdminRedeemTab: React.FC<AdminRedeemTabProps> = ({
 
   const handleGenerateRandom = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let res = 'VELORA-';
+    let res = 'NIPA-';
     for (let i = 0; i < 6; i++) {
       res += chars.charAt(Math.floor(Math.random() * chars.length));
     }
@@ -108,7 +108,7 @@ export const AdminRedeemTab: React.FC<AdminRedeemTabProps> = ({
                 type="text"
                 value={codeText}
                 onChange={(e) => setCodeText(e.target.value.toUpperCase())}
-                placeholder="যেমন: VELORA-SPECIAL, PRO-GIFT"
+                placeholder="যেমন: NIPA-SPECIAL, PRO-GIFT"
                 className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono font-black text-amber-300 placeholder:text-slate-600 uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>

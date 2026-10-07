@@ -35,7 +35,7 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
             className="flex items-center gap-2"
           >
             <Sparkles className="w-4.5 h-4.5 text-indigo-600" />
-            <span className="font-black text-gray-900 text-sm tracking-wider uppercase">VELORA</span>
+            <span className="font-black text-gray-900 text-sm tracking-wider uppercase">NIPA</span>
           </motion.div>
 
           {tokenState && onOpenTokenModal && (
@@ -116,10 +116,8 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
       </div>
 
       <div className="shrink-0">
-        {/* Admin & Referral Links */}
+        {/* Admin Links */}
         <div className="p-2 border-t border-gray-100 space-y-1.5 bg-white">
-
-
           {/* Admin Panel button - ONLY shown to username 'Admin' or 'admin' */}
           {userProfile?.username?.toLowerCase() === 'admin' && (
             <motion.button

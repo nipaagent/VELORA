@@ -254,7 +254,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `velora-chat-backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `nipa-chat-backup-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
       } else {
@@ -619,7 +619,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-900">
-                        {userProfile?.email || auth.currentUser?.email || (userProfile?.username ? `${userProfile.username}@velora.app` : 'User')}
+                        {userProfile?.email || auth.currentUser?.email || (userProfile?.username ? `${userProfile.username}@nipa.app` : 'User')}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-700">
                         {userProfile?.role === 'admin' ? 'Admin' : 'Personal Account'}

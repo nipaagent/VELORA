@@ -77,7 +77,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
         setError('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে (ইংরেজি অক্ষর, সংখ্যা বা আন্ডারস্কোর)।');
         return;
       }
-      cleanEmail = `${cleanUsername}@velora.app`;
+      cleanEmail = `${cleanUsername}@nipa.app`;
     }
 
     const cleanPassword = password.trim();
@@ -311,9 +311,9 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
           <div className="relative z-10 space-y-5">
             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] bg-white border border-slate-100 p-3 rounded-xl shadow-sm inline-flex">
               <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              Velora Network v2.7
+              NIPA Network v2.7
             </div>
-            <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">© 2026 VELORA SOLUTIONS</p>
+            <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">© 2026 NIPA SOLUTIONS</p>
           </div>
         </div>
 
@@ -326,7 +326,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
             </div>
-            <h2 className="text-lg font-black tracking-widest text-slate-900 uppercase">VELORA</h2>
+            <h2 className="text-lg font-black tracking-widest text-slate-900 uppercase">NIPA</h2>
           </div>
 
           <div className="px-8 md:px-16 pt-8 md:pt-16 pb-12 flex-1 flex flex-col justify-center">
@@ -441,7 +441,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                       type="text"
                       value={referralCodeInput}
                       onChange={(e) => setReferralCodeInput(e.target.value)}
-                      placeholder="e.g. VELORA77"
+                      placeholder="e.g. NIPA77"
                       readOnly={!!initialReferralCode}
                       className={`w-full pl-11 pr-4 py-3 text-sm rounded-2xl outline-none transition-all font-medium uppercase placeholder:text-slate-300 ${initialReferralCode ? 'bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed opacity-90' : 'bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50'}`}
                     />
@@ -483,7 +483,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
               {isSignUp ? (
                 <>Already a member? <span className="text-indigo-600">Sign In</span></>
               ) : (
-                <>New to Velora? <span className="text-indigo-600">Create Account</span></>
+                <>New to NIPA? <span className="text-indigo-600">Create Account</span></>
               )}
             </button>
           </div>
