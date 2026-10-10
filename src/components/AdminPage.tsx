@@ -80,6 +80,15 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       totalCalls: 0,
       successCalls: 0,
       errorCalls: 0
+    },
+    {
+      name: 'NIPA UNOROUTER GATEWAY',
+      maskedValue: 'sk-0i4••••••••••••••••••••••••8lwk',
+      status: 'Active',
+      todayCalls: 0,
+      totalCalls: 0,
+      successCalls: 0,
+      errorCalls: 0
     }
   ]);
   const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);

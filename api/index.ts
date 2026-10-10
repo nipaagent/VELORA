@@ -46,11 +46,18 @@ const isKeyHealthy = (apiKey: string): boolean => {
 const getApiKeysInfo = async () => {
   const keysMap = new Map<string, { name: string; type: 'unorouter' | 'naga'; customEndpoint?: string }>();
 
-  // 1. Specifically look for NIPA_AI and IMRAN_BY_NIPA gateways
+  // 1. Specifically look for NIPA_AI, IMRAN_BY_NIPA and UNOROUTER_AI gateways
   const gateways = [
     { env: 'NIPA_AI', name: 'NIPA AI GATEWAY' },
-    { env: 'IMRAN_BY_NIPA', name: 'IMRAN BY NIPA GATEWAY' }
+    { env: 'IMRAN_BY_NIPA', name: 'IMRAN BY NIPA GATEWAY' },
+    { env: 'UNOROUTER_AI', name: 'NIPA UNOROUTER GATEWAY' }
   ];
+
+  // Default key provided by user for Unorouter
+  const defaultUnoKey = "sk-0i4EG4pXYvWmy693v7yP48DtjwP00G42sHvRgqGWwXZe8lwk";
+  if (!process.env.UNOROUTER_AI && !keysMap.has(defaultUnoKey)) {
+    keysMap.set(defaultUnoKey, { name: "NIPA UNOROUTER (Default)", type: "unorouter" });
+  }
 
   gateways.forEach(gw => {
     const val = process.env[gw.env];
@@ -291,12 +298,12 @@ CRITICAL RULES:
       if (hasAttachments) {
         // High-performance vision models for image analysis
         candidateModels = keyObj.type === 'unorouter'
-          ? ["llama-3.2-11b-vision:free", "gemma-4-26b:free", "qwen3.8-flash-next:free"]
+          ? ["llama-3.2-11b-vision:free", "gemma-4-26b:free", "qwen3.8-flash-next:free", "gpt-oss-safeguard-20b:free"]
           : ["gpt-4o-mini", "claude-3-5-sonnet", "sonar:free"];
       } else {
         // Optimized free model failover list
         candidateModels = keyObj.type === 'unorouter'
-          ? [modelName, "gemma-4-26b:free", "qwen3.8-flash-next:free", "gemma-4-31b-it:free"]
+          ? [modelName, "gemma-4-26b:free", "qwen3.8-flash-next:free", "gpt-oss-safeguard-20b:free", "gemma-4-31b-it:free"]
           : [modelName, "nemotron-3.5-lightning:free", "sonar:free", "dots-3-note-preview:free"];
       }
 
@@ -445,6 +452,7 @@ const handleModelsRequest = (req: express.Request, res: express.Response) => {
       { id: "nemotron-3.5-lightning:free", object: "model", created: now, owned_by: "naga", permission: defaultPerm },
       { id: "gpt-4o-mini", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
       { id: "gpt-4o", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
+      { id: "gpt-oss-safeguard-20b:free", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
       { id: "claude-3-5-sonnet", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm }
     ]
   });

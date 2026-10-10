@@ -260,6 +260,10 @@ console.log(data);`;
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                   <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">imran_by_nipa</span>
                 </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">nipa_unorouter</span>
+                </div>
               </div>
             </div>
           </section>
