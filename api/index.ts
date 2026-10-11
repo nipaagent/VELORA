@@ -135,30 +135,33 @@ const trackApiUsage = async (
 
 const generateImageDirect = async (imagePrompt: string, apiKey: string, type: 'unorouter' | 'naga', endpoint?: string) => {
   const url = endpoint || (type === 'unorouter' ? "https://api.unorouter.com/v1/chat/completions" : "https://api.naga.ac/v1/chat/completions");
-  const model = "juggernaut-xl:free";
+  const imageCandidateModels = ["juggernaut-xl:free", "dreamshaper:free", "albedobase-xl-sdxl:free", "absolutereality:free"];
   
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: "user", content: imagePrompt }],
-        temperature: 0.7,
-        max_tokens: 1000
-      }),
-      signal: AbortSignal.timeout(60000) // Image gen can be slow
-    });
+  for (const imgModel of imageCandidateModels) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: imgModel,
+          messages: [{ role: "user", content: imagePrompt }],
+          temperature: 0.7,
+          max_tokens: 1000
+        }),
+        signal: AbortSignal.timeout(35000)
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      return data.choices?.[0]?.message?.content || "";
+      if (res.ok) {
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content || "";
+        if (content) return content;
+      }
+    } catch (e) {
+      console.warn(`Direct image gen error with ${imgModel}:`, e);
     }
-  } catch (e) {
-    console.error("Direct image gen error:", e);
   }
   return null;
 };
@@ -188,8 +191,8 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
     }
 
     let modelName = modelFromClient;
-    if (!modelName || modelName === 'nipa-ai-core' || modelName.includes('gemini') || modelName.includes('550b') || modelName === 'sonar:free') {
-      modelName = process.env.AI_MODEL || process.env.DEFAULT_MODEL || "gemma-4-26b:free";
+    if (!modelName || modelName === 'nipa-ai-core' || modelName.includes('550b') || modelName === 'sonar:free') {
+      modelName = process.env.AI_MODEL || process.env.DEFAULT_MODEL || "gemini-2.5-flash-lite:free";
     }
 
     const isStreamRequested = (req.body?.stream === true || req.query?.stream === 'true') && 
@@ -331,12 +334,12 @@ STRICT RULES:
       if (hasAttachments) {
         // High-performance vision models for image analysis
         candidateModels = keyObj.type === 'unorouter'
-          ? ["llama-3.2-11b-vision:free", "pixtral-12b:free", "qwen3.8-flash-next:free", "gpt-oss-safeguard-20b:free"]
+          ? ["gemini-2.5-flash-lite:free", "gemini-3.1-flash-lite:free", "gpt-4o:free", "llama-3.2-11b-vision:free", "qwen2.5-vl-7b-instruct-awq:free"]
           : ["gpt-4o-mini", "claude-3-5-sonnet", "sonar:free"];
       } else {
-        // Optimized free model failover list (Fastest models first)
+        // Ultra-fast response candidates (Sub-second response models prioritized)
         candidateModels = keyObj.type === 'unorouter'
-          ? ["gemma-4-26b:free", "qwen3.8-flash-next:free", modelName, "gpt-oss-safeguard-20b:free", "gemma-4-31b-it:free"]
+          ? ["gemini-2.5-flash-lite:free", "gemini-3.1-flash-lite:free", "nemotron-3.5-lightning:free", "gemini-3.5-flash-lite:free", "gemini-flash-lite-latest:free", "gpt-4o:free", "mistral-small:free", "deepseek-v4.1-flash:free", "gemma-4-26b:free", "gpt-oss-safeguard-20b:free"]
           : ["nemotron-3.5-lightning:free", "sonar:free", modelName, "dots-3-note-preview:free"];
       }
 
@@ -359,8 +362,8 @@ STRICT RULES:
               max_tokens: 4096,
               stream: isStreamRequested
             }),
-            // Stable failover: 15s for first 2 models (fast enough), 45s for rest
-            signal: AbortSignal.timeout(attemptIdx < 2 ? 15000 : 45000)
+            // Fast failover: 6s for initial models, 25s for rest
+            signal: AbortSignal.timeout(attemptIdx < 3 ? 6000 : 25000)
           });
 
           if (response.ok && response.body) {

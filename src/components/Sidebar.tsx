@@ -22,9 +22,10 @@ interface SidebarProps {
   onOpenProfile: () => void;
   onOpenReferral?: () => void;
   onOpenAdmin?: () => void;
+  isSharedSession?: boolean;
 }
 
-export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelectChat, onNewChat, onDeleteChat, onClearAllChats, userProfile, tokenState, onOpenTokenModal, onSignOut, onOpenProfile, onOpenReferral, onOpenAdmin }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelectChat, onNewChat, onDeleteChat, onClearAllChats, userProfile, tokenState, onOpenTokenModal, onSignOut, onOpenProfile, onOpenReferral, onOpenAdmin, isSharedSession }: SidebarProps) {
   return (
     <div className="w-full h-full bg-white text-gray-800 flex flex-col justify-between border-r border-gray-100 shadow-sm">
       <div className="flex flex-col min-h-0 flex-1">
@@ -116,54 +117,76 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
       </div>
 
       <div className="shrink-0">
-        {/* Admin Links */}
-        <div className="p-2 border-t border-gray-100 space-y-1.5 bg-white">
-          {/* Admin Panel button - ONLY shown to username 'Admin' or 'admin' */}
-          {userProfile?.username?.toLowerCase() === 'admin' && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={onOpenAdmin}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 rounded-xl transition-colors text-[10px] font-black uppercase tracking-widest border border-emerald-200/80 shadow-2xs"
-              title="Admin Panel"
-            >
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Admin Panel</span>
-            </motion.button>
-          )}
-        </div>
+        {/* Admin Links - Hidden in Shared Mode */}
+        {!isSharedSession && (
+          <div className="p-2 border-t border-gray-100 space-y-1.5 bg-white">
+            {userProfile?.username?.toLowerCase() === 'admin' && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onOpenAdmin}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 rounded-xl transition-colors text-[10px] font-black uppercase tracking-widest border border-emerald-200/80 shadow-2xs"
+                title="Admin Panel"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Admin Panel</span>
+              </motion.button>
+            )}
+          </div>
+        )}
 
         {/* User profile & logout footer */}
         {userProfile && (
           <div className="p-2.5 border-t border-gray-100 bg-slate-50/80">
-            <div className="flex items-center justify-between gap-2">
-              <motion.button 
-                whileHover={{ x: 2 }}
-                onClick={onOpenProfile}
-                className="flex items-center gap-3 overflow-hidden text-left hover:bg-white p-1.5 rounded-xl transition-colors flex-1 group border border-transparent hover:border-slate-200/60"
-                title="Settings"
-              >
-                <div className="w-9 h-9 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
-                  <Settings className="w-4.5 h-4.5 text-slate-700" />
+            {isSharedSession ? (
+              <div className="flex items-center justify-between gap-2 p-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-xs">
+                    SS
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] uppercase font-black tracking-wider text-indigo-600 block">Shared Session</span>
+                    <span className="text-xs font-bold text-slate-800 truncate block">{userProfile.fullName || userProfile.username}</span>
+                  </div>
                 </div>
-                <div className="overflow-hidden leading-tight flex-1 mt-0.5">
-                  <div className="text-xs font-black text-slate-900 truncate tracking-tight uppercase">Settings</div>
-                  <div className="text-[9px] text-slate-500 truncate font-bold uppercase tracking-widest mt-0.5">Preferences & Data</div>
-                </div>
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.1, color: '#e11d48' }}
-                whileTap={{ scale: 0.9 }}
-                onClick={onSignOut}
-                className="p-2 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors shrink-0"
-                title="Sign Out"
-              >
-                <LogOut className="w-4.5 h-4.5" />
-              </motion.button>
-            </div>
+                <button
+                  onClick={onSignOut}
+                  className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                  title="প্রস্থান"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>প্রস্থান</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <motion.button 
+                  whileHover={{ x: 2 }}
+                  onClick={onOpenProfile}
+                  className="flex items-center gap-3 overflow-hidden text-left hover:bg-white p-1.5 rounded-xl transition-colors flex-1 group border border-transparent hover:border-slate-200/60"
+                  title="Settings"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                    <Settings className="w-4.5 h-4.5 text-slate-700" />
+                  </div>
+                  <div className="overflow-hidden leading-tight flex-1 mt-0.5">
+                    <div className="text-xs font-black text-slate-900 truncate tracking-tight uppercase">Settings</div>
+                    <div className="text-[9px] text-slate-500 truncate font-bold uppercase tracking-widest mt-0.5">Preferences & Data</div>
+                  </div>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.1, color: '#e11d48' }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={onSignOut}
+                  className="p-2 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors shrink-0"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4.5 h-4.5" />
+                </motion.button>
+              </div>
+            )}
           </div>
         )}
-
       </div>
     </div>
   );

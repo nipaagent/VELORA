@@ -17,6 +17,15 @@ import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
 import { ref, onValue, set, remove, get, update } from 'firebase/database';
 import { formatTokenCount, cn, saveChatsToLocal } from './lib/utils';
+import SharedSessionHeader from './components/chat/SharedSessionHeader';
+
+interface SharedSessionInfo {
+  isShared: boolean;
+  code: string;
+  ownerUid: string;
+  ownerName: string;
+  expiresAt: number;
+}
 
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
@@ -84,6 +93,14 @@ export default function App() {
   const [urlPromoCode, setUrlPromoCode] = useState<string>('');
   const [globalTokenMultiplier, setGlobalTokenMultiplier] = useState<number>(1);
   const [authLoading, setAuthLoading] = useState(true);
+  const [sharedSessionInfo, setSharedSessionInfo] = useState<SharedSessionInfo | null>(() => {
+    try {
+      const stored = sessionStorage.getItem('nipa-shared-session');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // Extract referral, promo, and account share URL links
   useEffect(() => {
@@ -110,7 +127,13 @@ export default function App() {
           const snap = await get(ref(db, `public_share_codes/${cleanShare}`));
           if (snap.exists()) {
             const data = snap.val();
-            if (data.isActive && (!data.expiresAt || data.expiresAt > Date.now())) {
+            if (!data.isActive) {
+              alert("⚠️ এই শেয়ার লিংকটি বাতিল করা হয়েছে।");
+            } else if (data.expiresAt > 0 && data.expiresAt < Date.now()) {
+              alert("⚠️ এই শেয়ার লিংকটির সময়সীমা শেষ হয়ে গেছে।");
+            } else if (data.maxUsers > 0 && (data.useCount || 0) >= data.maxUsers) {
+              alert(`⚠️ এই শেয়ার লিংকটির সর্বোচ্চ ইউজার সীমা (${data.maxUsers} জন) পূর্ণ হয়ে গেছে।`);
+            } else {
               await signInWithEmailAndPassword(auth, data.ownerEmail, data.accessPass);
               try {
                 await update(ref(db, `public_share_codes/${cleanShare}`), {
@@ -121,8 +144,6 @@ export default function App() {
                 });
               } catch {}
               alert(`🎉 সফলভাবে শেয়ারকৃত অ্যাকাউন্টে (${data.ownerName}) প্রবেশ করা হয়েছে!`);
-            } else {
-              alert("⚠️ এই শেয়ার লিংকটির মেয়াদ শেষ হয়ে গেছে অথবা লিংকটি বাতিল করা হয়েছে।");
             }
           } else {
             alert("⚠️ ভুল বা অকার্যকর শেয়ার লিংক।");
