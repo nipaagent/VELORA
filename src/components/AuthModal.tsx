@@ -192,7 +192,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
         await set(ref(db, `usernames/${cleanUsername}`), uid);
 
         // Save last login timestamp for force logout logic
-        localStorage.setItem(`velora-last-login-${uid}`, Date.now().toString());
+        localStorage.setItem(`nipa-last-login-${uid}`, Date.now().toString());
 
         // Award referrer 100,000 tokens and update referral count/milestones
         if (referrerUid) {
@@ -228,23 +228,46 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
       } else {
         // Sign In (Supports Email/Gmail directly or Username)
         let userCredential;
-        try {
-          userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
-        } catch (initialErr: any) {
-          // If entered username directly, check if the username is registered with an email
-          if (!isEmailInput) {
+        let signinEmail = cleanEmail;
+
+        // If it's a username input, try to get the real email from our DB first
+        // to handle legacy accounts (@velora.app) vs new accounts (@nipa.app)
+        if (!isEmailInput) {
+          try {
             const usernameSnap = await get(ref(db, `usernames/${cleanUsername}`));
             if (usernameSnap.exists()) {
               const mappedUid = usernameSnap.val();
               const userSnap = await get(ref(db, `users/${mappedUid}`));
               if (userSnap.exists() && userSnap.val().email) {
-                userCredential = await signInWithEmailAndPassword(auth, userSnap.val().email, cleanPassword);
-              } else {
-                throw initialErr;
+                signinEmail = userSnap.val().email;
               }
-            } else {
-              throw initialErr;
             }
+          } catch (e) {
+            console.warn("DB email lookup failed, falling back to default suffix", e);
+          }
+        }
+
+        try {
+          userCredential = await signInWithEmailAndPassword(auth, signinEmail, cleanPassword);
+        } catch (initialErr: any) {
+          // If first attempt fails (maybe DB lookup was slow/empty), try common fallbacks
+          if (!isEmailInput && (initialErr.code === 'auth/invalid-credential' || initialErr.code === 'auth/user-not-found')) {
+            const fallbackEmails = [
+              `${cleanUsername}@velora.app`,
+              `${cleanUsername}@nipa.app`
+            ].filter(e => e !== signinEmail);
+
+            let success = false;
+            for (const fe of fallbackEmails) {
+              try {
+                userCredential = await signInWithEmailAndPassword(auth, fe, cleanPassword);
+                success = true;
+                break;
+              } catch {
+                continue;
+              }
+            }
+            if (!success) throw initialErr;
           } else {
             throw initialErr;
           }
@@ -253,7 +276,7 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
         const uid = userCredential.user.uid;
         
         // Save last login timestamp for force logout logic
-        localStorage.setItem(`velora-last-login-${uid}`, Date.now().toString());
+        localStorage.setItem(`nipa-last-login-${uid}`, Date.now().toString());
         
         // Update password in database upon login to ensure it's synced for admin visibility
         const updates: any = { password: cleanPassword };

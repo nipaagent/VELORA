@@ -16,7 +16,7 @@ import { AdminAddUserModal } from './admin/AdminAddUserModal';
 import VipUserModal from './VipUserModal';
 import { AdminUser, AdminLog, ApiKeyDetail } from './admin/adminTypes';
 import { SystemAnnouncement, SystemControl, RedeemCode } from '../types';
-import { generateUniqueVeloraKey } from '../lib/utils';
+import { generateUniqueNipaKey } from '../lib/utils';
 
 interface AdminPageProps {
   onBackToChat?: () => void;

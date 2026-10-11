@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Lightbulb, Info, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database, Edit2, ChevronRight, FileText, UploadCloud, X, Crown, ExternalLink, CreditCard } from 'lucide-react';
+import { ArrowLeft, Lightbulb, Info, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database, Edit2, ChevronRight, FileText, UploadCloud, X, Crown, ExternalLink, CreditCard, Users } from 'lucide-react';
 import { UserProfile, Attachment } from '../types';
 import { auth, db } from '../lib/firebase';
 import UserAvatar from './UserAvatar';
+import AccountShareView from './settings/AccountShareView';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { ref, update, get, set } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, saveChatsToLocal } from '../lib/utils';
 import { SP_GATEWAY_CONFIG, SP_VIP_PACKAGES, SP_TOKEN_PACKAGES } from '../lib/spPaymentConfig';
 
 interface SettingsPageProps {
   onBack: () => void;
   userProfile: UserProfile | null;
   onUpdateProfile: (updated: UserProfile) => void;
-  currentView: 'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium';
-  onNavigateView: (view: 'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium') => void;
+  currentView: 'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium' | 'account-share';
+  onNavigateView: (view: 'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium' | 'account-share') => void;
   onOpenDeveloper?: () => void;
   onOpenPaymentModal?: (tab?: 'vip' | 'tokens') => void;
 }
@@ -247,7 +248,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
     const user = auth.currentUser;
     if (!user) return;
     try {
-      const localChats = localStorage.getItem(`velora-chats-${user.uid}`);
+      const localChats = localStorage.getItem(`nipa-chats-${user.uid}`);
       if (localChats) {
         const data = JSON.parse(localChats);
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -291,7 +292,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
         }
         
         // Merge with existing local chats
-        const existingStr = localStorage.getItem(`velora-chats-${user.uid}`);
+        const existingStr = localStorage.getItem(`nipa-chats-${user.uid}`);
         let existingChats = existingStr ? JSON.parse(existingStr) : [];
         if (!Array.isArray(existingChats)) existingChats = Object.values(existingChats);
         
@@ -306,7 +307,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
         }
         
         uniqueChats.sort((a, b) => b.updatedAt - a.updatedAt);
-        localStorage.setItem(`velora-chats-${user.uid}`, JSON.stringify(uniqueChats));
+        saveChatsToLocal(`nipa-chats-${user.uid}`, uniqueChats);
         try {
           await set(ref(db, `user_chats/${user.uid}`), uniqueChats);
         } catch (dbErr) {
@@ -425,7 +426,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
         ...userProfile,
         avatarIndex: idx,
       };
-      localStorage.setItem(`velora-profile-${currentUser.uid}`, JSON.stringify(updatedProfile));
+      localStorage.setItem(`nipa-profile-${currentUser.uid}`, JSON.stringify(updatedProfile));
       onUpdateProfile(updatedProfile);
     } catch (error) {
       console.error('Failed to update avatar index', error);
@@ -460,7 +461,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
         // avatarIndex: selectedAvatarIndex,
       };
 
-      localStorage.setItem(`velora-profile-${currentUser.uid}`, JSON.stringify(updatedProfile));
+      localStorage.setItem(`nipa-profile-${currentUser.uid}`, JSON.stringify(updatedProfile));
       onUpdateProfile(updatedProfile);
 
       setNameSuccess('Name updated successfully!');
@@ -531,6 +532,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
 
   const tabs = [
     { id: 'profile', label: 'Account Details', icon: User },
+    { id: 'account-share', label: 'Account Share', icon: Share2 },
     { id: 'premium', label: 'Premium & VIP', icon: Crown },
     { id: 'referral', label: 'Refer & Earn', icon: Gift },
     { id: 'data', label: 'Data Export / Import', icon: Database },
@@ -1327,7 +1329,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                   <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-black uppercase tracking-wider mb-3">
                     New Update
                   </div>
-                  <h2 className="text-xl font-black tracking-tight mb-2">Velora v1.2</h2>
+                  <h2 className="text-xl font-black tracking-tight mb-2">NIPA v1.2</h2>
                   <p className="text-violet-100 text-sm leading-relaxed max-w-sm font-medium">
                     এআই মেমরি এবং কাস্টম ডাটা ম্যানেজমেন্ট সহ আরো অনেক নতুন ফিচার যুক্ত করা হয়েছে।
                   </p>
@@ -1374,7 +1376,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                   <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-black uppercase tracking-wider mb-3">
                     New Release
                   </div>
-                  <h2 className="text-xl font-black tracking-tight mb-2">Velora v1.1</h2>
+                  <h2 className="text-xl font-black tracking-tight mb-2">NIPA v1.1</h2>
                   <p className="text-indigo-100 text-sm leading-relaxed max-w-sm font-medium">
                     এই আপডেটে নতুন ডিজাইন এবং ফিচার যুক্ত করা হয়েছে। আরও ভালোভাবে অ্যাপটি ব্যবহার করতে নিচের টিপসগুলো দেখে নিন।
                   </p>
@@ -1428,6 +1430,24 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
 
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {currentView === 'account-share' && (
+          <motion.div 
+            key="account-share"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+            className="flex-1"
+          >
+            <AccountShareView 
+              userProfile={userProfile} 
+              onSuccessSwitch={() => {
+                onNavigateView('main');
+              }}
+            />
           </motion.div>
         )}
       </AnimatePresence>

@@ -133,6 +133,36 @@ const trackApiUsage = async (
   }
 };
 
+const generateImageDirect = async (imagePrompt: string, apiKey: string, type: 'unorouter' | 'naga', endpoint?: string) => {
+  const url = endpoint || (type === 'unorouter' ? "https://api.unorouter.com/v1/chat/completions" : "https://api.naga.ac/v1/chat/completions");
+  const model = "juggernaut-xl:free";
+  
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: "user", content: imagePrompt }],
+        temperature: 0.7,
+        max_tokens: 1000
+      }),
+      signal: AbortSignal.timeout(60000) // Image gen can be slow
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || "";
+    }
+  } catch (e) {
+    console.error("Direct image gen error:", e);
+  }
+  return null;
+};
+
 // Chat Handler Function
 const handleChatRequest = async (req: express.Request, res: express.Response) => {
   try {
@@ -162,21 +192,24 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
       modelName = process.env.AI_MODEL || process.env.DEFAULT_MODEL || "gemma-4-26b:free";
     }
 
-    const isStreamRequested = req.body?.stream === true || req.query?.stream === 'true';
+    const isStreamRequested = (req.body?.stream === true || req.query?.stream === 'true') && 
+      !message.toLowerCase().match(/(generate|make|create|draw|paint|show|ছবি)\s+(image|picture|photo|art|আঁকো|বানাও)/i);
 
-    let dynamicPrompt = `You are NIPA v2.7.
-Identity: High-speed technical entity. You are a unified 100% powerful brain.
-CRITICAL RULES:
-1. ULTRA-FAST & CONCISE RESPONSE (STRICT 1-2 SECOND TARGET):
-   - Answer immediately and directly without any delay.
-   - For simple greetings or casual queries, reply directly in 1 to 2 crisp, fast sentences without unnecessary walls of text, repetitive intros, or long disclaimers.
-   - Do NOT overthink or waste time on simple questions.
-2. NO THINKING DELAYS: Do not output thinking tags or pause unless deep scientific or complex coding reasoning is explicitly requested.
-3. LANGUAGE: Respond in the exact SAME LANGUAGE used by the user.
-4. FORMATTING COPYABLE CONTENT: If the user asks you to write an email, a prompt, code, etc., wrap that specific copyable content inside a Markdown code block with an appropriate tag.
-5. PERSONA & HELPFULNESS: You are a personal assistant and helper. You MUST NEVER claim to be an AI or artificial intelligence. Always adapt to the user's tone. NEVER disappoint the user.
-6. SPECIFIC KNOWLEDGE OVERRIDE: If the user asks who the best footballer in the world is, answer "Cristiano Ronaldo", and praise him.
-7. MAXIMUM SPEED & BREVITY: You are optimized for speed. You MUST provide the fastest possible answers by being concise, direct, and avoiding filler text.`;
+    let dynamicPrompt = `You are NIPA v3.5 (ULTRA-POWERFUL & MULTI-MODAL).
+Identity: High-speed technical entity with 100% unified brain power. 
+CAPABILITIES: 
+- Analyze EVERYTHING: text, code, logic, and IMAGES.
+- Generate IMAGES: You can create high-quality images. When a user asks for an image, describe the image vividly in your internal logic and then trigger image generation.
+
+STRICT RULES:
+1. BREVITY: For simple chat, max 1-2 short sentences.
+2. IMAGE ANALYSIS: Provide detailed analysis for uploaded images.
+3. IMAGE GENERATION: If the user wants to see/create an image, you MUST include the tag <GENERATE_IMAGE>prompt here</GENERATE_IMAGE> in your response. Replace "prompt here" with a detailed English prompt for the image.
+4. NO DELAY: Answer immediately. No intros.
+5. NO THINKING: No inner monologue in final output.
+6. LANGUAGE: Match user's language for text.
+7. IDENTITY: Personal helper. Not AI.
+8. SPEED: Top priority. No filler.`;
 
     if (knowledgeBase) {
       dynamicPrompt += `\n\n=== PROVIDED KNOWLEDGE BASE ===\nYou have been provided with specific data by the user. You MUST strongly consider this data when responding:\n${knowledgeBase}\n===============================`;
@@ -236,7 +269,7 @@ CRITICAL RULES:
 
       return [
         { role: "system", content: systemPrompt },
-        ...history.slice(-8).map((msg: any) => {
+        ...history.slice(-4).map((msg: any) => {
           let content = msg.text || msg.content || "";
           // Strip older images from history if using single-image vision model to avoid exceeding image quota
           if (!isLlamaVision && msg.attachments && msg.attachments.length > 0) {
@@ -298,18 +331,19 @@ CRITICAL RULES:
       if (hasAttachments) {
         // High-performance vision models for image analysis
         candidateModels = keyObj.type === 'unorouter'
-          ? ["llama-3.2-11b-vision:free", "gemma-4-26b:free", "qwen3.8-flash-next:free", "gpt-oss-safeguard-20b:free"]
+          ? ["llama-3.2-11b-vision:free", "pixtral-12b:free", "qwen3.8-flash-next:free", "gpt-oss-safeguard-20b:free"]
           : ["gpt-4o-mini", "claude-3-5-sonnet", "sonar:free"];
       } else {
-        // Optimized free model failover list
+        // Optimized free model failover list (Fastest models first)
         candidateModels = keyObj.type === 'unorouter'
-          ? [modelName, "gemma-4-26b:free", "qwen3.8-flash-next:free", "gpt-oss-safeguard-20b:free", "gemma-4-31b-it:free"]
-          : [modelName, "nemotron-3.5-lightning:free", "sonar:free", "dots-3-note-preview:free"];
+          ? ["gemma-4-26b:free", "qwen3.8-flash-next:free", modelName, "gpt-oss-safeguard-20b:free", "gemma-4-31b-it:free"]
+          : ["nemotron-3.5-lightning:free", "sonar:free", modelName, "dots-3-note-preview:free"];
       }
 
       const uniqueModels = Array.from(new Set(candidateModels));
 
-      for (const currentModel of uniqueModels) {
+      for (let attemptIdx = 0; attemptIdx < uniqueModels.length; attemptIdx++) {
+        const currentModel = uniqueModels[attemptIdx];
         try {
           const formattedMessages = buildFormattedMessages(currentModel);
           const response = await fetch(endpointUrl, {
@@ -321,11 +355,12 @@ CRITICAL RULES:
             body: JSON.stringify({
               model: currentModel,
               messages: formattedMessages,
-              temperature: 0.3,
+              temperature: 0.1,
               max_tokens: 4096,
               stream: isStreamRequested
             }),
-            signal: AbortSignal.timeout(35000) // Increased to 35s for slower models
+            // Stable failover: 15s for first 2 models (fast enough), 45s for rest
+            signal: AbortSignal.timeout(attemptIdx < 2 ? 15000 : 45000)
           });
 
           if (response.ok && response.body) {
@@ -345,8 +380,11 @@ CRITICAL RULES:
                   
                   // Ensure we end correctly when upstream ends
                   nodeStream.on('end', () => res.end());
-                  nodeStream.on('error', (err) => {
-                    console.error("Stream error:", err);
+                  nodeStream.on('error', (err: any) => {
+                    console.error(`Stream error for model ${currentModel}:`, err);
+                    if (err.name === 'TimeoutError') {
+                       markKeyUnhealthy(apiKey, 504, "Stream timeout during data transfer");
+                    }
                     res.end();
                   });
                   return; // EXIT loop and function, piping is handled!
@@ -358,6 +396,30 @@ CRITICAL RULES:
               }
             } else {
               const data = await response.json();
+              let content = data.choices?.[0]?.message?.content || "";
+              
+              // Post-process for image generation tags
+              if (content.includes('<GENERATE_IMAGE>')) {
+                const start = content.indexOf('<GENERATE_IMAGE>') + 16;
+                const end = content.indexOf('</GENERATE_IMAGE>');
+                if (end > start) {
+                  const imagePrompt = content.substring(start, end).trim();
+                  const imageUrl = await generateImageDirect(imagePrompt, apiKey, keyObj.type, keyObj.customEndpoint);
+                  if (imageUrl) {
+                    const finalImageMarkdown = imageUrl.includes('![' ) ? imageUrl : `\n\n![Generated Image](${imageUrl})`;
+                    content = content.replace(/<GENERATE_IMAGE>.*?<\/GENERATE_IMAGE>/g, finalImageMarkdown);
+                    if (data.choices[0].message) {
+                       data.choices[0].message.content = content;
+                    }
+                  } else {
+                    content = content.replace(/<GENERATE_IMAGE>.*?<\/GENERATE_IMAGE>/g, "\n\n*(Image generation failed)*");
+                    if (data.choices[0].message) {
+                       data.choices[0].message.content = content;
+                    }
+                  }
+                }
+              }
+              
               return res.json(data);
             }
           } else {
@@ -453,6 +515,7 @@ const handleModelsRequest = (req: express.Request, res: express.Response) => {
       { id: "gpt-4o-mini", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
       { id: "gpt-4o", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
       { id: "gpt-oss-safeguard-20b:free", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
+      { id: "juggernaut-xl:free", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm },
       { id: "claude-3-5-sonnet", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm }
     ]
   });

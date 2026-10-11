@@ -14,9 +14,9 @@ import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
 import SpCardPaymentModal from './components/SpCardPaymentModal';
 import { auth, db } from './lib/firebase';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
 import { ref, onValue, set, remove, get, update } from 'firebase/database';
-import { formatTokenCount, cn } from './lib/utils';
+import { formatTokenCount, cn, saveChatsToLocal } from './lib/utils';
 
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
@@ -67,7 +67,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDeveloperOpen, setIsDeveloperOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState<'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium'>('main');
+  const [settingsView, setSettingsView] = useState<'main' | 'profile' | 'referral' | 'data' | 'tips' | 'premium' | 'account-share'>('main');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [isSpPaymentModalOpen, setIsSpPaymentModalOpen] = useState(false);
@@ -85,11 +85,12 @@ export default function App() {
   const [globalTokenMultiplier, setGlobalTokenMultiplier] = useState<number>(1);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Extract referral and promo codes from URL
+  // Extract referral, promo, and account share URL links
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const refCode = params.get('ref') || params.get('referral');
     const promoCode = params.get('promo') || params.get('redeem');
+    const shareParam = params.get('share') || params.get('account_share');
     
     let hasCleaned = false;
     if (refCode) {
@@ -100,9 +101,40 @@ export default function App() {
       setUrlPromoCode(promoCode.trim().toUpperCase());
       hasCleaned = true;
     }
+
+    if (shareParam) {
+      const cleanShare = shareParam.trim().toUpperCase();
+      hasCleaned = true;
+      (async () => {
+        try {
+          const snap = await get(ref(db, `public_share_codes/${cleanShare}`));
+          if (snap.exists()) {
+            const data = snap.val();
+            if (data.isActive && (!data.expiresAt || data.expiresAt > Date.now())) {
+              await signInWithEmailAndPassword(auth, data.ownerEmail, data.accessPass);
+              try {
+                await update(ref(db, `public_share_codes/${cleanShare}`), {
+                  useCount: (data.useCount || 0) + 1
+                });
+                await update(ref(db, `user_share_codes/${data.ownerUid}/${cleanShare}`), {
+                  useCount: (data.useCount || 0) + 1
+                });
+              } catch {}
+              alert(`🎉 সফলভাবে শেয়ারকৃত অ্যাকাউন্টে (${data.ownerName}) প্রবেশ করা হয়েছে!`);
+            } else {
+              alert("⚠️ এই শেয়ার লিংকটির মেয়াদ শেষ হয়ে গেছে অথবা লিংকটি বাতিল করা হয়েছে।");
+            }
+          } else {
+            alert("⚠️ ভুল বা অকার্যকর শেয়ার লিংক।");
+          }
+        } catch (e: any) {
+          console.error("Auto share link login error:", e);
+        }
+      })();
+    }
     
     if (hasCleaned) {
-      // Clean URL after reading
+      // Clean URL after reading so secret token is not exposed in address bar
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -322,7 +354,7 @@ export default function App() {
   const updateTokenState = async (newState: TokenState) => {
     setTokenState(newState);
     if (user) {
-      const localTokensKey = `velora-tokens-${user.uid}`;
+      const localTokensKey = `nipa-tokens-${user.uid}`;
       localStorage.setItem(localTokensKey, JSON.stringify(newState));
       try {
         await set(ref(db, `users/${user.uid}/tokenState`), newState);
@@ -349,9 +381,9 @@ export default function App() {
         isInitialChatSyncDoneRef.current = null;
 
         // Local storage cache keys per user
-        const localProfileKey = `velora-profile-${currentUser.uid}`;
-        const localChatsKey = `velora-chats-${currentUser.uid}`;
-        const localTokensKey = `velora-tokens-${currentUser.uid}`;
+        const localProfileKey = `nipa-profile-${currentUser.uid}`;
+        const localChatsKey = `nipa-chats-${currentUser.uid}`;
+        const localTokensKey = `nipa-tokens-${currentUser.uid}`;
         const todayStr = getTodayStr();
 
         // 1. Immediately reset active chat view to prevent bleed-through
@@ -413,7 +445,7 @@ export default function App() {
         
         const defaultProfile: UserProfile = parsedProfile ? parsedProfile : {
           uid: currentUser.uid,
-          email: currentUser.email || `${fallbackName}@velora.app`,
+          email: currentUser.email || `${fallbackName}@nipa.app`,
           fullName: fallbackName,
           username: fallbackName,
           createdAt: Date.now()
@@ -457,7 +489,7 @@ export default function App() {
               }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
               setChats(cleanCloudChats);
-              localStorage.setItem(localChatsKey, JSON.stringify(cleanCloudChats));
+              saveChatsToLocal(localChatsKey, cleanCloudChats);
               isInitialChatSyncDoneRef.current = currentUser.uid;
             } else {
               // Cloud is empty for this user. If local cache has chats, backup to cloud!
@@ -594,7 +626,7 @@ export default function App() {
     const unsubscribe = onValue(forceLogoutRef, (snapshot) => {
       if (snapshot.exists()) {
         const forceLogoutTime = snapshot.val();
-        const lastLoginTime = Number(localStorage.getItem(`velora-last-login-${user.uid}`) || 0);
+        const lastLoginTime = Number(localStorage.getItem(`nipa-last-login-${user.uid}`) || 0);
         
         if (forceLogoutTime > lastLoginTime) {
           alert("অ্যাডমিন কর্তৃক সকল ইউজারকে লগ আউট করা হয়েছে। দয়া করে আবার লগইন করুন।");
@@ -609,8 +641,8 @@ export default function App() {
   // Sync chats to localStorage and Firebase Realtime Database per user (100% account dedicated)
   useEffect(() => {
     if (user && isInitialChatSyncDoneRef.current === user.uid && activeUserUidRef.current === user.uid) {
-      const localChatsKey = `velora-chats-${user.uid}`;
-      localStorage.setItem(localChatsKey, JSON.stringify(chats));
+      const localChatsKey = `nipa-chats-${user.uid}`;
+      saveChatsToLocal(localChatsKey, chats);
 
       const timer = setTimeout(() => {
         if (activeUserUidRef.current === user.uid) {
@@ -914,7 +946,7 @@ export default function App() {
             tokensUsedToday: (prev.tokensUsedToday || 0) + requestTokensSpent
           };
           if (user) {
-            const localTokensKey = `velora-tokens-${user.uid}`;
+            const localTokensKey = `nipa-tokens-${user.uid}`;
             localStorage.setItem(localTokensKey, JSON.stringify(updatedState));
             set(ref(db, `users/${user.uid}/tokenState`), updatedState).catch(console.warn);
           }
@@ -1007,7 +1039,7 @@ export default function App() {
               tokensUsedToday: (prev.tokensUsedToday || 0) + requestTokensSpent
             };
             if (user) {
-              const localTokensKey = `velora-tokens-${user.uid}`;
+              const localTokensKey = `nipa-tokens-${user.uid}`;
               localStorage.setItem(localTokensKey, JSON.stringify(updatedState));
               set(ref(db, `users/${user.uid}/tokenState`), updatedState).catch(console.warn);
             }
@@ -1085,7 +1117,7 @@ export default function App() {
     }
     if (!user) return;
     try {
-      localStorage.setItem(`velora-chats-${user.uid}`, JSON.stringify(updatedChats));
+      saveChatsToLocal(`nipa-chats-${user.uid}`, updatedChats);
       const sanitized = sanitizeChatsForDb(updatedChats);
       await set(ref(db, `user_chats/${user.uid}`), sanitized.length > 0 ? sanitized : null);
     } catch (e) {
@@ -1099,7 +1131,7 @@ export default function App() {
       setChats([]);
       setCurrentChatId(null);
       if (user) {
-        localStorage.removeItem(`velora-chats-${user.uid}`);
+        localStorage.removeItem(`nipa-chats-${user.uid}`);
         try {
           await set(ref(db, `user_chats/${user.uid}`), null);
         } catch (e) {
