@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot } from 'lucide-react';
+import { Bot, RotateCcw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Message, UserProfile } from '../../types';
 import { cn } from '../../lib/utils';
@@ -121,10 +121,29 @@ export default function ChatMessageItem({
             </div>
           )}
 
-          {!isUser && message.text && (
-            <span className="block mt-1.5 text-[10px] font-mono tracking-tight text-zinc-500">
-              ~{Math.max(25, Math.round(message.text.length * 1.4))} tokens
-            </span>
+          {!isUser && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {message.text && (
+                <span className="text-[10px] font-mono tracking-tight text-zinc-500">
+                  ~{Math.max(25, Math.round(message.text.length * 1.4))} tokens
+                </span>
+              )}
+              {(message.status === 'error' || message.text?.includes('পুনরায় চেষ্টা করুন') || message.text?.includes('থমকে গেছে') || message.text?.includes('Error:')) && (
+                <div className="flex items-center gap-2 mt-1 w-full">
+                  {onRetry && (
+                    <button
+                      type="button"
+                      onClick={() => onRetry(message)}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>পুনরায় চেষ্টা করুন</span>
+                    </button>
+                  )}
+                  <span className="text-[10px] text-slate-500 font-medium">আংশিক উত্তর সংরক্ষিত রয়েছে</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

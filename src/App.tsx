@@ -893,49 +893,86 @@ export default function App() {
           return c;
         }));
 
+        let isStalled = false;
+
         while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
+          let readResult: ReadableStreamReadResult<Uint8Array> | null = null;
+          try {
+            const readPromise = reader.read();
+            const timeoutPromise = new Promise<{ done: true; value: undefined; timedOut: true } | ReadableStreamReadResult<Uint8Array>>(resolve => {
+              const timer = setTimeout(() => resolve({ done: true, value: undefined, timedOut: true }), 8000);
+              readPromise.then(res => {
+                clearTimeout(timer);
+                resolve(res);
+              }).catch(() => {
+                clearTimeout(timer);
+                resolve({ done: true, value: undefined, timedOut: true });
+              });
+            });
+
+            const res = await timeoutPromise;
+            if ('timedOut' in res && res.timedOut) {
+              console.warn(`[CLIENT_STALL_EVENT ${new Date().toISOString()}] SSE reader stalled for >8000ms. Preserving ${fullResponse.length} chars received.`);
+              isStalled = true;
+              try { reader.cancel(); } catch {}
+              break;
+            }
+            readResult = res;
+          } catch (readErr) {
+            console.error(`[CLIENT_STREAM_READ_ERROR ${new Date().toISOString()}]`, readErr);
+            isStalled = true;
+            break;
+          }
+
+          if (readResult.done) {
             if (buffer.trim()) {
-              // Try to parse whatever is left in the buffer just in case
               const trimmedLine = buffer.trim();
               if (trimmedLine.startsWith('data:')) {
                 let dataStr = trimmedLine.substring(5).trim();
-                try { if (dataStr !== '[DONE]') { const data = JSON.parse(dataStr); const content = data.choices?.[0]?.delta?.content || data.choices?.[0]?.message?.content || data.text || ''; if (content) fullResponse += content; } } catch(e) {}
+                try {
+                  if (dataStr !== '[DONE]') {
+                    const data = JSON.parse(dataStr);
+                    const content = data.choices?.[0]?.delta?.content || data.choices?.[0]?.message?.content || data.text || '';
+                    if (content) fullResponse += content;
+                  }
+                } catch(e) {}
               }
             }
             break;
           }
-          
+
+          const value = readResult.value;
+          if (!value) break;
+
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
-          
+
           for (const line of lines) {
             const trimmedLine = line.trim();
-            if (trimmedLine.length === 0) continue;
-            
+            if (trimmedLine.length === 0 || trimmedLine === ': ping' || trimmedLine.startsWith(':')) continue;
+
             if (trimmedLine.startsWith('data:')) {
               let dataStr = trimmedLine.substring(5).trim();
               if (dataStr === '[DONE]') continue;
-              
+
               try {
                 const data = JSON.parse(dataStr);
                 const content = data.choices?.[0]?.delta?.content || data.choices?.[0]?.message?.content || data.text || '';
-                
+
                 if (content) {
                   fullResponse += content;
-                  
+
                   let currentText = fullResponse;
                   let currentThinking = '';
-                  
+
                   const thinkingStart = currentText.indexOf('<thinking>');
                   const thinkStart = currentText.indexOf('<think>');
                   const thoughtStart = currentText.indexOf('<thought>');
-                  
+
                   let startIdx = -1;
                   let tagType = '';
-                  
+
                   if (thoughtStart !== -1) {
                     startIdx = thoughtStart;
                     tagType = 'thought';
@@ -946,7 +983,7 @@ export default function App() {
                     startIdx = thinkStart;
                     tagType = 'think';
                   }
-                  
+
                   if (startIdx !== -1) {
                     let endIdx = -1;
                     let endTagLength = 0;
@@ -962,7 +999,7 @@ export default function App() {
                       endIdx = currentText.indexOf('</think>');
                       endTagLength = 8;
                     }
-                    
+
                     if (endIdx !== -1) {
                       currentThinking = currentText.substring(startIdx + startTagLength, endIdx).trim();
                       currentText = currentText.substring(0, startIdx) + currentText.substring(endIdx + endTagLength);
@@ -971,12 +1008,12 @@ export default function App() {
                       currentText = currentText.substring(0, startIdx);
                     }
                   }
-                  
+
                   setChats(prev => prev.map(c => {
                     if (c.id === chatId) {
                       const newMessages = c.messages.map(m => {
                         if (m.id === modelMessageId) {
-                          return { ...m, text: currentText.trim(), thinking: currentThinking };
+                          return { ...m, text: currentText.trim(), thinking: currentThinking, status: 'sent' as const };
                         }
                         return m;
                       });
@@ -986,10 +1023,30 @@ export default function App() {
                   }));
                 }
               } catch (e) {
-                // Ignore parsing errors for incomplete JSON chunks
+                // Ignore incomplete JSON chunks
               }
             }
           }
+        }
+
+        if (isStalled) {
+          if (!fullResponse.trim()) {
+            fullResponse = "*(সার্ভার রেসপন্স দিতে সময় নিচ্ছে — অনুগ্রহ করে নিচে 'পুনরায় চেষ্টা করুন' বাটনে ক্লিক করুন)*";
+          } else if (!fullResponse.includes('পুনরায় চেষ্টা করুন')) {
+            fullResponse += "\n\n*(রেসপন্স থমকে গেছে — নিচে 'পুনরায় চেষ্টা করুন' বাটনে ক্লিক করুন)*";
+          }
+          setChats(prev => prev.map(c => {
+            if (c.id === chatId) {
+              const newMessages = c.messages.map(m => {
+                if (m.id === modelMessageId) {
+                  return { ...m, text: fullResponse.trim(), status: 'error' as const };
+                }
+                return m;
+              });
+              return { ...c, messages: newMessages, updatedAt: Date.now() };
+            }
+            return c;
+          }));
         }
         
         // Calculate exact token consumption based on prompt & output character length
@@ -1590,7 +1647,21 @@ export default function App() {
                       <ChatArea 
                         chat={currentChat} 
                         onSendMessage={sendMessage} 
-                        onRetryMessage={(msg) => sendMessage(msg.text, msg.attachments)}
+                        onRetryMessage={(msg) => {
+                          if (msg.role === 'model') {
+                            const msgs = currentChat?.messages || [];
+                            const modelIdx = msgs.findIndex(m => m.id === msg.id);
+                            let userMsgToRetry = msgs.filter((m, idx) => m.role === 'user' && (modelIdx === -1 || idx < modelIdx)).pop();
+                            if (!userMsgToRetry) {
+                              userMsgToRetry = msgs.filter(m => m.role === 'user').pop();
+                            }
+                            if (userMsgToRetry) {
+                              sendMessage(userMsgToRetry.text, userMsgToRetry.attachments);
+                            }
+                          } else {
+                            sendMessage(msg.text, msg.attachments);
+                          }
+                        }}
                         onNewChat={createNewChat}
                         isLoading={isLoading}
                         userProfile={userProfile}

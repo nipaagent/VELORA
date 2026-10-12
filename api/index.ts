@@ -350,6 +350,12 @@ Guidelines:
 
       for (let attemptIdx = 0; attemptIdx < uniqueModels.length; attemptIdx++) {
         const currentModel = uniqueModels[attemptIdx];
+        if (attemptIdx > 0) {
+          const backoffMs = Math.min(2000, 200 * Math.pow(2, attemptIdx - 1));
+          console.warn(`[GATEWAY_BACKOFF ${new Date().toISOString()}] Sleeping ${backoffMs}ms before attempt ${attemptIdx + 1} with model ${currentModel}`);
+          await new Promise(r => setTimeout(r, backoffMs));
+        }
+
         try {
           const formattedMessages = buildFormattedMessages(currentModel);
           const response = await fetch(endpointUrl, {
@@ -377,26 +383,72 @@ Guidelines:
               res.setHeader("Content-Type", "text/event-stream");
               res.setHeader("Cache-Control", "no-cache");
               res.setHeader("Connection", "keep-alive");
+              res.setHeader("X-Accel-Buffering", "no");
 
               try {
-                // Safely pipe Web ReadableStream to Node WritableStream (res)
                 if (response.body) {
                   const nodeStream = Readable.fromWeb(response.body as any);
-                  nodeStream.pipe(res);
+                  let lastDataTime = Date.now();
                   
-                  // Ensure we end correctly when upstream ends
-                  nodeStream.on('end', () => res.end());
-                  nodeStream.on('error', (err: any) => {
-                    console.error(`Stream error for model ${currentModel}:`, err);
-                    if (err.name === 'TimeoutError') {
-                       markKeyUnhealthy(apiKey, 504, "Stream timeout during data transfer");
+                  // Periodic ping interval to maintain active SSE keep-alive
+                  const pingInterval = setInterval(() => {
+                    if (!res.writableEnded) {
+                      res.write(": ping\n\n");
+                      if (typeof (res as any).flush === 'function') (res as any).flush();
                     }
-                    res.end();
+                  }, 2500);
+
+                  // Upstream stall monitor interval (12 seconds without new data)
+                  const stallCheckInterval = setInterval(() => {
+                    const quietMs = Date.now() - lastDataTime;
+                    if (quietMs > 12000 && !res.writableEnded) {
+                      console.warn(`[STALL_EVENT ${new Date().toISOString()}] Upstream stream stalled for model ${currentModel} (${quietMs}ms silence)`);
+                      const timeoutChunk = JSON.stringify({
+                        choices: [{
+                          delta: { content: "\n\n*(রেসপন্স থমকে গেছে — অনুগ্রহ করে নিচে 'পুনরায় চেষ্টা করুন' বাটনে ক্লিক করুন)*" },
+                          finish_reason: "stop"
+                        }]
+                      });
+                      res.write(`data: ${timeoutChunk}\n\ndata: [DONE]\n\n`);
+                      clearInterval(pingInterval);
+                      clearInterval(stallCheckInterval);
+                      res.end();
+                    }
+                  }, 2000);
+
+                  nodeStream.on('data', (chunk: any) => {
+                    lastDataTime = Date.now();
+                    res.write(chunk);
+                    if (typeof (res as any).flush === 'function') (res as any).flush();
                   });
-                  return; // EXIT loop and function, piping is handled!
+
+                  nodeStream.on('end', () => {
+                    clearInterval(pingInterval);
+                    clearInterval(stallCheckInterval);
+                    if (!res.writableEnded) res.end();
+                  });
+
+                  nodeStream.on('error', (err: any) => {
+                    clearInterval(pingInterval);
+                    clearInterval(stallCheckInterval);
+                    console.error(`[STREAM_ERROR ${new Date().toISOString()}] Model ${currentModel}:`, err);
+                    markKeyUnhealthy(apiKey, 504, "Stream error during transfer");
+                    if (!res.writableEnded) {
+                      const errChunk = JSON.stringify({
+                        choices: [{
+                          delta: { content: "\n\n*(কানেকশন ড্রপ করেছে — অনুগ্রহ করে 'পুনরায় চেষ্টা করুন' বাটনে ক্লিক করুন)*" },
+                          finish_reason: "stop"
+                        }]
+                      });
+                      res.write(`data: ${errChunk}\n\ndata: [DONE]\n\n`);
+                      res.end();
+                    }
+                  });
+
+                  return; // EXIT loop and function, stream actively managed
                 }
               } catch (streamErr) {
-                console.error("Stream pipe setup error:", streamErr);
+                console.error(`[STREAM_SETUP_ERROR ${new Date().toISOString()}]`, streamErr);
                 res.end();
                 return;
               }
