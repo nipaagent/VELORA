@@ -117,14 +117,15 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
     setTestResponse('');
     
     try {
+      const idToken = user ? await user.getIdToken() : apiKey;
       const res = await fetch('/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${idToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'nipa-ai-core',
+          model: 'gpt-oss-safeguard-20b:free',
           messages: [{ role: "user", content: testMessage }],
           stream: false
         })
@@ -147,7 +148,7 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
   -H "Authorization: Bearer ${apiKey || 'YOUR_API_KEY'}" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "nipa-ai-core",
+    "model": "gpt-oss-safeguard-20b:free",
     "messages": [{"role": "user", "content": "Hello"}],
     "stream": false
   }'`;
@@ -159,7 +160,7 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    model: "nipa-ai-core",
+    model: "gpt-oss-safeguard-20b:free",
     messages: [{"role": "user", "content": "Hello"}],
     stream: false
   })

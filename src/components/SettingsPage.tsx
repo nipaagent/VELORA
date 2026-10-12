@@ -789,23 +789,23 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
             className="flex-1 w-full max-w-3xl mx-auto p-4 sm:p-5 space-y-5"
           >
             <h3 className="text-sm font-black text-slate-800 tracking-tight uppercase flex items-center gap-2">
-              <Crown className="w-4 h-4 text-amber-500" /> SP Wallet ভার্চুয়াল কার্ড পেমেন্ট ও VIP
+              <Crown className="w-4 h-4 text-amber-500" /> বিকাশ পেমেন্ট ও VIP মেম্বারশিপ
             </h3>
             
             {/* VIP Banner */}
-            <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-amber-500/30 relative overflow-hidden group">
+            <div className="bg-gradient-to-br from-slate-900 via-[#8A0C43] to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-pink-500/30 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 pointer-events-none">
                 <Crown className="w-36 h-36 rotate-12 text-amber-400" />
               </div>
               
               <div className="relative z-10 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="px-3 py-1 rounded-full text-xs font-black bg-gradient-to-r from-amber-500/30 to-amber-600/30 text-amber-300 border border-amber-400/40 flex items-center gap-1.5">
-                    <CreditCard className="w-3.5 h-3.5" />
-                    SP WALLET BD - VIRTUAL CARD GATEWAY
+                  <span className="px-3 py-1 rounded-full text-xs font-black bg-white/20 text-white border border-white/30 flex items-center gap-1.5">
+                    <span>৳</span>
+                    BKASH MANUAL SEND MONEY
                   </span>
-                  <span className="text-xs font-mono font-bold text-slate-300 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
-                    ১ SP = ৳৭.৭৭ BDT
+                  <span className="text-xs font-mono font-bold text-pink-200 bg-white/10 px-2.5 py-1 rounded-lg border border-white/20">
+                    সহজ ও নিরাপদ পেমেন্ট
                   </span>
                 </div>
 
@@ -814,8 +814,8 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                     <span>আনলিমিটেড VIP মেম্বারশিপ</span>
                     <Crown className="w-6 h-6 text-amber-400 fill-amber-400" />
                   </h3>
-                  <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-lg font-medium">
-                    ১৬-ডিজিট SP ভার্চুয়াল কার্ড ব্যবহার করে সরাসরি ডেবিট করুন। কোনো অ্যাড ছাড়া আজীবন বা মাসভিত্তিক আনলিমিটেড AI চ্যাট উপভোগ করুন।
+                  <p className="text-pink-100 text-xs sm:text-sm leading-relaxed max-w-lg font-medium">
+                    বিকাশে সেন্ড মানি করে দ্রুত TrxID সাবমিট করুন। কোনো অ্যাড ছাড়া আজীবন বা মাসভিত্তিক আনলিমিটেড AI চ্যাট উপভোগ করুন।
                   </p>
                 </div>
 
@@ -825,15 +825,15 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                     className="px-6 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-2xl font-black text-xs uppercase tracking-wider transition-all active:scale-95 shadow-lg flex items-center gap-2 cursor-pointer"
                   >
                     <Crown className="w-4 h-4 text-slate-950" />
-                    <span>👑 VIP মেম্বারশিপ কিনুন</span>
+                    <span>👑 বিকাশে VIP মেম্বারশিপ নিন</span>
                   </button>
 
                   <button 
                     onClick={() => onOpenPaymentModal?.('tokens')}
-                    className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 border border-indigo-400/30 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center gap-2 cursor-pointer"
+                    className="px-6 py-3.5 bg-white/10 hover:bg-white/20 border border-white/30 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center gap-2 cursor-pointer"
                   >
-                    <Zap className="w-4 h-4 text-indigo-400" />
-                    <span>⚡ টোকেন বান্ডেল কিনুন</span>
+                    <Zap className="w-4 h-4 text-pink-300" />
+                    <span>⚡ বিকাশে টোকেন কিনুন</span>
                   </button>
                 </div>
               </div>
@@ -843,7 +843,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
             <div className="space-y-3">
               <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <Crown className="w-3.5 h-3.5 text-amber-500" />
-                উপলব্ধ VIP প্যাকেজসমূহ (Virtual Card Debit):
+                উপলব্ধ VIP প্যাকেজসমূহ (bKash Payment):
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -881,10 +881,10 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
 
                       <button
                         onClick={() => onOpenPaymentModal?.('vip')}
-                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                        className="px-4 py-2 bg-[#E2136E] hover:bg-[#C91060] text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
                       >
-                        <CreditCard className="w-3.5 h-3.5 text-amber-400" />
-                        <span>কার্ডে কিনুন</span>
+                        <Crown className="w-3.5 h-3.5 text-white" />
+                        <span>বিকাশে কিনুন</span>
                       </button>
                     </div>
                   </div>
@@ -896,7 +896,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
             <div className="space-y-3 pt-2">
               <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-indigo-500" />
-                অতিরিক্ত টোকেন প্যাক (Virtual Card Debit):
+                অতিরিক্ত টোকেন প্যাক (bKash Payment):
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -909,7 +909,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <span className="font-black text-slate-900 text-sm">{pkg.name}</span>
                         {pkg.badge && (
-                          <span className="text-[10px] font-black bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full uppercase">
+                          <span className="text-[10px] font-black bg-pink-100 text-[#E2136E] px-2 py-0.5 rounded-full uppercase">
                             {pkg.badge}
                           </span>
                         )}
@@ -919,7 +919,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                       <div className="space-y-1 mb-4">
                         {pkg.features.map((f, i) => (
                           <div key={i} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                             <span>{f}</span>
                           </div>
                         ))}
@@ -929,15 +929,15 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                       <div>
                         <div className="font-black text-base text-slate-900">৳{pkg.priceBdt} BDT</div>
-                        <div className="text-[10px] font-mono text-slate-500 font-bold">{pkg.priceSp} SP Coins</div>
+                        <div className="text-[10px] text-slate-400 font-bold">ইনস্ট্যান্ট রিকোয়েস্ট</div>
                       </div>
 
                       <button
                         onClick={() => onOpenPaymentModal?.('tokens')}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                        className="px-4 py-2 bg-[#E2136E] hover:bg-[#C91060] text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
                       >
-                        <CreditCard className="w-3.5 h-3.5 text-indigo-200" />
-                        <span>কার্ডে কিনুন</span>
+                        <Zap className="w-3.5 h-3.5 text-white" />
+                        <span>বিকাশে কিনুন</span>
                       </button>
                     </div>
                   </div>

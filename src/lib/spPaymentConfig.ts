@@ -17,7 +17,6 @@ export const SP_GATEWAY_CONFIG = {
   paymentChannel: 'ONLY VIRTUAL CARD (16-Digit Card Debit)',
   merchantSettlementWallet: '0199999999',
   publicClientApiKey: 'sp_card_pub_velora_r1usqx',
-  secretServerApiKey: 'sp_card_sec_velora_mugchqm0_46f814fm',
   gatewayBaseUrl: 'https://www.spwalletbd.com',
   cardCheckoutApi: 'https://www.spwalletbd.com/api/checkout/card-pay',
   exchangeRateBdtPerSp: 7.77 // 1 SP = ৳7.77 BDT

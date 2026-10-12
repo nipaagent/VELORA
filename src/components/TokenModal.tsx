@@ -346,19 +346,19 @@ export default function TokenModal({
                     </button>
                   </div>
 
-                  {/* SP Wallet Virtual Card Purchase Button */}
+                  {/* bKash VIP Purchase Button */}
                   {!isVipActive && (
-                    <div className="bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-indigo-500/10 border border-amber-200/60 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="bg-gradient-to-r from-pink-500/10 via-rose-500/10 to-indigo-500/10 border border-pink-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-xl shadow-sm">
-                          <Crown className="w-5 h-5 text-amber-500" />
+                        <div className="p-2 bg-white rounded-xl shadow-sm text-[#E2136E]">
+                          <Crown className="w-5 h-5 text-[#E2136E]" />
                         </div>
                         <div className="text-left">
                           <h4 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
-                            <span>SP Wallet ভার্চুয়াল কার্ড দিয়ে VIP নিন</span>
-                            <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.5 rounded-full uppercase">16-Digit Card</span>
+                            <span>বিকাশ দিয়ে VIP নিন</span>
+                            <span className="text-[9px] bg-[#E2136E] text-white font-black px-1.5 py-0.5 rounded-full uppercase">bKash Pay</span>
                           </h4>
-                          <p className="text-[10px] text-slate-600 font-bold">১৬-ডিজিট ভার্চুয়াল কার্ড ডেবিট করে সরাসরি VIP বা টোকেন কিনুন।</p>
+                          <p className="text-[10px] text-slate-600 font-bold">সহজে বিকাশ সেন্ড মানি করে সরাসরি VIP বা টোকেন কিনুন।</p>
                         </div>
                       </div>
                       <button 
@@ -366,10 +366,10 @@ export default function TokenModal({
                           onClose();
                           if (onOpenPaymentModal) onOpenPaymentModal('vip');
                         }}
-                        className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950 rounded-xl text-xs font-black uppercase tracking-wider hover:from-amber-400 hover:to-yellow-400 transition-all active:scale-95 shadow-md flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                        className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-[#E2136E] to-[#C91060] text-white rounded-xl text-xs font-black uppercase tracking-wider hover:opacity-95 transition-all active:scale-95 shadow-md flex items-center justify-center gap-2 cursor-pointer shrink-0"
                       >
-                        <CreditCard className="w-4 h-4 text-slate-950" />
-                        <span>কার্ড দিয়ে কিনুন</span>
+                        <Crown className="w-4 h-4 text-white" />
+                        <span>বিকাশে কিনুন</span>
                       </button>
                     </div>
                   )}

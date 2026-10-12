@@ -14,6 +14,7 @@ import {
   calcSpPrice 
 } from '../lib/spPaymentConfig';
 import { formatTokenCount, cn } from '../lib/utils';
+import { auth } from '../lib/firebase';
 
 interface SpCardPaymentModalProps {
   isOpen: boolean;
@@ -116,9 +117,14 @@ export default function SpCardPaymentModal({
     setErrorMsg(null);
 
     try {
+      const currentUser = auth.currentUser;
+      const idToken = currentUser ? await currentUser.getIdToken() : '';
       const response = await fetch('/api/payment/sp-card-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+        },
         body: JSON.stringify({
           userId: userId,
           packageId: selectedPkg.id,

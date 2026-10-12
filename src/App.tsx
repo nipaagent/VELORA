@@ -13,7 +13,7 @@ import LandingPage from './components/LandingPage';
 import SettingsPage from './components/SettingsPage';
 import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
-import SpCardPaymentModal from './components/SpCardPaymentModal';
+import BkashPaymentModal from './components/BkashPaymentModal';
 import MaintenancePage from './components/MaintenancePage';
 import { ToastContainer } from './components/Toast';
 import { auth, db } from './lib/firebase';
@@ -848,9 +848,13 @@ export default function App() {
     setIsLoading(true);
 
     try {
+      const idToken = await user.getIdToken();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify({ 
           message: text, 
           attachments,
@@ -1085,18 +1089,21 @@ export default function App() {
         }
 
 
-        setTokenState(prev => {
-          const updatedState = {
-            ...prev,
-            tokensUsedToday: (prev.tokensUsedToday || 0) + requestTokensSpent
-          };
-          if (user) {
-            const localTokensKey = `nipa-tokens-${user.uid}`;
-            localStorage.setItem(localTokensKey, JSON.stringify(updatedState));
-            set(ref(db, `users/${user.uid}/tokenState`), updatedState).catch(console.warn);
+        // Re-read the user's tokenState from Realtime Database path users/{uid}/tokenState
+        // The backend is the single source of truth for token deductions.
+        if (user) {
+          try {
+            const tokenSnap = await get(ref(db, `users/${user.uid}/tokenState`));
+            if (tokenSnap.exists()) {
+              const freshTokens = tokenSnap.val() as TokenState;
+              setTokenState(freshTokens);
+              const localTokensKey = `nipa-tokens-${user.uid}`;
+              localStorage.setItem(localTokensKey, JSON.stringify(freshTokens));
+            }
+          } catch (tsErr) {
+            console.warn("Error re-reading tokenState after stream:", tsErr);
           }
-          return updatedState;
-        });
+        }
 
         setChats(prev => {
           const finalChat = prev.find(c => c.id === chatId);
@@ -1178,18 +1185,21 @@ export default function App() {
           const responseCharCount = currentText.length;
           const requestTokensSpent = Math.max(10, Math.round(((promptCharCount + responseCharCount) / 3.5) * globalTokenMultiplier));
 
-          setTokenState(prev => {
-            const updatedState = {
-              ...prev,
-              tokensUsedToday: (prev.tokensUsedToday || 0) + requestTokensSpent
-            };
-            if (user) {
-              const localTokensKey = `nipa-tokens-${user.uid}`;
-              localStorage.setItem(localTokensKey, JSON.stringify(updatedState));
-              set(ref(db, `users/${user.uid}/tokenState`), updatedState).catch(console.warn);
+          // Re-read the user's tokenState from Realtime Database path users/{uid}/tokenState
+          // The backend is the single source of truth for token deductions.
+          if (user) {
+            try {
+              const tokenSnap = await get(ref(db, `users/${user.uid}/tokenState`));
+              if (tokenSnap.exists()) {
+                const freshTokens = tokenSnap.val() as TokenState;
+                setTokenState(freshTokens);
+                const localTokensKey = `nipa-tokens-${user.uid}`;
+                localStorage.setItem(localTokensKey, JSON.stringify(freshTokens));
+              }
+            } catch (tsErr) {
+              console.warn("Error re-reading tokenState after response:", tsErr);
             }
-            return updatedState;
-          });
+          }
 
           setChats(prev => prev.map(c => {
             if (c.id === chatId) {
@@ -1726,43 +1736,13 @@ export default function App() {
         }}
       />
 
-      {/* SP Wallet Virtual Card Payment Gateway Modal */}
-      <SpCardPaymentModal
+      {/* bKash Manual Payment Modal */}
+      <BkashPaymentModal
         isOpen={isSpPaymentModalOpen}
         onClose={() => setIsSpPaymentModalOpen(false)}
         userId={user?.uid}
         userProfile={userProfile}
         initialTab={spPaymentInitialTab}
-        onPaymentSuccess={(result) => {
-          if (result.packageType === 'vip') {
-            const currentExp = userProfile?.vipExpiresAt || 0;
-            const base = currentExp > Date.now() ? currentExp : Date.now();
-            const isLifetime = result.amount >= 36500;
-            const newExp = isLifetime ? 2000000000000 : base + (result.amount * 24 * 60 * 60 * 1000);
-            if (userProfile) {
-              const updatedProfile: UserProfile = {
-                ...userProfile,
-                isVip: true,
-                vipExpiresAt: newExp
-              };
-              setUserProfile(updatedProfile);
-            }
-          } else if (result.packageType === 'tokens') {
-            const currentBonus = tokenState.bonusTokens || 0;
-            const newBonus = currentBonus + result.amount;
-            const updatedTokenState: TokenState = {
-              ...tokenState,
-              bonusTokens: newBonus
-            };
-            updateTokenState(updatedTokenState);
-            if (userProfile) {
-              setUserProfile({
-                ...userProfile,
-                tokenState: updatedTokenState
-              });
-            }
-          }
-        }}
       />
     </div>
   );

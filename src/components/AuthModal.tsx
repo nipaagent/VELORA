@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, Lock, User, UserCheck, Sparkles, Loader2, LogIn, UserPlus, AlertCircle, ShieldCheck } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { ref, get, set, update } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
 import { Gift } from 'lucide-react';
@@ -28,6 +28,10 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
   const [referralCodeInput, setReferralCodeInput] = useState(initialReferralCode || '');
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetIdentifier, setResetIdentifier] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState('');
+  const [resetError, setResetError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
@@ -124,6 +128,77 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
   };
 
   const passStrength = isSignUp ? calculatePasswordStrength(password) : { label: '', color: '' };
+
+  const handleOpenForgotPassword = () => {
+    setResetIdentifier(username.trim());
+    setResetError('');
+    setResetSuccess('');
+    setShowForgotPassword(true);
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+
+    const rawInput = resetIdentifier.trim();
+    if (!rawInput) {
+      setResetError('সঠিক ইমেইল/ইউজারনেম দিন');
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      let resolvedEmail = '';
+      const isEmail = rawInput.includes('@');
+
+      if (isEmail) {
+        resolvedEmail = rawInput.toLowerCase();
+      } else {
+        const cleanUsername = rawInput.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        if (!cleanUsername) {
+          setResetError('সঠিক ইমেইল/ইউজারনেম দিন');
+          setResetLoading(false);
+          return;
+        }
+
+        try {
+          const usernameSnap = await get(ref(db, `usernames/${cleanUsername}`));
+          if (usernameSnap.exists()) {
+            const mappedUid = usernameSnap.val();
+            const userSnap = await get(ref(db, `users/${mappedUid}`));
+            if (userSnap.exists() && userSnap.val().email) {
+              resolvedEmail = userSnap.val().email;
+            }
+          }
+        } catch (dbErr) {
+          console.warn("DB email lookup failed in password reset:", dbErr);
+        }
+
+        if (!resolvedEmail) {
+          resolvedEmail = `${cleanUsername}@nipa.app`;
+        }
+      }
+
+      await sendPasswordResetEmail(auth, resolvedEmail);
+      setResetSuccess('পাসওয়ার্ড রিসেট লিংক পাঠানো হয়েছে! আপনার ইমেইল ইনবক্স (এবং স্প্যাম ফোল্ডার) চেক করুন।');
+    } catch (err: any) {
+      console.error("Password reset error:", err);
+      const code = err?.code || '';
+      if (code === 'auth/invalid-email' || code === 'auth/missing-email') {
+        setResetError('সঠিক ইমেইল/ইউজারনেম দিন');
+      } else if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+        setResetError('এই ইমেইল/ইউজারনেমে কোনো অ্যাকাউন্ট পাওয়া যায়নি');
+      } else if (code === 'auth/too-many-requests') {
+        setResetError('অনেকবার চেষ্টা করা হয়েছে, কিছুক্ষণ পর আবার চেষ্টা করুন');
+      } else {
+        setResetError(err.message || 'পাসওয়ার্ড রিসেট করতে সমস্যা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।');
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -274,9 +349,8 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
           email: cleanEmail,
           fullName: fullName.trim(),
           username: cleanUsername,
-          password: cleanPassword,
           createdAt: Date.now(),
-          role: cleanUsername === 'admin' ? 'admin' : 'user',
+          role: 'user',
           referralCode: newReferralCode,
           referredBy: referrerUid || undefined,
           referredByCode: referrerUid ? cleanReferral : undefined,
@@ -297,37 +371,7 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
         // Save last login timestamp for force logout logic
         localStorage.setItem(`nipa-last-login-${uid}`, Date.now().toString());
 
-        // Award referrer 100,000 tokens and update referral count/milestones
-        if (referrerUid) {
-          const referrerRef = ref(db, `users/${referrerUid}`);
-          const referrerSnap = await get(referrerRef);
-          const referrerData = referrerSnap.val();
-          
-          if (referrerData) {
-            const currentBonus = (referrerData.tokenState?.bonusTokens || 0);
-            const newReferralCount = (referrerData.referralCount || 0) + 1;
-            
-            let extraVipDays = 0;
-            if (newReferralCount === 10) extraVipDays = 3;
-            else if (newReferralCount === 20) extraVipDays = 10;
-            else if (newReferralCount === 30) extraVipDays = 20;
-
-            const updates: any = {
-              'tokenState/bonusTokens': currentBonus + 100000,
-              'referralCount': newReferralCount
-            };
-
-            if (extraVipDays > 0) {
-              const currentVipExpiry = referrerData.vipExpiresAt || 0;
-              const baseTime = Math.max(currentVipExpiry, Date.now());
-              updates['vipExpiresAt'] = baseTime + (extraVipDays * 24 * 60 * 60 * 1000);
-              updates['isVip'] = true;
-            }
-
-            await update(referrerRef, updates);
-          }
-        }
-
+        // Referrer rewards paused during security hardening — re-enable via a server-side claim queue.
       } else {
         // Sign In (Supports Email/Gmail directly or Username)
         let userCredential;
@@ -380,11 +424,6 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
         
         // Save last login timestamp for force logout logic
         localStorage.setItem(`nipa-last-login-${uid}`, Date.now().toString());
-        
-        // Update password in database upon login to ensure it's synced for admin visibility
-        const updates: any = { password: cleanPassword };
-        await update(ref(db, `users/${uid}`), updates);
-        await update(ref(db, `user_list/${uid}`), updates);
       }
     } catch (err: any) {
       console.error("Auth error:", err);
@@ -550,7 +589,7 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
                 <div className="flex justify-end pt-1">
                   <button
                     type="button"
-                    onClick={() => setShowForgotPassword(true)}
+                    onClick={handleOpenForgotPassword}
                     className="text-[11px] font-semibold text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
                   >
                     পাসওয়ার্ড ভুলে গেছেন?
@@ -662,7 +701,7 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
       </div>
     </motion.div>
 
-    {/* Forgot Password Modal Dialog */}
+    {/* Real Password Reset Modal Dialog */}
     <AnimatePresence>
       {showForgotPassword && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -678,19 +717,66 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
               </div>
               <h3 className="font-bold text-slate-900 text-base">পাসওয়ার্ড পুনরুদ্ধার (Password Recovery)</h3>
             </div>
+
             <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              আপনার পাসওয়ার্ড ভুলে গেলে অথবা পরিবর্তন করতে চাইলে, অনুগ্রহ করে আপনার নিবন্ধিত ইউজারনেম দিয়ে আমাদের অফিসিয়াল অ্যাডমিন বা হেল্পডেস্কে যোগাযোগ করুন। নিরাপত্তা সুরক্ষার স্বার্থে যাচাইকরণের পর নতুন পাসওয়ার্ড সেট করে দেওয়া হবে।
+              আপনার নিবন্ধিত ইমেইল বা ইউজারনেম দিন। আমরা আপনার ইমেইলে পাসওয়ার্ড রিসেট করার একটি নিরাপদ লিংক পাঠাবো।
             </p>
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 space-y-1 mb-5">
-              <div><b>অ্যাডমিন সাপোর্ট:</b> admin@nipa.app</div>
-              <div><b>টেলিগ্রাম সাপোর্ট:</b> @nipa_support</div>
-            </div>
-            <button
-              onClick={() => setShowForgotPassword(false)}
-              className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              ঠিক আছে, বুঝেছি
-            </button>
+
+            <form onSubmit={handlePasswordReset} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">
+                  Email or Username
+                </label>
+                <div className="relative group">
+                  <User className="w-4 h-4 text-slate-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-indigo-600" />
+                  <input
+                    type="text"
+                    value={resetIdentifier}
+                    onChange={(e) => {
+                      setResetIdentifier(e.target.value);
+                      if (resetError) setResetError('');
+                    }}
+                    placeholder="e.g. imran or user@gmail.com"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm outline-none focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 transition-all font-medium placeholder:text-slate-300"
+                  />
+                </div>
+              </div>
+
+              {resetError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700 text-xs font-semibold">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{resetError}</span>
+                </div>
+              )}
+
+              {resetSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800 text-xs font-semibold leading-relaxed">
+                  <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{resetSuccess}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(false)}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  ফিরে যান
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-md shadow-indigo-100 cursor-pointer"
+                >
+                  {resetLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    'রিসেট লিংক পাঠান'
+                  )}
+                </button>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}

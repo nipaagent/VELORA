@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { ref, onValue, set, remove, update, push, get } from 'firebase/database';
 import { 
   LayoutDashboard, Users, CreditCard, Zap, Crown, 
@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AdminOverviewTab } from './admin/AdminOverviewTab';
 import { AdminUsersTab } from './admin/AdminUsersTab';
 import { AdminPaymentsTab } from './admin/AdminPaymentsTab';
+import { AdminTokensTab } from './admin/AdminTokensTab';
 import { AdminTokenConfigTab } from './admin/AdminTokenConfigTab';
 import { AdminRedeemTab } from './admin/AdminRedeemTab';
 import { AdminSecurityTab } from './admin/AdminSecurityTab';
@@ -121,7 +122,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const fetchApiKeysStats = async () => {
     setIsLoadingApiKeys(true);
     try {
-      const res = await fetch('/api/admin/stats');
+      const currentUser = auth.currentUser;
+      const idToken = currentUser ? await currentUser.getIdToken() : '';
+      const res = await fetch('/api/admin/stats', {
+        headers: {
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.keys && data.keys.length > 0) {
@@ -842,13 +849,16 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             )}
 
             {activeTab === 'tokens' && (
-              <AdminTokenConfigTab
-                tokenConfig={tokenConfig}
-                onSaveTokenConfig={handleSaveTokenConfig}
-                onBatchUpdateAllUsersLimit={handleBatchUpdateAllUsersLimit}
-                isSaving={isSaving}
-                totalUsersCount={users.length}
-              />
+              <div className="space-y-8">
+                <AdminTokensTab users={users} />
+                <AdminTokenConfigTab
+                  tokenConfig={tokenConfig}
+                  onSaveTokenConfig={handleSaveTokenConfig}
+                  onBatchUpdateAllUsersLimit={handleBatchUpdateAllUsersLimit}
+                  isSaving={isSaving}
+                  totalUsersCount={users.length}
+                />
+              </div>
             )}
 
             {activeTab === 'redeem' && (
