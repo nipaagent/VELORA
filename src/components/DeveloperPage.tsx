@@ -363,7 +363,7 @@ console.log(data);`;
               </div>
               <div>
                 <h2 className="text-sm font-bold text-slate-800">Build Your Own AI Applications</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Use your Nipa API key to power any custom application, tool, or integration.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Use your NIPA API key to power any custom application, tool, or integration.</p>
               </div>
             </div>
             

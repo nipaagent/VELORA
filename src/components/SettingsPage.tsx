@@ -1331,7 +1331,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                   </div>
                   <h2 className="text-xl font-black tracking-tight mb-2">NIPA NETWORK V2.7</h2>
                   <p className="text-slate-200 text-sm leading-relaxed max-w-sm font-medium">
-                    রিয়েল reCAPTCHA সিকিউরিটি, স্ট্রিমড রেসপন্স, SP Wallet BD পেমেন্ট গেটওয়ে এবং উন্নত Nipa AI ইন্টেলিজেন্স।
+                    রিয়েল reCAPTCHA সিকিউরিটি, স্ট্রিমড রেসপন্স, SP Wallet BD পেমেন্ট গেটওয়ে এবং উন্নত NIPA AI ইন্টেলিজেন্স।
                   </p>
                 </div>
               </div>

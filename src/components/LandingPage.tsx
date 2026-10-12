@@ -285,7 +285,7 @@ export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPu
             </div>
             <h3 className="font-bold text-white mb-1.5">প্রশ্ন করো, উত্তর নাও</h3>
             <p className="text-zinc-400 text-xs leading-relaxed">
-              চ্যাটে বাংলায় বা ইংরেজিতে যা জানতে চাও লিখে পাঠাও। ছবি বিশ্লেষণ করতে চাইলে ছবি আপলোড করো — мгновен উত্তর চলে আসবে।
+              চ্যাটে বাংলায় বা ইংরেজিতে যা জানতে চাও লিখে পাঠাও। ছবি বিশ্লেষণ করতে চাইলে ছবি আপলোড করো — তাৎক্ষণিক উত্তর চলে আসবে।
             </p>
           </div>
 

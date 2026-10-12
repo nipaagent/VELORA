@@ -518,6 +518,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   };
 
   // Nav Items Definition
+  const totalCallsAllTime = apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0);
+  const totalCallsToday = apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0);
+  const totalSuccess = apiKeys.reduce((acc, k) => acc + (k.successCalls || 0), 0);
+  const successRate = totalCallsAllTime > 0
+    ? Math.min(100, Math.max(0, Math.round((totalSuccess / totalCallsAllTime) * 100)))
+    : (totalCallsToday > 0 ? Math.min(100, Math.max(0, Math.round((totalSuccess / totalCallsToday) * 100))) : 100);
+
   const navItems: { id: AdminTabId; label: string; icon: any; badge?: string | number }[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'users', label: 'User Directory', icon: Users, badge: users.length },
@@ -525,7 +532,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     { id: 'tokens', label: 'Token & Ad Config', icon: Zap },
     { id: 'redeem', label: 'Redeem Codes', icon: Crown, badge: redeemCodes.length },
     { id: 'security', label: 'Security', icon: ShieldCheck, badge: systemControl.maintenanceMode ? 'Alert' : undefined },
-    { id: 'apikeys', label: 'API Gateway', icon: KeyRound, badge: '93%' },
+    { id: 'apikeys', label: 'API Gateway', icon: KeyRound, badge: `${successRate}%` },
     { id: 'broadcast', label: 'Broadcast', icon: Radio, badge: announcement.isActive ? 'Live' : undefined },
     { id: 'logs', label: 'Audit Logs', icon: RefreshCw, badge: adminLogs.length },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -554,7 +561,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                 <div className="text-xs font-black tracking-tight text-slate-900 flex items-center gap-1.5 leading-none">
                   <span>MASTER CONTROL</span>
                 </div>
-                <div className="text-[10px] text-indigo-600 font-bold font-mono mt-0.5">v3.8 PRO</div>
+                <div className="text-[10px] text-indigo-600 font-bold font-mono mt-0.5">V2.7 PRO</div>
               </div>
             </div>
           ) : (

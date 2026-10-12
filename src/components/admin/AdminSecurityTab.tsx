@@ -30,8 +30,8 @@ export const AdminSecurityTab: React.FC<AdminSecurityTabProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  const recaptchaSiteKey = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
-  const recaptchaSecretKey = "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe";
+  const recaptchaSiteKey = "6Ld9n_NipaProdSiteKey2026_0199999999";
+  const recaptchaSecretKey = "6Ld9n_NipaProdSecretKey2026_Sec999";
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);

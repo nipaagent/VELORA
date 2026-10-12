@@ -8,7 +8,7 @@ export default function ChatEmptyState() {
         <Bot className="w-8 h-8 text-slate-800" />
       </div>
       <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-1.5 flex items-center gap-2 justify-center">
-        Nipa Assistant
+        NIPA Assistant
         <Sparkles className="w-4 h-4 text-amber-500" />
       </h2>
       <p className="text-xs font-medium text-slate-500 max-w-sm mx-auto leading-relaxed">

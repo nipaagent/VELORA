@@ -48,7 +48,7 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
           if (widgetIdRef.current === null) {
             recaptchaContainerRef.current.innerHTML = '';
             const wid = window.grecaptcha.render(recaptchaContainerRef.current, {
-              sitekey: ((import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY as string) || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
+              sitekey: ((import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY as string) || "6Ld9n_NipaProdSiteKey2026_0199999999",
               callback: (token: string) => {
                 if (isMounted) {
                   setRecaptchaToken(token);
