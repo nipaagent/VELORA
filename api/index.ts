@@ -472,7 +472,7 @@ Guidelines:
               model: currentModel,
               messages: formattedMessages,
               temperature: 0.1,
-              max_tokens: 4096,
+              max_tokens: 1000,
               stream: isStreamRequested
             }),
             // Ultra-fast failover: 3.5s for initial primary models to guarantee first token < 3s, then 6s
