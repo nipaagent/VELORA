@@ -9,6 +9,7 @@ import TokenBadge from './components/TokenBadge';
 import TokenModal from './components/TokenModal';
 import MenuSlide from './animations/MenuSlide';
 import AuthModal from './components/AuthModal';
+import LandingPage from './components/LandingPage';
 import SettingsPage from './components/SettingsPage';
 import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
@@ -93,6 +94,8 @@ export default function App() {
   const [urlPromoCode, setUrlPromoCode] = useState<string>('');
   const [globalTokenMultiplier, setGlobalTokenMultiplier] = useState<number>(1);
   const [authLoading, setAuthLoading] = useState(true);
+  const [landingView, setLandingView] = useState<'landing' | 'auth'>('landing');
+  const [authInitialIsSignUp, setAuthInitialIsSignUp] = useState<boolean>(false);
   const [sharedSessionInfo, setSharedSessionInfo] = useState<SharedSessionInfo | null>(() => {
     try {
       const stored = sessionStorage.getItem('nipa-shared-session');
@@ -509,8 +512,54 @@ export default function App() {
                 return true;
               }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-              setChats(cleanCloudChats);
-              saveChatsToLocal(localChatsKey, cleanCloudChats);
+              // Optimistic UI Reconciliation: Never wipe out in-flight or sending messages!
+              setChats(prev => {
+                if (!prev || prev.length === 0) return cleanCloudChats;
+
+                const mergedMap = new Map<string, Chat>();
+                // Seed with cloud chats
+                cleanCloudChats.forEach(c => mergedMap.set(c.id, { ...c }));
+
+                // Reconcile with local state
+                prev.forEach(localChat => {
+                  const cloudChat = mergedMap.get(localChat.id);
+                  if (!cloudChat) {
+                    // Chat only exists locally (just created, optimistic)
+                    mergedMap.set(localChat.id, localChat);
+                  } else {
+                    // Chat exists in both. Preserve any local messages currently sending, failed, or missing from cloud
+                    const cloudMsgIds = new Set((cloudChat.messages || []).map(m => m.id));
+                    const preservedLocalMsgs = (localChat.messages || []).filter(
+                      m => !cloudMsgIds.has(m.id) || m.status === 'sending' || m.status === 'error'
+                    );
+
+                    if (preservedLocalMsgs.length > 0) {
+                      const allMsgs = [...(cloudChat.messages || [])];
+                      preservedLocalMsgs.forEach(locMsg => {
+                        const existingIdx = allMsgs.findIndex(m => m.id === locMsg.id);
+                        if (existingIdx !== -1) {
+                          allMsgs[existingIdx] = locMsg;
+                        } else {
+                          allMsgs.push(locMsg);
+                        }
+                      });
+                      allMsgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+                      mergedMap.set(localChat.id, {
+                        ...cloudChat,
+                        messages: allMsgs,
+                        updatedAt: Math.max(cloudChat.updatedAt || 0, localChat.updatedAt || 0)
+                      });
+                    }
+                  }
+                });
+
+                const mergedList = Array.from(mergedMap.values()).sort(
+                  (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)
+                );
+                saveChatsToLocal(localChatsKey, mergedList);
+                return mergedList;
+              });
+
               isInitialChatSyncDoneRef.current = currentUser.uid;
             } else {
               // Cloud is empty for this user. If local cache has chats, backup to cloud!
@@ -756,6 +805,7 @@ export default function App() {
       text,
       timestamp: Date.now(),
       attachments,
+      status: 'sending',
     };
 
     const updatedWithUser: Chat = {
@@ -764,20 +814,17 @@ export default function App() {
       updatedAt: Date.now(),
     };
 
-    // Save to Firebase Realtime Database & update local state
+    // Save to local cache & update state immediately (Optimistic UI)
     setChats(prev => {
       const exists = prev.some(c => c.id === chatId);
-      if (exists) {
-        return prev.map(c => c.id === chatId ? updatedWithUser : c);
+      const updated = exists 
+        ? prev.map(c => c.id === chatId ? updatedWithUser : c)
+        : [updatedWithUser, ...prev];
+      if (user) {
+        saveChatsToLocal(`nipa-chats-${user.uid}`, updated);
       }
-      return [updatedWithUser, ...prev];
+      return updated;
     });
-
-    try {
-      /* LocalStorage handles it */
-    } catch (e) {
-      console.warn("DB save error:", e);
-    }
 
     setIsLoading(true);
 
@@ -818,9 +865,10 @@ export default function App() {
         
         setChats(prev => prev.map(c => {
           if (c.id === chatId) {
+            const updatedMsgs = c.messages.map(m => m.id === userMessage.id ? { ...m, status: 'sent' as const } : m);
             return {
               ...c,
-              messages: [...c.messages, modelMessage],
+              messages: [...updatedMsgs, modelMessage],
               updatedAt: Date.now()
             };
           }
@@ -1090,6 +1138,11 @@ export default function App() {
         }
         
         console.error("Error from API:", data.error);
+        const userMsgWithError: Message = {
+          ...userMessage,
+          status: 'error',
+          errorText: data.error || 'Failed to send'
+        };
         const errorMessage: Message = {
           id: crypto.randomUUID(),
           role: 'model',
@@ -1098,17 +1151,20 @@ export default function App() {
         };
         
         const updatedWithError: Chat = {
-          ...updatedWithUser,
-          messages: [...updatedWithUser.messages, errorMessage],
+          ...currentChatState,
+          messages: [...currentChatState.messages, userMsgWithError, errorMessage],
           updatedAt: Date.now(),
         };
 
         setChats(prev => prev.map(c => c.id === chatId ? updatedWithError : c));
-
-        
       }
     } catch (e) {
       console.error("Failed to send message", e);
+      const userMsgWithError: Message = {
+        ...userMessage,
+        status: 'error',
+        errorText: 'নেটওয়ার্ক সমস্যা বা সার্ভার ডাউন।'
+      };
       const errorMessage: Message = {
         id: crypto.randomUUID(),
         role: 'model',
@@ -1117,14 +1173,12 @@ export default function App() {
       };
       
       const updatedWithError: Chat = {
-        ...updatedWithUser,
-        messages: [...updatedWithUser.messages, errorMessage],
+        ...currentChatState,
+        messages: [...currentChatState.messages, userMsgWithError, errorMessage],
         updatedAt: Date.now(),
       };
 
       setChats(prev => prev.map(c => c.id === chatId ? updatedWithError : c));
-
-      
     } finally {
       setIsLoading(false);
     }
@@ -1174,7 +1228,24 @@ export default function App() {
   }
 
   if (!user) {
-    return <AuthModal isOpen={true} initialReferralCode={urlReferralCode} />;
+    if (landingView === 'landing' && !urlReferralCode) {
+      return (
+        <LandingPage
+          onOpenAuth={(isSignUp = false) => {
+            setAuthInitialIsSignUp(isSignUp);
+            setLandingView('auth');
+          }}
+        />
+      );
+    }
+    return (
+      <AuthModal 
+        isOpen={true} 
+        initialReferralCode={urlReferralCode} 
+        initialIsSignUp={authInitialIsSignUp}
+        onBackToLanding={() => setLandingView('landing')}
+      />
+    );
   }
 
   return (
@@ -1443,6 +1514,7 @@ export default function App() {
                       <ChatArea 
                         chat={currentChat} 
                         onSendMessage={sendMessage} 
+                        onRetryMessage={(msg) => sendMessage(msg.text, msg.attachments)}
                         onNewChat={createNewChat}
                         isLoading={isLoading}
                         userProfile={userProfile}

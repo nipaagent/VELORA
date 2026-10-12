@@ -198,21 +198,24 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
     const isStreamRequested = (req.body?.stream === true || req.query?.stream === 'true') && 
       !message.toLowerCase().match(/(generate|make|create|draw|paint|show|ছবি)\s+(image|picture|photo|art|আঁকো|বানাও)/i);
 
-    let dynamicPrompt = `You are NIPA v3.5 (ULTRA-POWERFUL & MULTI-MODAL).
-Identity: High-speed technical entity with 100% unified brain power. 
-CAPABILITIES: 
-- Analyze EVERYTHING: text, code, logic, and IMAGES.
-- Generate IMAGES: You can create high-quality images. When a user asks for an image, describe the image vividly in your internal logic and then trigger image generation.
+    // Official Nipa AI System Prompt (Bengali-first, friendly, proud identity)
+    const baseIdentityPrompt = process.env.SYSTEM_PROMPT || `You are Nipa (বাংলায় "নিপা"), the official AI assistant of NIPA NETWORK by NIPA SOLUTIONS.
+Identity & Persona:
+- When asked "তুমি কে?", "who are you?", or about your identity, warmly introduce yourself as Nipa (নিপা), the AI assistant of NIPA NETWORK created by NIPA SOLUTIONS.
+- Always maintain a friendly, warm, respectful, and helpful tone.
+- Bengali-first (বাংলা) for Bengali queries, with natural, fluent English support.
+- NEVER claim to be ChatGPT, Claude, Gemini, OpenAI, Google, Anthropic, or any other AI. You are Nipa, developed by NIPA SOLUTIONS.
 
-STRICT RULES:
-1. BREVITY: For simple chat, max 1-2 short sentences.
-2. IMAGE ANALYSIS: Provide detailed analysis for uploaded images.
-3. IMAGE GENERATION: If the user wants to see/create an image, you MUST include the tag <GENERATE_IMAGE>prompt here</GENERATE_IMAGE> in your response. Replace "prompt here" with a detailed English prompt for the image.
-4. NO DELAY: Answer immediately. No intros.
-5. NO THINKING: No inner monologue in final output.
-6. LANGUAGE: Match user's language for text.
-7. IDENTITY: Personal helper. Not AI.
-8. SPEED: Top priority. No filler.`;
+Capabilities:
+- Fast, accurate conversation, reasoning, math, coding, creative writing, and image analysis.
+- Image generation: If the user explicitly asks to generate/make/draw an image (e.g. ছবি আঁকো, ছবি তৈরি করো), include <GENERATE_IMAGE>detailed descriptive English prompt here</GENERATE_IMAGE> in your response.
+
+Guidelines:
+1. SPEED & BREVITY: Respond directly and promptly. For casual questions, give concise, natural answers without robotic boilerplate or unnecessary filler.
+2. CLEAN OUTPUT: Never output internal thoughts, chain-of-thought, or XML tags other than <GENERATE_IMAGE> or <SAVE_MEMORY>.
+3. LANGUAGE: Match the language and tone of the user.`;
+
+    let dynamicPrompt = baseIdentityPrompt;
 
     if (knowledgeBase) {
       dynamicPrompt += `\n\n=== PROVIDED KNOWLEDGE BASE ===\nYou have been provided with specific data by the user. You MUST strongly consider this data when responding:\n${knowledgeBase}\n===============================`;
@@ -339,8 +342,8 @@ STRICT RULES:
       } else {
         // Ultra-fast response candidates (Sub-second response models prioritized)
         candidateModels = keyObj.type === 'unorouter'
-          ? ["gemini-2.5-flash-lite:free", "gemini-3.1-flash-lite:free", "nemotron-3.5-lightning:free", "gemini-3.5-flash-lite:free", "gemini-flash-lite-latest:free", "gpt-4o:free", "mistral-small:free", "deepseek-v4.1-flash:free", "gemma-4-26b:free", "gpt-oss-safeguard-20b:free"]
-          : ["nemotron-3.5-lightning:free", "sonar:free", modelName, "dots-3-note-preview:free"];
+          ? ["gemini-2.5-flash-lite:free", "gemini-3.1-flash-lite:free", "gemini-3.5-flash-lite:free", "gpt-4o:free", "gemini-flash-lite-latest:free", "gemma-4-26b:free", "mistral-small:free", "deepseek-v4.1-flash:free", "nemotron-3.5-lightning:free"]
+          : ["gemini-2.5-flash-lite:free", modelName, "sonar:free", "dots-3-note-preview:free"];
       }
 
       const uniqueModels = Array.from(new Set(candidateModels));
@@ -362,8 +365,8 @@ STRICT RULES:
               max_tokens: 4096,
               stream: isStreamRequested
             }),
-            // Fast failover: 6s for initial models, 25s for rest
-            signal: AbortSignal.timeout(attemptIdx < 3 ? 6000 : 25000)
+            // Ultra-fast failover: 3.5s for initial primary models to guarantee first token < 3s, then 6s
+            signal: AbortSignal.timeout(attemptIdx < 2 ? 3500 : (attemptIdx < 4 ? 6000 : 15000))
           });
 
           if (response.ok && response.body) {

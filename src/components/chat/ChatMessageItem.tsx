@@ -11,12 +11,14 @@ interface ChatMessageItemProps {
   message: Message;
   isGenerating: boolean;
   userProfile?: UserProfile | null;
+  onRetry?: (message: Message) => void;
 }
 
 export default function ChatMessageItem({
   message,
   isGenerating,
   userProfile,
+  onRetry,
 }: ChatMessageItemProps) {
   const isUser = message.role === 'user';
 
@@ -86,6 +88,43 @@ export default function ChatMessageItem({
             </div>
           ) : (
             <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
+          )}
+
+          {/* Token & Status Indicator */}
+          {isUser && (
+            <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[10px] select-none">
+              {message.status === 'sending' && (
+                <span className="flex items-center gap-1.5 text-zinc-300 font-medium animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping inline-block" />
+                  পাঠানো হচ্ছে...
+                </span>
+              )}
+              {message.status === 'error' && (
+                <div className="flex items-center gap-2 text-rose-300 font-medium">
+                  <span>পাঠানো যায়নি</span>
+                  {onRetry && (
+                    <button
+                      type="button"
+                      onClick={() => onRetry(message)}
+                      className="px-2 py-0.5 rounded bg-rose-500/30 text-rose-200 hover:bg-rose-500/40 text-[10px] font-bold cursor-pointer transition-colors"
+                    >
+                      আবার পাঠান
+                    </button>
+                  )}
+                </div>
+              )}
+              {(!message.status || message.status === 'sent') && message.text && (
+                <span className="text-zinc-400 font-mono">
+                  ~{Math.max(25, Math.round(message.text.length * 1.4))} tokens
+                </span>
+              )}
+            </div>
+          )}
+
+          {!isUser && message.text && (
+            <span className="block mt-1.5 text-[10px] font-mono tracking-tight text-zinc-500">
+              ~{Math.max(25, Math.round(message.text.length * 1.4))} tokens
+            </span>
           )}
         </div>
 

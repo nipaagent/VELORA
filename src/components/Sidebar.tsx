@@ -38,10 +38,6 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
             <Sparkles className="w-4.5 h-4.5 text-indigo-600" />
             <span className="font-black text-gray-900 text-sm tracking-wider uppercase">NIPA</span>
           </motion.div>
-
-          {tokenState && onOpenTokenModal && (
-            <TokenBadge tokenState={tokenState} userProfile={userProfile} onClick={onOpenTokenModal} />
-          )}
         </div>
         
         <div className="p-2 shrink-0 flex items-center gap-1.5">

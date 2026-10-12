@@ -1,29 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { ref, onValue, set, remove, update, push, get } from 'firebase/database';
-import { AdminHeader } from './admin/AdminHeader';
+import { 
+  LayoutDashboard, Users, CreditCard, Zap, Crown, 
+  ShieldCheck, KeyRound, Radio, RefreshCw, Settings, 
+  ArrowLeft, Search, Command, ChevronLeft, ChevronRight, 
+  Menu, X, Power, FileDown, LogOut, Check, Sliders
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { AdminOverviewTab } from './admin/AdminOverviewTab';
 import { AdminUsersTab } from './admin/AdminUsersTab';
-import { AdminBroadcastTab } from './admin/AdminBroadcastTab';
+import { AdminPaymentsTab } from './admin/AdminPaymentsTab';
 import { AdminTokenConfigTab } from './admin/AdminTokenConfigTab';
 import { AdminRedeemTab } from './admin/AdminRedeemTab';
 import { AdminSecurityTab } from './admin/AdminSecurityTab';
 import { AdminApiKeysTab } from './admin/AdminApiKeysTab';
+import { AdminBroadcastTab } from './admin/AdminBroadcastTab';
 import { AdminLogsTab } from './admin/AdminLogsTab';
-import { AdminPaymentsTab } from './admin/AdminPaymentsTab';
+import { AdminSettingsTab } from './admin/AdminSettingsTab';
 import { AdminUserTokenModal } from './admin/AdminUserTokenModal';
 import { AdminUserEditModal } from './admin/AdminUserEditModal';
 import { AdminAddUserModal } from './admin/AdminAddUserModal';
 import VipUserModal from './VipUserModal';
 import { AdminUser, AdminLog, ApiKeyDetail } from './admin/adminTypes';
 import { SystemAnnouncement, SystemControl, RedeemCode } from '../types';
-import { generateUniqueNipaKey } from '../lib/utils';
+import { cn } from '../lib/utils';
 
 interface AdminPageProps {
   onBackToChat?: () => void;
 }
 
+export type AdminTabId = 
+  | 'overview' 
+  | 'users' 
+  | 'payments' 
+  | 'tokens' 
+  | 'redeem' 
+  | 'security' 
+  | 'apikeys' 
+  | 'broadcast' 
+  | 'logs' 
+  | 'settings';
+
 export default function AdminPage({ onBackToChat }: AdminPageProps) {
-  const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'broadcast' | 'tokens' | 'redeem' | 'security' | 'apikeys' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<AdminTabId>('overview');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [commandSearch, setCommandSearch] = useState('');
+
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [adLinks, setAdLinks] = useState<string[]>([]);
   const [redeemCodes, setRedeemCodes] = useState<RedeemCode[]>([]);
@@ -61,7 +86,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
 
-  // API Keys status mock/realtime
+  // API Keys status
   const [apiKeys, setApiKeys] = useState<ApiKeyDetail[]>([
     {
       name: 'NIPA AI GATEWAY',
@@ -114,7 +139,18 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     fetchApiKeysStats();
   }, []);
 
-  // Push audit log helper
+  // Keyboard shortcut for Ctrl+K / Cmd+K Command Palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const logAdminAction = async (action: string, description: string) => {
     try {
       const logsRef = ref(db, 'admin_logs');
@@ -128,10 +164,10 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
   };
 
-  // 1. Listen to Users from Firebase RTDB
+  // Listeners from Firebase RTDB
   useEffect(() => {
     const usersRef = ref(db, 'users');
-    const unsubscribeUsers = onValue(usersRef, (snapshot) => {
+    const unsubUsers = onValue(usersRef, (snapshot) => {
       if (!snapshot.exists()) {
         setUsers([]);
         return;
@@ -141,14 +177,12 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         uid,
         ...data[uid]
       }));
-      // Sort newest first
       list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setUsers(list);
     });
 
-    // 3. Listen to Redeem Codes
     const redeemRef = ref(db, 'redeem_codes');
-    const unsubscribeRedeem = onValue(redeemRef, (snapshot) => {
+    const unsubRedeem = onValue(redeemRef, (snapshot) => {
       if (!snapshot.exists()) {
         setRedeemCodes([]);
         return;
@@ -158,37 +192,39 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         id: k,
         ...data[k]
       }));
-      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setRedeemCodes(list);
     });
 
-    // 4. Listen to Token Config
     const tokenConfigRef = ref(db, 'settings/token_config');
-    const unsubscribeConfig = onValue(tokenConfigRef, (snapshot) => {
+    const unsubTokenCfg = onValue(tokenConfigRef, (snapshot) => {
       if (snapshot.exists()) {
         setTokenConfig(snapshot.val());
       }
     });
 
-    // 5. Listen to Announcement
-    const announceRef = ref(db, 'settings/system_announcement');
-    const unsubscribeAnnounce = onValue(announceRef, (snapshot) => {
+    const adLinksRef = ref(db, 'settings/ad_links');
+    const unsubAdLinks = onValue(adLinksRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setAdLinks(snapshot.val() || []);
+      }
+    });
+
+    const annRef = ref(db, 'settings/announcement');
+    const unsubAnn = onValue(annRef, (snapshot) => {
       if (snapshot.exists()) {
         setAnnouncement(snapshot.val());
       }
     });
 
-    // 6. Listen to System Control
-    const controlRef = ref(db, 'settings/system_control');
-    const unsubscribeControl = onValue(controlRef, (snapshot) => {
+    const sysRef = ref(db, 'settings/system_control');
+    const unsubSys = onValue(sysRef, (snapshot) => {
       if (snapshot.exists()) {
         setSystemControl(snapshot.val());
       }
     });
 
-    // 7. Listen to Admin Logs
     const logsRef = ref(db, 'admin_logs');
-    const unsubscribeLogs = onValue(logsRef, (snapshot) => {
+    const unsubLogs = onValue(logsRef, (snapshot) => {
       if (!snapshot.exists()) {
         setAdminLogs([]);
         return;
@@ -203,49 +239,46 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     });
 
     return () => {
-      unsubscribeUsers();
-      unsubscribeRedeem();
-      unsubscribeConfig();
-      unsubscribeAnnounce();
-      unsubscribeControl();
-      unsubscribeLogs();
+      unsubUsers();
+      unsubRedeem();
+      unsubTokenCfg();
+      unsubAdLinks();
+      unsubAnn();
+      unsubSys();
+      unsubLogs();
     };
   }, []);
 
-  // Handler: Save System Announcement
-  const handleSaveAnnouncement = async (data: SystemAnnouncement) => {
-    setIsSaving(true);
-    try {
-      await set(ref(db, 'settings/system_announcement'), data);
-      await logAdminAction(
-        data.isActive ? 'BROADCAST_PUBLISHED' : 'BROADCAST_DISABLED',
-        `গ্লোবাল ব্রডকাস্ট নোটিশ আপডেট করা হয়েছে: "${data.title || 'Untitled'}"`
-      );
-    } catch (e: any) {
-      alert("ব্রডকাস্ট সংরক্ষণ ব্যর্থ হয়েছে: " + e.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Handler: Save System Control
+  // Handlers
   const handleUpdateSystemControl = async (ctrl: SystemControl) => {
     setIsSaving(true);
     try {
       await set(ref(db, 'settings/system_control'), ctrl);
       await logAdminAction(
         'SYSTEM_CONTROL_UPDATED',
-        `সিস্টেম সুইচ আপডেট: মেইনটেন্যান্স=${ctrl.maintenanceMode ? 'ON' : 'OFF'}, রেজিস্ট্রেশন=${ctrl.allowRegistration ? 'ON' : 'OFF'}`
+        `সিস্টেম কন্ট্রোল আপডেট: মেইনটেন্যান্স=${ctrl.maintenanceMode ? 'অন' : 'অফ'}, রেজিস্ট্রেশন=${ctrl.allowRegistration ? 'অন' : 'অফ'}`
       );
     } catch (e: any) {
-      alert("সিস্টেম কন্ট্রোল আপডেট ব্যর্থ হয়েছে: " + e.message);
+      alert("সিস্টেম সেটিং সংরক্ষণ ব্যর্থ: " + e.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Handler: Save Global Token Config
-  const handleSaveTokenConfig = async (cfg: any) => {
+  const handleSaveAnnouncement = async (ann: SystemAnnouncement) => {
+    setIsSaving(true);
+    try {
+      await set(ref(db, 'settings/announcement'), ann);
+      await logAdminAction('ANNOUNCEMENT_UPDATED', `সিস্টেম ব্রডকাস্ট আপডেট করা হয়েছে: "${ann.title}"`);
+      alert("ব্রডকাস্ট ঘোষণা সফলভাবে সংরক্ষণ করা হয়েছে!");
+    } catch (e: any) {
+      alert("সংরক্ষণ ব্যর্থ: " + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveTokenConfig = async (cfg: typeof tokenConfig) => {
     setIsSaving(true);
     try {
       await set(ref(db, 'settings/token_config'), cfg);
@@ -260,7 +293,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
   };
 
-  // Handler: Atomic Batch Update All Users Token Limit
   const handleBatchUpdateAllUsersLimit = async (newLimit: number) => {
     const updates: Record<string, any> = {};
     users.forEach(u => {
@@ -273,20 +305,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     );
   };
 
-  // Handler: Add / Delete Ad Link
-  const handleAddAdLink = async (link: string) => {
-    const updated = [...adLinks, link];
-    await set(ref(db, 'settings/ad_links'), updated);
-    await logAdminAction('AD_LINK_ADDED', `নতুন স্পনসর অ্যাড লিংক যোগ করা হয়েছে: ${link}`);
-  };
-
-  const handleDeleteAdLink = async (link: string) => {
-    const updated = adLinks.filter(l => l !== link);
-    await set(ref(db, 'settings/ad_links'), updated);
-    await logAdminAction('AD_LINK_DELETED', `অ্যাড লিংক মুছে ফেলা হয়েছে`);
-  };
-
-  // Handler: Create Redeem Code
   const handleCreateRedeemCode = async (codeData: Omit<RedeemCode, 'id' | 'usedCount' | 'usedBy'>) => {
     setIsSaving(true);
     try {
@@ -302,11 +320,11 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       });
       await logAdminAction(
         'REDEEM_CODE_CREATED',
-        `নতুন রিডিম কোড তৈরি করা হয়েছে: ${codeData.code} (${codeData.rewardType === 'tokens' ? codeData.tokenAmount + ' টোকেন' : codeData.vipDays + ' দিন VIP'})`
+        `নতুন রিডিম কোড তৈরি: ${codeData.code}`
       );
       alert(`🎉 রিডিম কোড ${codeData.code} সফলভাবে তৈরি করা হয়েছে!`);
     } catch (e: any) {
-      alert("কোড তৈরি ব্যর্থ হয়েছে: " + e.message);
+      alert("কোড তৈরি ব্যর্থ: " + e.message);
     } finally {
       setIsSaving(false);
     }
@@ -316,19 +334,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     await update(ref(db, `redeem_codes/${code.id}`), {
       isActive: !code.isActive
     });
-    await logAdminAction(
-      'REDEEM_CODE_TOGGLED',
-      `রিডিম কোড ${code.code} ${!code.isActive ? 'সক্রিয়' : 'নিষ্ক্রিয়'} করা হয়েছে`
-    );
   };
 
   const handleDeleteRedeemCode = async (codeId: string) => {
     if (!window.confirm("আপনি কি নিশ্চিত যে এই রিডিম কোডটি মুছে ফেলতে চান?")) return;
     await remove(ref(db, `redeem_codes/${codeId}`));
-    await logAdminAction('REDEEM_CODE_DELETED', `রিডিম কোড ${codeId} মুছে ফেলা হয়েছে`);
   };
 
-  // Handler: Update User Tokens
   const handleUpdateUserTokens = async (
     uid: string, 
     action: 'add_bonus' | 'sub_bonus' | 'set_daily' | 'reset_used', 
@@ -344,19 +356,16 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
       if (action === 'add_bonus') {
         updates[`users/${uid}/tokenState/bonusTokens`] = currentBonus + amount;
-        await logAdminAction('TOKENS_ADDED', `${targetUser.username}-কে +${amount} বোনাস টোকেন দেওয়া হয়েছে`);
       } else if (action === 'sub_bonus') {
         updates[`users/${uid}/tokenState/bonusTokens`] = Math.max(0, currentBonus - amount);
-        await logAdminAction('TOKENS_SUBTRACTED', `${targetUser.username}-এর একাউন্ট থেকে -${amount} টোকেন কাটা হয়েছে`);
       } else if (action === 'set_daily') {
         updates[`users/${uid}/tokenState/maxDailyTokens`] = amount;
-        await logAdminAction('DAILY_LIMIT_SET', `${targetUser.username}-এর ডেইলি লিমিট ${amount}-এ সেট করা হয়েছে`);
       } else if (action === 'reset_used') {
         updates[`users/${uid}/tokenState/tokensUsedToday`] = 0;
-        await logAdminAction('USED_TOKENS_RESET', `${targetUser.username}-এর ব্যবহৃত টোকেন রিসেট করা হয়েছে`);
       }
 
       await update(ref(db), updates);
+      await logAdminAction('TOKEN_UPDATE', `${targetUser.username} এর টোকেন পরিবর্তন করা হয়েছে`);
     } catch (e: any) {
       alert("টোকেন আপডেট ব্যর্থ: " + e.message);
     } finally {
@@ -364,7 +373,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
   };
 
-  // Handler: Save Edited User
   const handleSaveUser = async (uid: string, data: Partial<AdminUser>) => {
     setIsSaving(true);
     try {
@@ -374,7 +382,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         updates[`user_list/${uid}/${k}`] = (data as any)[k];
       });
       await update(ref(db), updates);
-      await logAdminAction('USER_UPDATED', `ইউজার @${data.username || uid} এর প্রোফাইল এডিট করা হয়েছে`);
+      await logAdminAction('USER_UPDATED', `ইউজার @${data.username || uid} প্রোফাইল এডিট`);
     } catch (e: any) {
       alert("ইউজার আপডেট ব্যর্থ: " + e.message);
     } finally {
@@ -382,63 +390,38 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
   };
 
-  // Handler: Create Brand New User
-  const handleCreateUser = async (userData: {
-    fullName: string;
-    username: string;
-    password: string;
-    role: 'user' | 'admin';
-    initialTokens: number;
-    isVip: boolean;
-    vipDays: number;
-  }) => {
+  const handleCreateUser = async (newUser: Partial<AdminUser>) => {
     setIsSaving(true);
     try {
-      const cleanUsername = userData.username.toLowerCase().trim();
-      const userListRef = ref(db, 'user_list');
-      const snap = await get(userListRef);
-      if (snap.exists()) {
-        const all = Object.values(snap.val()) as any[];
-        if (all.some(u => u.username?.toLowerCase() === cleanUsername)) {
-          alert(`ইউজারনেম '${cleanUsername}' ইতিমধ্যে ব্যবহৃত হয়েছে!`);
-          return;
-        }
-      }
-
-      const uid = 'nipa_usr_' + crypto.randomUUID().slice(0, 12);
-      const referralCode = 'NIP' + Math.random().toString(36).substring(2, 7).toUpperCase();
-      const now = Date.now();
-      const vipExpiresAt = userData.isVip && userData.vipDays > 0 ? now + userData.vipDays * 24 * 60 * 60 * 1000 : 0;
-
-      const profileObj: any = {
+      const uid = `manual_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const cleanUsername = (newUser.username || '').toLowerCase().trim();
+      const userPayload: any = {
         uid,
-        fullName: userData.fullName,
         username: cleanUsername,
-        password: userData.password,
-        role: userData.role,
-        status: 'approved',
+        fullName: newUser.fullName || cleanUsername,
+        email: newUser.email || `${cleanUsername}@nipa.app`,
+        password: newUser.password || '123456',
+        role: newUser.role || 'user',
         isBanned: false,
-        isVip: userData.isVip,
-        vipExpiresAt,
-        referralCode,
-        createdAt: now,
+        createdAt: Date.now(),
         tokenState: {
-          maxDailyTokens: userData.initialTokens,
-          bonusTokens: 0,
+          maxDailyTokens: 50000,
+          bonusTokens: newUser.tokenState?.bonusTokens || 0,
           tokensUsedToday: 0,
-          lastResetDate: new Date().toISOString().split('T')[0],
-          adsWatchedToday: 0
+          lastResetDate: new Date().toISOString().split('T')[0]
         }
       };
 
-      const updates: Record<string, any> = {};
-      updates[`users/${uid}`] = profileObj;
-      updates[`user_list/${uid}`] = profileObj;
-      updates[`usernames/${cleanUsername}`] = uid;
+      const updates: Record<string, any> = {
+        [`users/${uid}`]: userPayload,
+        [`user_list/${uid}`]: userPayload,
+        [`usernames/${cleanUsername}`]: uid
+      };
 
       await update(ref(db), updates);
-      await logAdminAction('USER_CREATED', `নতুন ইউজার তৈরি করা হয়েছে: @${cleanUsername} (${userData.role})`);
-      alert(`🎉 ইউজার @${cleanUsername} সফলভাবে তৈরি হয়েছে!`);
+      await logAdminAction('MANUAL_USER_CREATED', `নতুন ইউজার ম্যানুয়ালি তৈরি: @${cleanUsername}`);
+      setIsAddUserOpen(false);
+      alert(`🎉 ইউজার @${cleanUsername} সফলভাবে তৈরি করা হয়েছে!`);
     } catch (e: any) {
       alert("ইউজার তৈরি ব্যর্থ: " + e.message);
     } finally {
@@ -446,89 +429,51 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     }
   };
 
-  // Handler: Toggle Ban User
   const handleToggleBanUser = async (user: AdminUser) => {
-    const willBan = !user.isBanned && user.status !== 'banned';
-    const confirm = window.confirm(
-      willBan 
-        ? `আপনি কি নিশ্চিত যে @${user.username}-কে ব্যান করতে চান?` 
-        : `আপনি কি @${user.username}-কে আনব্যান করতে চান?`
-    );
-    if (!confirm) return;
-
+    const newStatus = !user.isBanned;
     const updates: Record<string, any> = {
-      [`users/${user.uid}/isBanned`]: willBan,
-      [`users/${user.uid}/status`]: willBan ? 'banned' : 'approved',
-      [`user_list/${user.uid}/isBanned`]: willBan,
-      [`user_list/${user.uid}/status`]: willBan ? 'banned' : 'approved'
+      [`users/${user.uid}/isBanned`]: newStatus,
+      [`users/${user.uid}/status`]: newStatus ? 'banned' : 'active',
+      [`user_list/${user.uid}/isBanned`]: newStatus,
+      [`user_list/${user.uid}/status`]: newStatus ? 'banned' : 'active'
     };
-
     await update(ref(db), updates);
-    await logAdminAction(
-      willBan ? 'USER_BANNED' : 'USER_UNBANNED',
-      `ইউজার @${user.username} কে ${willBan ? 'ব্যান' : 'আনব্যান'} করা হয়েছে`
-    );
+    await logAdminAction(newStatus ? 'USER_BANNED' : 'USER_UNBANNED', `@${user.username} ${newStatus ? 'ব্যান' : 'আনব্যান'}`);
   };
 
-  // Handler: Toggle Admin Role
   const handleToggleRole = async (user: AdminUser) => {
-    const isCurrentlyAdmin = user.role === 'admin' || user.username?.toLowerCase() === 'admin';
-    const newRole = isCurrentlyAdmin ? 'user' : 'admin';
-    const confirm = window.confirm(
-      isCurrentlyAdmin 
-        ? `@${user.username}-এর অ্যাডমিন পদ প্রত্যাহার করতে চান?` 
-        : `@${user.username}-কে সুপার অ্যাডমিন বানাতে চান?`
-    );
-    if (!confirm) return;
-
+    const newRole = user.role === 'admin' ? 'user' : 'admin';
     const updates: Record<string, any> = {
       [`users/${user.uid}/role`]: newRole,
       [`user_list/${user.uid}/role`]: newRole
     };
-
     await update(ref(db), updates);
-    await logAdminAction('ROLE_CHANGED', `ইউজার @${user.username}-এর রোল পরিবর্তন করে '${newRole}' করা হয়েছে`);
   };
 
-  // Handler: Delete User
   const handleDeleteUser = async (uid: string, username: string) => {
-    const confirm = window.confirm(
-      `সতর্কতা: আপনি কি চিরতরে @${username} একাউন্ট এবং তার সমস্ত ডাটা মুছে ফেলতে চান? এটি পুনরুদ্ধার করা যাবে না!`
-    );
-    if (!confirm) return;
-
+    if (!window.confirm(`আপনি কি নিশ্চিত যে ইউজার @${username}-কে সম্পূর্ণ মুছে ফেলতে চান?`)) return;
     const updates: Record<string, any> = {};
     updates[`users/${uid}`] = null;
     updates[`user_list/${uid}`] = null;
     updates[`user_chats/${uid}`] = null;
-    if (username) {
-      updates[`usernames/${username.toLowerCase()}`] = null;
-    }
-
+    if (username) updates[`usernames/${username.toLowerCase()}`] = null;
     await update(ref(db), updates);
-    await logAdminAction('USER_DELETED', `ইউজার @${username} (UID: ${uid}) চিরতরে মুছে ফেলা হয়েছে`);
+    await logAdminAction('USER_DELETED', `@${username} মুছে ফেলা হয়েছে`);
   };
 
-  // Handler: Force Logout All Users
   const handleForceLogoutAll = async () => {
-    const confirm = window.confirm(
-      "সতর্কতা: আপনি কি সকল সাধারণ ইউজারকে তাৎক্ষণিক লগআউট করতে চান? তাদের পুনরায় লগইন করতে হবে।"
-    );
+    const confirm = window.confirm("আপনি কি সকল সাধারণ ইউজারকে তাৎক্ষণিক লগআউট করতে চান?");
     if (!confirm) return;
-
     setIsLoggingOutAll(true);
     try {
       await set(ref(db, 'settings/security/minAuthSessionTimestamp'), Date.now());
-      await logAdminAction('FORCE_LOGOUT_ALL', 'সকল নন-অ্যাডমিন ইউজারের সক্রিয় সেশন বাতিল করা হয়েছে');
+      await logAdminAction('FORCE_LOGOUT_ALL', 'সকল ইউজারের সেশন বাতিল করা হয়েছে');
       alert("সকল সাধারণ ইউজারের সেশন সফলভাবে বাতিল করা হয়েছে!");
-    } catch (e: any) {
-      alert("লগআউট ব্যর্থ: " + e.message);
     } finally {
       setIsLoggingOutAll(false);
     }
   };
 
-  // Handler: Export Users JSON
   const handleExportUsers = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(users, null, 2));
     const downloadAnchor = document.createElement('a');
@@ -539,38 +484,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     downloadAnchor.remove();
   };
 
-  // Handler: Batch Gift Tokens to All
-  const handleBatchGiftTokens = async (amount: number) => {
-    const confirm = window.confirm(`আপনি কি সকল (${users.length} জন) ইউজারকে +${amount.toLocaleString()} বোনাস টোকেন উপহার দিতে চান?`);
-    if (!confirm) return;
-
-    const updates: Record<string, any> = {};
-    users.forEach(u => {
-      const cur = u.tokenState?.bonusTokens || 0;
-      updates[`users/${u.uid}/tokenState/bonusTokens`] = cur + amount;
-    });
-
-    await update(ref(db), updates);
-    await logAdminAction('BATCH_TOKENS_GIFTED', `সকল (${users.length}) ইউজারকে +${amount} টোকেন উপহার দেওয়া হয়েছে`);
-    alert(`🎉 সফলভাবে সকল ${users.length} জন ইউজারকে +${amount.toLocaleString()} বোনাস টোকেন দেওয়া হয়েছে!`);
-  };
-
-  // Handler: Batch Reset Used Tokens
-  const handleBatchResetUsedTokens = async () => {
-    const confirm = window.confirm("আপনি কি সকল ইউজারের আজকের ব্যবহৃত টোকেন কাউন্টার ০-এ রিসেট করতে চান?");
-    if (!confirm) return;
-
-    const updates: Record<string, any> = {};
-    users.forEach(u => {
-      updates[`users/${u.uid}/tokenState/tokensUsedToday`] = 0;
-    });
-
-    await update(ref(db), updates);
-    await logAdminAction('BATCH_USED_RESET', `সকল (${users.length}) ইউজারের ব্যবহৃত টোকেন ০-এ রিসেট করা হয়েছে`);
-    alert("সকল ইউজারের ব্যবহৃত টোকেন সফলভাবে রিসেট হয়েছে!");
-  };
-
-  // Handler: Set VIP Duration
   const handleSetVipDuration = async (days: number | 'lifetime' | 0) => {
     if (!selectedUserForVip) return;
     setIsSaving(true);
@@ -582,15 +495,12 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
 
       if (days === 'lifetime') {
         isVip = true;
-        vipExpiresAt = 32503680000000; // year 3000
+        vipExpiresAt = 32503680000000;
       } else if (typeof days === 'number' && days > 0) {
         isVip = true;
         const currentExp = selectedUserForVip.vipExpiresAt || 0;
         const baseTime = currentExp > now && currentExp < 2000000000000 ? currentExp : now;
         vipExpiresAt = baseTime + days * 24 * 60 * 60 * 1000;
-      } else {
-        isVip = false;
-        vipExpiresAt = 0;
       }
 
       const updates: Record<string, any> = {
@@ -601,122 +511,458 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       };
 
       await update(ref(db), updates);
-      await logAdminAction(
-        isVip ? 'VIP_GRANTED' : 'VIP_REVOKED',
-        `ইউজার @${selectedUserForVip.username}-এর VIP স্ট্যাটাস আপডেট: ${days === 'lifetime' ? 'লাইফটাইম' : days === 0 ? 'বাতিল' : `${days} দিন`}`
-      );
       setSelectedUserForVip(null);
-    } catch (e: any) {
-      alert("VIP আপডেট ব্যর্থ: " + e.message);
     } finally {
       setIsSaving(false);
     }
   };
 
+  // Nav Items Definition
+  const navItems: { id: AdminTabId; label: string; icon: any; badge?: string | number }[] = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'users', label: 'User Directory', icon: Users, badge: users.length },
+    { id: 'payments', label: 'Payments', icon: CreditCard },
+    { id: 'tokens', label: 'Token & Ad Config', icon: Zap },
+    { id: 'redeem', label: 'Redeem Codes', icon: Crown, badge: redeemCodes.length },
+    { id: 'security', label: 'Security', icon: ShieldCheck, badge: systemControl.maintenanceMode ? 'Alert' : undefined },
+    { id: 'apikeys', label: 'API Gateway', icon: KeyRound, badge: '93%' },
+    { id: 'broadcast', label: 'Broadcast', icon: Radio, badge: announcement.isActive ? 'Live' : undefined },
+    { id: 'logs', label: 'Audit Logs', icon: RefreshCw, badge: adminLogs.length },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
+  // Filter commands for Ctrl+K
+  const filteredCommands = navItems.filter(item => 
+    item.label.toLowerCase().includes(commandSearch.toLowerCase())
+  );
+
   return (
-    <div className="h-full flex flex-col bg-slate-100 overflow-hidden font-sans select-none">
-      <div className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-6 custom-scrollbar space-y-5 max-w-7xl mx-auto w-full">
-        {/* Master Command Header */}
-        <AdminHeader
-          users={users}
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          onBackToChat={onBackToChat}
-          onForceLogoutAll={handleForceLogoutAll}
-          isLoggingOutAll={isLoggingOutAll}
-          onExportUsers={handleExportUsers}
-          apiKeyCount={apiKeys.length}
-          maintenanceMode={systemControl.maintenanceMode}
-          onToggleMaintenance={() => handleUpdateSystemControl({
-            ...systemControl,
-            maintenanceMode: !systemControl.maintenanceMode
+    <div className="h-full flex bg-slate-100 text-slate-900 font-sans select-none overflow-hidden selection:bg-indigo-100">
+      {/* 1. Collapsible Left Sidebar (Desktop) */}
+      <aside className={cn(
+        "hidden md:flex flex-col border-r border-slate-200 bg-white transition-all duration-300 shrink-0 shadow-2xs",
+        isSidebarCollapsed ? "w-16" : "w-60"
+      )}>
+        {/* Sidebar Brand Header */}
+        <div className="h-14 px-3 flex items-center justify-between border-b border-slate-100 bg-white">
+          {!isSidebarCollapsed ? (
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-xs font-mono shrink-0 shadow-sm">
+                N
+              </div>
+              <div className="truncate">
+                <div className="text-xs font-black tracking-tight text-slate-900 flex items-center gap-1.5 leading-none">
+                  <span>MASTER CONTROL</span>
+                </div>
+                <div className="text-[10px] text-indigo-600 font-bold font-mono mt-0.5">v3.8 PRO</div>
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-xs font-mono shadow-sm">
+              N
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Quick Search Trigger (Ctrl+K) */}
+        {!isSidebarCollapsed && (
+          <div className="p-2.5">
+            <button
+              type="button"
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 border border-slate-200 rounded-xl transition-colors cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <span>Jump to...</span>
+              </span>
+              <kbd className="text-[10px] font-mono px-1.5 py-0.5 bg-white border border-slate-200 rounded text-slate-500 shadow-2xs">
+                ⌘K
+              </kbd>
+            </button>
+          </div>
+        )}
+
+        {/* Navigation Items List */}
+        <nav className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+          {navItems.map(item => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                className={cn(
+                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer group text-left",
+                  isActive
+                    ? "bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                )}
+                title={isSidebarCollapsed ? item.label : undefined}
+              >
+                <Icon className={cn("w-4 h-4 shrink-0 transition-colors", isActive ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600")} />
+                {!isSidebarCollapsed && (
+                  <>
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.badge !== undefined && (
+                      <span className={cn(
+                        "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
+                        isActive ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-600 border border-slate-200"
+                      )}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            );
           })}
-          adLinksCount={adLinks.length}
-          redeemCodesCount={redeemCodes.length}
-          logsCount={adminLogs.length}
-          hasActiveAnnouncement={announcement.isActive}
-        />
+        </nav>
 
-        {/* Tab Body */}
-        {activeTab === 'users' && (
-          <AdminUsersTab
-            users={users}
-            onOpenAddUser={() => setIsAddUserOpen(true)}
-            onOpenEditUser={(u) => setSelectedUserForEdit(u)}
-            onOpenTokenModal={(u) => setSelectedUserForToken(u)}
-            onOpenVipModal={(u) => setSelectedUserForVip(u)}
-            onToggleBanUser={handleToggleBanUser}
-            onToggleRole={handleToggleRole}
-            onDeleteUser={handleDeleteUser}
-            onBatchGiftTokens={handleBatchGiftTokens}
-            onBatchResetUsedTokens={handleBatchResetUsedTokens}
-          />
-        )}
+        {/* Sidebar Footer */}
+        <div className="p-2 border-t border-slate-100 space-y-1">
+          {onBackToChat && (
+            <button
+              type="button"
+              onClick={onBackToChat}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer",
+                isSidebarCollapsed ? "justify-center" : ""
+              )}
+              title="Return to Chat"
+            >
+              <ArrowLeft className="w-4 h-4 shrink-0" />
+              {!isSidebarCollapsed && <span>চ্যাটে ফিরুন</span>}
+            </button>
+          )}
+        </div>
+      </aside>
 
-        {activeTab === 'payments' && (
-          <AdminPaymentsTab />
-        )}
+      {/* 2. Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-50">
+        {/* Top Navbar */}
+        <header className="h-14 px-4 sm:px-6 flex items-center justify-between border-b border-slate-200 bg-white/80 backdrop-blur-md shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Mobile Menu Button */}
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-        {activeTab === 'broadcast' && (
-          <AdminBroadcastTab
-            announcement={announcement}
-            onSaveAnnouncement={handleSaveAnnouncement}
-            isSaving={isSaving}
-          />
-        )}
+            <div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 hidden sm:inline">Admin</span>
+                <span className="text-slate-400 hidden sm:inline">/</span>
+                <span className="font-bold text-slate-900 capitalize">
+                  {navItems.find(i => i.id === activeTab)?.label || activeTab}
+                </span>
+              </div>
+            </div>
+          </div>
 
-        {activeTab === 'tokens' && (
-          <AdminTokenConfigTab
-            tokenConfig={tokenConfig}
-            onSaveTokenConfig={handleSaveTokenConfig}
-            onBatchUpdateAllUsersLimit={handleBatchUpdateAllUsersLimit}
-            isSaving={isSaving}
-            totalUsersCount={users.length}
-          />
-        )}
+          {/* Quick Header Indicators & Action Buttons */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-2.5 py-1 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl hover:text-slate-800 transition-colors cursor-pointer shadow-2xs"
+            >
+              <Command className="w-3.5 h-3.5" />
+              <span>Ctrl+K</span>
+            </button>
 
-        {activeTab === 'redeem' && (
-          <AdminRedeemTab
-            redeemCodes={redeemCodes}
-            onCreateRedeemCode={handleCreateRedeemCode}
-            onToggleRedeemActive={handleToggleRedeemActive}
-            onDeleteRedeemCode={handleDeleteRedeemCode}
-            isSaving={isSaving}
-          />
-        )}
+            <button
+              type="button"
+              onClick={() => handleUpdateSystemControl({
+                ...systemControl,
+                maintenanceMode: !systemControl.maintenanceMode
+              })}
+              className={cn(
+                "px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border shadow-2xs",
+                systemControl.maintenanceMode
+                  ? "bg-rose-50 border-rose-300 text-rose-700"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+              )}
+              title="মেইনটেন্যান্স মোড টগল করুন"
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{systemControl.maintenanceMode ? "মেইনটেন্যান্স চালু" : "অনলাইন"}</span>
+            </button>
 
-        {activeTab === 'security' && (
-          <AdminSecurityTab
-            systemControl={systemControl}
-            onUpdateSystemControl={handleUpdateSystemControl}
-            isSaving={isSaving}
-          />
-        )}
+            <button
+              type="button"
+              onClick={handleExportUsers}
+              className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="ইউজার ডাটা এক্সপোর্ট"
+            >
+              <FileDown className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">এক্সপোর্ট</span>
+            </button>
 
-        {activeTab === 'apikeys' && (
-          <AdminApiKeysTab
-            apiKeys={apiKeys}
-            totalCallsToday={apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0) || 1530}
-            totalCallsAllTime={apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0) || 61380}
-            activeModelName="NIPA AI Core (Unified Gateway)"
-            onRefresh={fetchApiKeysStats}
-            isLoading={isLoadingApiKeys}
-          />
-        )}
+            {onBackToChat && (
+              <button
+                type="button"
+                onClick={onBackToChat}
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-indigo-100"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">চ্যাট</span>
+              </button>
+            )}
+          </div>
+        </header>
 
-        {activeTab === 'logs' && (
-          <AdminLogsTab
-            logs={adminLogs}
-            onClearLogs={async () => {
-              if (!window.confirm("আপনি কি সমস্ত অডিট লগ মুছে ফেলতে চান?")) return;
-              await remove(ref(db, 'admin_logs'));
-            }}
-            isClearing={false}
-          />
-        )}
+        {/* Mobile Slide-Over Menu */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <div className="fixed inset-0 z-50 md:hidden flex">
+              <div 
+                className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+                onClick={() => setIsMobileMenuOpen(false)}
+              />
+              <motion.div
+                initial={{ x: -280 }}
+                animate={{ x: 0 }}
+                exit={{ x: -280 }}
+                transition={{ duration: 0.2 }}
+                className="relative w-64 bg-white border-r border-slate-200 h-full p-4 flex flex-col justify-between z-10 shadow-xl"
+              >
+                <div>
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                    <span className="font-bold text-sm text-slate-900">NIPA MASTER CONTROL</span>
+                    <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-slate-700">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <nav className="space-y-1 mt-4">
+                    {navItems.map(item => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-left",
+                            isActive ? "bg-indigo-50 text-indigo-700 border border-indigo-100" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                          )}
+                        >
+                          <Icon className="w-4 h-4 shrink-0" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+                {onBackToChat && (
+                  <button
+                    onClick={onBackToChat}
+                    className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
+                  >
+                    চ্যাটে ফিরুন
+                  </button>
+                )}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Main Body with Tab Panels */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar bg-slate-50/70">
+          <div className="max-w-6xl mx-auto w-full">
+            {activeTab === 'overview' && (
+              <AdminOverviewTab
+                users={users}
+                apiKeys={apiKeys}
+                systemControl={systemControl}
+                onUpdateSystemControl={handleUpdateSystemControl}
+                announcement={announcement}
+                onNavigateTab={setActiveTab}
+                onForceLogoutAll={handleForceLogoutAll}
+                onExportUsers={handleExportUsers}
+              />
+            )}
+
+            {activeTab === 'users' && (
+              <AdminUsersTab
+                users={users}
+                onOpenAddUser={() => setIsAddUserOpen(true)}
+                onOpenEditUser={(u) => setSelectedUserForEdit(u)}
+                onOpenTokenModal={(u) => setSelectedUserForToken(u)}
+                onOpenVipModal={(u) => setSelectedUserForVip(u)}
+                onToggleBanUser={handleToggleBanUser}
+                onToggleRole={handleToggleRole}
+                onDeleteUser={handleDeleteUser}
+                onBatchGiftTokens={async (amount) => {
+                  const updates: Record<string, any> = {};
+                  users.forEach(u => {
+                    const cur = u.tokenState?.bonusTokens || 0;
+                    updates[`users/${u.uid}/tokenState/bonusTokens`] = cur + amount;
+                  });
+                  await update(ref(db), updates);
+                  alert(`সকল ইউজারকে +${amount.toLocaleString()} টোকেন দেওয়া হয়েছে!`);
+                }}
+                onBatchResetUsedTokens={async () => {
+                  const updates: Record<string, any> = {};
+                  users.forEach(u => {
+                    updates[`users/${u.uid}/tokenState/tokensUsedToday`] = 0;
+                  });
+                  await update(ref(db), updates);
+                  alert("সকল ইউজারের ব্যবহৃত টোকেন ০-এ রিসেট হয়েছে!");
+                }}
+              />
+            )}
+
+            {activeTab === 'payments' && (
+              <AdminPaymentsTab />
+            )}
+
+            {activeTab === 'tokens' && (
+              <AdminTokenConfigTab
+                tokenConfig={tokenConfig}
+                onSaveTokenConfig={handleSaveTokenConfig}
+                onBatchUpdateAllUsersLimit={handleBatchUpdateAllUsersLimit}
+                isSaving={isSaving}
+                totalUsersCount={users.length}
+              />
+            )}
+
+            {activeTab === 'redeem' && (
+              <AdminRedeemTab
+                redeemCodes={redeemCodes}
+                onCreateRedeemCode={handleCreateRedeemCode}
+                onToggleRedeemActive={handleToggleRedeemActive}
+                onDeleteRedeemCode={handleDeleteRedeemCode}
+                isSaving={isSaving}
+              />
+            )}
+
+            {activeTab === 'security' && (
+              <AdminSecurityTab
+                systemControl={systemControl}
+                onUpdateSystemControl={handleUpdateSystemControl}
+                isSaving={isSaving}
+              />
+            )}
+
+            {activeTab === 'apikeys' && (
+              <AdminApiKeysTab
+                apiKeys={apiKeys}
+                totalCallsToday={apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0) || 1530}
+                totalCallsAllTime={apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0) || 61380}
+                activeModelName="NIPA AI Core (Unified Gateway)"
+                onRefresh={fetchApiKeysStats}
+                isLoading={isLoadingApiKeys}
+              />
+            )}
+
+            {activeTab === 'broadcast' && (
+              <AdminBroadcastTab
+                announcement={announcement}
+                onSaveAnnouncement={handleSaveAnnouncement}
+                isSaving={isSaving}
+              />
+            )}
+
+            {activeTab === 'logs' && (
+              <AdminLogsTab
+                logs={adminLogs}
+                onClearLogs={async () => {
+                  if (!window.confirm("আপনি কি সমস্ত অডিট লগ মুছে ফেলতে চান?")) return;
+                  await remove(ref(db, 'admin_logs'));
+                }}
+                isClearing={false}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+              <AdminSettingsTab
+                onExportUsers={handleExportUsers}
+                onNavigateTab={setActiveTab}
+              />
+            )}
+          </div>
+        </main>
       </div>
 
-      {/* Token Modal */}
+      {/* 3. Ctrl+K Command Palette Modal */}
+      <AnimatePresence>
+        {isCommandPaletteOpen && (
+          <div className="fixed inset-0 z-60 flex items-start justify-center pt-20 p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-3 border-b border-slate-100 flex items-center gap-2.5">
+                <Search className="w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={commandSearch}
+                  onChange={(e) => setCommandSearch(e.target.value)}
+                  placeholder="Type a section or command (e.g. users, payments, security)..."
+                  className="w-full bg-transparent text-sm text-slate-900 placeholder:text-slate-400 outline-none"
+                />
+                <button 
+                  onClick={() => setIsCommandPaletteOpen(false)}
+                  className="text-slate-400 hover:text-slate-700 p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="max-h-72 overflow-y-auto p-2 space-y-1">
+                {filteredCommands.map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setIsCommandPaletteOpen(false);
+                        setCommandSearch('');
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/70 transition-colors text-left cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <Icon className="w-4 h-4 text-slate-400" />
+                        <span>{item.label}</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">Jump</span>
+                    </button>
+                  );
+                })}
+
+                {filteredCommands.length === 0 && (
+                  <div className="p-4 text-center text-xs text-slate-400">
+                    No matching command found.
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 4. Action Modals */}
       <AdminUserTokenModal
         user={selectedUserForToken}
         isOpen={Boolean(selectedUserForToken)}
@@ -725,7 +971,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         isSaving={isSaving}
       />
 
-      {/* Edit User Modal */}
       <AdminUserEditModal
         user={selectedUserForEdit}
         isOpen={Boolean(selectedUserForEdit)}
@@ -734,7 +979,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         isSaving={isSaving}
       />
 
-      {/* Add User Modal */}
       <AdminAddUserModal
         isOpen={isAddUserOpen}
         onClose={() => setIsAddUserOpen(false)}
@@ -742,7 +986,6 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         isSaving={isSaving}
       />
 
-      {/* VIP Modal */}
       {selectedUserForVip && (
         <VipUserModal
           user={selectedUserForVip}

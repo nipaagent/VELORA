@@ -9,15 +9,18 @@ import { Gift } from 'lucide-react';
 interface AuthModalProps {
   isOpen: boolean;
   initialReferralCode?: string;
+  initialIsSignUp?: boolean;
+  onBackToLanding?: () => void;
 }
 
-export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProps) {
-  const [isSignUp, setIsSignUp] = useState(!!initialReferralCode);
+export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp = false, onBackToLanding }: AuthModalProps) {
+  const [isSignUp, setIsSignUp] = useState(!!initialReferralCode || initialIsSignUp);
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [referralCodeInput, setReferralCodeInput] = useState(initialReferralCode || '');
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -442,6 +445,18 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                   <span className={`text-[10px] font-bold ${passStrength.color}`}>{passStrength.label}</span>
                 </div>
               )}
+
+              {!isSignUp && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-[11px] font-semibold text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    পাসওয়ার্ড ভুলে গেছেন?
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100/70 text-[11px] text-indigo-700 font-medium leading-relaxed">
@@ -495,13 +510,13 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+          <div className="mt-6 pt-5 border-t border-slate-100 text-center space-y-4">
             <button
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError('');
               }}
-              className="text-[11px] text-slate-500 hover:text-indigo-600 font-bold transition-colors uppercase tracking-wider"
+              className="text-[11px] text-slate-500 hover:text-indigo-600 font-bold transition-colors uppercase tracking-wider cursor-pointer"
             >
               {isSignUp ? (
                 <>Already a member? <span className="text-indigo-600">Sign In</span></>
@@ -509,10 +524,69 @@ export default function AuthModal({ isOpen, initialReferralCode }: AuthModalProp
                 <>New to NIPA? <span className="text-indigo-600">Create Account</span></>
               )}
             </button>
+
+            {/* Trust Badges */}
+            <div className="flex flex-wrap gap-2 justify-center pt-1">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                নিরাপদ লগইন
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                ক্লাউড সুরক্ষিত
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                reCAPTCHA সক্রিয়
+              </span>
+            </div>
+
+            {onBackToLanding && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={onBackToLanding}
+                  className="text-xs text-slate-400 hover:text-slate-800 font-semibold transition-colors underline cursor-pointer"
+                >
+                  ← ল্যান্ডিং পেজে ফিরে যান (Back to Landing Page)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </motion.div>
+
+    {/* Forgot Password Modal Dialog */}
+    <AnimatePresence>
+      {showForgotPassword && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-200"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <Lock className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-base">পাসওয়ার্ড পুনরুদ্ধার (Password Recovery)</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              আপনার পাসওয়ার্ড ভুলে গেলে অথবা পরিবর্তন করতে চাইলে, অনুগ্রহ করে আপনার নিবন্ধিত ইউজারনেম দিয়ে আমাদের অফিসিয়াল অ্যাডমিন বা হেল্পডেস্কে যোগাযোগ করুন। নিরাপত্তা সুরক্ষার স্বার্থে যাচাইকরণের পর নতুন পাসওয়ার্ড সেট করে দেওয়া হবে।
+            </p>
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 space-y-1 mb-5">
+              <div><b>অ্যাডমিন সাপোর্ট:</b> admin@nipa.app</div>
+              <div><b>টেলিগ্রাম সাপোর্ট:</b> @nipa_support</div>
+            </div>
+            <button
+              onClick={() => setShowForgotPassword(false)}
+              className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              ঠিক আছে, বুঝেছি
+            </button>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   </div>
 );
 }

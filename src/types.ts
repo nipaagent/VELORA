@@ -13,6 +13,8 @@ export interface Message {
   thinking?: string;
   timestamp: number;
   attachments?: Attachment[];
+  status?: 'sending' | 'sent' | 'error';
+  errorText?: string;
 }
 
 export interface Chat {

@@ -207,7 +207,12 @@ export const AdminPaymentsTab: React.FC = () => {
               {filteredTransactions.map((tx) => (
                 <tr key={tx.id || tx.trxId} className="hover:bg-slate-50/70 transition-colors">
                   <td className="px-4 py-3">
-                    <div className="font-mono font-bold text-indigo-600 select-all">{tx.trxId}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-bold text-slate-900 select-all">{tx.trxId}</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-zinc-200 text-zinc-800 border border-zinc-300">
+                        TEST
+                      </span>
+                    </div>
                     <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {new Date(tx.timestamp).toLocaleString()}

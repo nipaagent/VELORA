@@ -13,6 +13,7 @@ interface ChatMessagesListProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
+  onRetry?: (message: Message) => void;
 }
 
 export default function ChatMessagesList({
@@ -22,6 +23,7 @@ export default function ChatMessagesList({
   scrollContainerRef,
   messagesEndRef,
   onScroll,
+  onRetry,
 }: ChatMessagesListProps) {
   return (
     <div
@@ -42,6 +44,7 @@ export default function ChatMessagesList({
                   message={msg}
                   isGenerating={isGenerating}
                   userProfile={userProfile}
+                  onRetry={onRetry}
                 />
               );
             })}

@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Chat, UserProfile } from '../types';
+import { Chat, UserProfile, Message } from '../types';
 import ChatMessagesList from './chat/ChatMessagesList';
 import ChatInput from './chat/ChatInput';
 
 interface ChatAreaProps {
   chat: Chat | undefined | null;
   onSendMessage: (text: string, attachments?: any[]) => void;
+  onRetryMessage?: (message: Message) => void;
   onNewChat?: () => void;
   isLoading: boolean;
   userProfile?: UserProfile | null;
@@ -14,6 +15,7 @@ interface ChatAreaProps {
 export default function ChatArea({
   chat,
   onSendMessage,
+  onRetryMessage,
   isLoading,
   userProfile,
 }: ChatAreaProps) {
@@ -67,6 +69,7 @@ export default function ChatArea({
         scrollContainerRef={scrollContainerRef}
         messagesEndRef={messagesEndRef}
         onScroll={handleScroll}
+        onRetry={onRetryMessage}
       />
 
       {/* Floating Bottom Input Box Area */}

@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+body {
+  font-family: "Hind Siliguri", "Poppins", system-ui, sans-serif;
+}
+
+.font-mono {
+  font-family: "Poppins", monospace;
+}
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
