@@ -559,7 +559,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               </div>
               <div className="truncate">
                 <div className="text-xs font-black tracking-tight text-slate-900 flex items-center gap-1.5 leading-none">
-                  <span>MASTER CONTROL</span>
+                  <span>NIPA NETWORK</span>
                 </div>
                 <div className="text-[10px] text-indigo-600 font-bold font-mono mt-0.5">V2.7 PRO</div>
               </div>
@@ -749,7 +749,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
               >
                 <div>
                   <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                    <span className="font-bold text-sm text-slate-900">NIPA MASTER CONTROL</span>
+                    <span className="font-bold text-sm text-slate-900">NIPA NETWORK V2.7</span>
                     <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-slate-700">
                       <X className="w-5 h-5" />
                     </button>
