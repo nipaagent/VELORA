@@ -41,6 +41,7 @@ export interface UserProfile {
   role?: 'admin' | 'user';
   status?: 'approved' | 'pending' | 'banned';
   isBanned?: boolean;
+  isAdmin?: boolean;
   isVip?: boolean;
   vipExpiresAt?: number;
   apiAccessEnabled?: boolean;

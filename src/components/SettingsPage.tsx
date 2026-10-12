@@ -1085,7 +1085,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
                       type="text"
                       value={redeemCode}
                       onChange={(e) => setRedeemCode(e.target.value)}
-                      placeholder="বন্ধুর রেফার কোড দিন (যেমন: ABC123)"
+                      placeholder="বন্ধুর রেফার কোড দিন (যেমন: NIPA77)"
                       className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-mono uppercase tracking-widest"
                     />
                     <button
@@ -1319,6 +1319,67 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
             <h3 className="text-sm font-black text-slate-800 tracking-tight uppercase flex items-center gap-2 mb-4">
               <Lightbulb className="w-4 h-4 text-amber-500" /> Tips & Updates
             </h3>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
+              <div className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white relative">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <Sparkles className="w-24 h-24 text-indigo-400" />
+                </div>
+                <div className="relative z-10">
+                  <div className="inline-block px-3 py-1 bg-amber-400 text-slate-950 font-black rounded-full text-xs uppercase tracking-wider mb-3 shadow-xs">
+                    Current Version (V2.7)
+                  </div>
+                  <h2 className="text-xl font-black tracking-tight mb-2">NIPA NETWORK V2.7</h2>
+                  <p className="text-slate-200 text-sm leading-relaxed max-w-sm font-medium">
+                    রিয়েল reCAPTCHA সিকিউরিটি, স্ট্রিমড রেসপন্স, SP Wallet BD পেমেন্ট গেটওয়ে এবং উন্নত Nipa AI ইন্টেলিজেন্স।
+                  </p>
+                </div>
+              </div>
+              
+              <div className="p-5 space-y-5">
+                <div className="flex gap-4">
+                  <div className="shrink-0 mt-1">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 mb-1">আল্ট্রা-ফাস্ট স্ট্রিমড রেসপন্স (SSE)</h4>
+                    <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                      AI রেসপন্স ৩ সেকেন্ডের মধ্যে স্ক্রিনে লাইভ লেখা শুরু হবে। ফেলওভার এবং স্পিড অপটিমাইজেশনের মাধ্যমে দ্রুততম চ্যাট অভিজ্ঞতা নিশ্চিত করা হয়েছে।
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="shrink-0 mt-1">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 mb-1">Google reCAPTCHA v2 সিকিউরিটি</h4>
+                    <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                      অ্যাকাউন্ট রেজিস্ট্রেসনে রিয়েল গুগল reCAPTCHA ভেরিফিকেশন এবং সার্ভার-সাইড টোকেন ভ্যালিডেশন যুক্ত করা হয়েছে যা সম্পূর্ণ সুরক্ষিত।
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="shrink-0 mt-1">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 mb-1">SP Wallet BD পেমেন্ট ও টোকেন প্যাক</h4>
+                    <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                      ভার্চুয়াল কার্ড পেমেন্টে মেম্বারশিপ ও ৫টি আনলিমিটেড টোকেন প্যাক সরাসরি ক্রয়ের সুব্যবস্থা যুক্ত করা হয়েছে।
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
               <div className="p-5 bg-gradient-to-br from-violet-600 to-fuchsia-700 text-white relative">

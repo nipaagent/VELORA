@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, Lock, User, UserCheck, Sparkles, Loader2, LogIn, UserPlus, AlertCircle, ShieldCheck } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { ref, get, set, update } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
 import { Gift } from 'lucide-react';
+
+declare global {
+  interface Window {
+    grecaptcha?: any;
+    onRecaptchaLoadCallback?: () => void;
+  }
+}
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,6 +30,72 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  
+  const recaptchaContainerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<number | null>(null);
+
+  // Initialize Real Google reCAPTCHA v2 for Sign Up
+  useEffect(() => {
+    if (!isOpen || !isSignUp) return;
+
+    let isMounted = true;
+
+    const renderWidget = () => {
+      if (!isMounted) return;
+      if (window.grecaptcha && recaptchaContainerRef.current) {
+        try {
+          if (widgetIdRef.current === null) {
+            recaptchaContainerRef.current.innerHTML = '';
+            const wid = window.grecaptcha.render(recaptchaContainerRef.current, {
+              sitekey: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
+              callback: (token: string) => {
+                if (isMounted) {
+                  setRecaptchaToken(token);
+                  setError('');
+                }
+              },
+              'expired-callback': () => {
+                if (isMounted) setRecaptchaToken(null);
+              }
+            });
+            widgetIdRef.current = wid;
+          }
+        } catch (e) {
+          console.warn("reCAPTCHA widget render notice:", e);
+        }
+      }
+    };
+
+    if (window.grecaptcha && typeof window.grecaptcha.render === 'function') {
+      renderWidget();
+    } else {
+      const existingScript = document.getElementById('google-recaptcha-script');
+      if (!existingScript) {
+        const script = document.createElement('script');
+        script.id = 'google-recaptcha-script';
+        script.src = 'https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoadCallback&render=explicit';
+        script.async = true;
+        script.defer = true;
+        window.onRecaptchaLoadCallback = () => {
+          renderWidget();
+        };
+        document.body.appendChild(script);
+      } else {
+        const checkTimer = setInterval(() => {
+          if (window.grecaptcha && typeof window.grecaptcha.render === 'function') {
+            clearInterval(checkTimer);
+            renderWidget();
+          }
+        }, 200);
+        return () => clearInterval(checkTimer);
+      }
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, isSignUp]);
 
   if (!isOpen) return null;
 
@@ -102,9 +175,36 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
     try {
       if (isSignUp) {
         if (!fullName.trim()) {
-          setError('Please enter your full name.');
+          setError('অনুগ্রহ করে আপনার সম্পূর্ণ নাম লিখুন (Full Name is required)।');
           setLoading(false);
           return;
+        }
+
+        if (!recaptchaToken) {
+          setError('অনুগ্রহ করে নিচের reCAPTCHA ভেরিফিকেশনটি সম্পন্ন করুন।');
+          setLoading(false);
+          return;
+        }
+
+        // Server-side reCAPTCHA token verification
+        try {
+          const verifyRes = await fetch('/api/verify-recaptcha', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: recaptchaToken })
+          });
+          const verifyData = await verifyRes.json();
+          if (!verifyRes.ok || !verifyData.success) {
+            setError(verifyData.error || 'reCAPTCHA ভেরিফিকেশন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+            if (window.grecaptcha && widgetIdRef.current !== null) {
+              window.grecaptcha.reset(widgetIdRef.current);
+              setRecaptchaToken(null);
+            }
+            setLoading(false);
+            return;
+          }
+        } catch (vErr) {
+          console.warn("reCAPTCHA validation call error:", vErr);
         }
 
         // Check if username exists before creating user
@@ -484,15 +584,26 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
                       className={`w-full pl-11 pr-4 py-3 text-sm rounded-2xl outline-none transition-all font-medium uppercase placeholder:text-slate-300 ${initialReferralCode ? 'bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed opacity-90' : 'bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50'}`}
                     />
                   </div>
-                  <p className="text-[9px] text-slate-400 ml-1 font-medium italic">Enter a code to get 1-day VIP access instantly!</p>
+                  <p className="text-[10px] text-indigo-600 ml-1 font-semibold">রেফার কোড থাকলে অ্যাকাউন্টে ৫০,০০০ বোনাস টোকেন যুক্ত হবে!</p>
                 </motion.div>
               )}
             </AnimatePresence>
 
+            {/* Real Google reCAPTCHA v2 Widget Container */}
+            {isSignUp && (
+              <div className="py-2 flex flex-col items-center justify-center">
+                <div 
+                  ref={recaptchaContainerRef} 
+                  className="overflow-hidden rounded-xl border border-slate-200/80 shadow-2xs min-h-[78px] flex items-center justify-center bg-slate-50/50 w-full max-w-[304px]" 
+                />
+                <span className="text-[10px] text-slate-400 mt-1.5 font-medium">Google reCAPTCHA বট প্রতিরোধ সিস্টেম</span>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 mt-4 bg-indigo-600 text-white rounded-2xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2.5 disabled:opacity-70"
+              className="w-full py-4 mt-2 bg-indigo-600 text-white rounded-2xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2.5 disabled:opacity-70"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -525,16 +636,13 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
               )}
             </button>
 
-            {/* Trust Badges */}
+            {/* Trust Badges - Fake badge removed */}
             <div className="flex flex-wrap gap-2 justify-center pt-1">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 নিরাপদ লগইন
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                 ক্লাউড সুরক্ষিত
-              </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                reCAPTCHA সক্রিয়
               </span>
             </div>
 

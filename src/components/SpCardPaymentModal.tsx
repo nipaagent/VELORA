@@ -21,6 +21,7 @@ interface SpCardPaymentModalProps {
   userId?: string;
   userProfile?: UserProfile | null;
   initialTab?: 'vip' | 'tokens';
+  initialPackageId?: string;
   onPaymentSuccess?: (result: {
     packageType: 'vip' | 'tokens';
     amount: number;
@@ -35,12 +36,30 @@ export default function SpCardPaymentModal({
   userId,
   userProfile,
   initialTab = 'vip',
+  initialPackageId,
   onPaymentSuccess
 }: SpCardPaymentModalProps) {
-  const [activeTab, setActiveTab] = useState<'vip' | 'tokens'>(initialTab);
-  const [selectedPkg, setSelectedPkg] = useState<SpPaymentPackage>(
-    initialTab === 'vip' ? SP_VIP_PACKAGES[1] : SP_TOKEN_PACKAGES[1]
-  );
+  const getInitialPackage = () => {
+    if (initialPackageId) {
+      const foundVip = SP_VIP_PACKAGES.find(p => p.id === initialPackageId);
+      if (foundVip) return foundVip;
+      const foundToken = SP_TOKEN_PACKAGES.find(p => p.id === initialPackageId);
+      if (foundToken) return foundToken;
+    }
+    return initialTab === 'vip' ? SP_VIP_PACKAGES[1] : SP_TOKEN_PACKAGES[0];
+  };
+
+  const initialPkg = getInitialPackage();
+  const [activeTab, setActiveTab] = useState<'vip' | 'tokens'>(initialPkg.type);
+  const [selectedPkg, setSelectedPkg] = useState<SpPaymentPackage>(initialPkg);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      const pkg = getInitialPackage();
+      setActiveTab(pkg.type);
+      setSelectedPkg(pkg);
+    }
+  }, [isOpen, initialPackageId, initialTab]);
   
   // Card Inputs
   const [cardNumber, setCardNumber] = useState('');

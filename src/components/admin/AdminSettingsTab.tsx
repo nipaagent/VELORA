@@ -45,7 +45,7 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
               <div>
                 <div className="font-bold text-slate-800">{pkg.name}</div>
                 <div className="text-xl font-mono font-black text-slate-900 mt-1">৳{pkg.priceBdt}</div>
-                <div className="text-[11px] text-slate-500 font-mono">{pkg.priceSp} SP · {pkg.days} দিন</div>
+                <div className="text-[11px] text-slate-500 font-mono">{pkg.priceSp} SP · {pkg.amount} দিন</div>
               </div>
               <div className="mt-3 pt-2 border-t border-slate-200 text-[10px] text-indigo-700 font-semibold">
                 দৈনিক ৫ লাখ টোকেন কোটা

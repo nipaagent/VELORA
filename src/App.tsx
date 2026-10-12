@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, LogOut, ArrowLeft, User, Sparkles, BrainCircuit, Crown } from 'lucide-react';
-import { Chat, Message, UserProfile, TokenState } from './types';
+import { Menu, LogOut, ArrowLeft, User, Sparkles, BrainCircuit, Crown, AlertTriangle } from 'lucide-react';
+import { Chat, Message, UserProfile, TokenState, SystemControl } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
@@ -162,6 +162,23 @@ export default function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
+  const [systemControl, setSystemControl] = useState<SystemControl>({
+    maintenanceMode: false,
+    allowRegistration: true,
+    aiChatEnabled: true,
+    adRewardsEnabled: true
+  });
+
+  useEffect(() => {
+    const sysRef = ref(db, 'settings/system_control');
+    const unsubSys = onValue(sysRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setSystemControl(snapshot.val());
+      }
+    });
+    return () => unsubSys();
+  }, []);
+
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const activeUserUidRef = useRef<string | null>(null);
@@ -1227,6 +1244,13 @@ export default function App() {
     );
   }
 
+  const isUserAdmin = Boolean(
+    userProfile?.isAdmin || 
+    userProfile?.role === 'admin' || 
+    userProfile?.username?.toLowerCase() === 'admin' || 
+    userProfile?.email === 'nipaagent@gmail.com'
+  );
+
   if (!user) {
     if (landingView === 'landing' && !urlReferralCode) {
       return (
@@ -1245,6 +1269,32 @@ export default function App() {
         initialIsSignUp={authInitialIsSignUp}
         onBackToLanding={() => setLandingView('landing')}
       />
+    );
+  }
+
+  // Enforce Maintenance Mode Block for Non-Admins
+  if (systemControl.maintenanceMode && !isUserAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-white">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center mb-5 animate-bounce">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+        <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider mb-3">
+          Scheduled Maintenance Mode
+        </span>
+        <h2 className="text-2xl font-black text-white mb-3">
+          সিস্টেম রক্ষণাবেক্ষণ চলছে
+        </h2>
+        <p className="text-zinc-300 text-sm max-w-md leading-relaxed mb-6">
+          NIPA NETWORK V2.7 সার্ভার ও AI ক্লাউড ইঞ্জিনের অপটিমাইজেশন কাজ চলছে। সাময়িকভাবে চ্যাট সার্ভিস স্থগিত রাখা হয়েছে। খুব শীঘ্রই সেবা সচল হবে।
+        </p>
+        <button
+          onClick={handleSignOut}
+          className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition-all cursor-pointer"
+        >
+          সাইন আউট / অ্যাডমিন লগইন
+        </button>
+      </div>
     );
   }
 

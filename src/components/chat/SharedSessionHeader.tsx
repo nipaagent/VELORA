@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, LogOut, Shield, Zap, Sparkles } from 'lucide-react';
-import { formatTokenCount } from '../../lib/utils';
+import { formatTokenCount, cn } from '../../lib/utils';
 import { TokenState } from '../../types';
 
 interface SharedSessionHeaderProps {

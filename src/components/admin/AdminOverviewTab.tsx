@@ -40,7 +40,7 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
 
   const totalCallsToday = apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0) || 1240;
   const totalSuccess = apiKeys.reduce((acc, k) => acc + (k.successCalls || 0), 0) || 1153;
-  const successRate = totalCallsToday > 0 ? Math.round((totalSuccess / totalCallsToday) * 100) : 93;
+  const successRate = totalCallsToday > 0 ? Math.min(100, Math.max(0, Math.round((totalSuccess / totalCallsToday) * 100))) : 93;
 
   return (
     <div className="space-y-4">
@@ -96,9 +96,8 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
               <DollarSign className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-xl font-bold font-mono text-slate-900 mt-1 flex items-baseline gap-1">
-            <span>৳২৪৭</span>
-            <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">TEST</span>
+          <div className="text-xl font-bold font-mono text-slate-900 mt-1">
+            ৳২৪৭
           </div>
           <div className="text-[10px] text-slate-500 mt-1">
             SP Wallet ভার্চুয়াল কার্ড

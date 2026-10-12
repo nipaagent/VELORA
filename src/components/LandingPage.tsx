@@ -14,17 +14,30 @@ import {
   LogIn, 
   HelpCircle,
   FileText,
-  Lock
+  Lock,
+  Zap,
+  X,
+  CreditCard,
+  UserPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { SP_TOKEN_PACKAGES, SP_VIP_PACKAGES } from '../lib/spPaymentConfig';
 
 interface LandingPageProps {
   onOpenAuth: (isSignUp?: boolean) => void;
   onOpenSharedSession?: () => void;
+  isLoggedIn?: boolean;
+  onSelectPurchasePackage?: (packageId: string, type: 'vip' | 'tokens') => void;
 }
 
-export default function LandingPage({ onOpenAuth }: LandingPageProps) {
+export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPurchasePackage }: LandingPageProps) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [pendingPurchaseItem, setPendingPurchaseItem] = useState<{
+    id: string;
+    name: string;
+    price: string;
+    type: 'vip' | 'tokens';
+  } | null>(null);
 
   const toggleFaq = (idx: number) => {
     setOpenFaq(prev => prev === idx ? null : idx);
@@ -85,7 +98,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
             </div>
             <div>
               <div className="font-bold text-base tracking-tight flex items-center gap-1.5 text-white">
-                NIPA <span className="text-[11px] font-mono text-zinc-400 font-normal px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">NETWORK V3.5</span>
+                NIPA <span className="text-[11px] font-mono text-zinc-400 font-normal px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">NETWORK V2.7</span>
               </div>
               <p className="text-[11px] text-zinc-400 leading-none">বাংলাদেশের নিজস্ব AI প্ল্যাটফর্ম</p>
             </div>
@@ -301,7 +314,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
             <div>
               <div className="text-sm font-bold text-zinc-300">Starter</div>
               <div className="text-3xl font-bold font-mono text-white mt-2">৳৪৯</div>
-              <div className="text-xs text-zinc-500 mb-4">/ ৭ দিন</div>
+              <div className="text-xs text-zinc-500 mb-4">/ ৭ দিন (~6.31 SP)</div>
               <ul className="space-y-2 text-xs text-zinc-300 mb-6">
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400 shrink-0" /> দৈনিক ১ লাখ টোকেন</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400 shrink-0" /> স্ট্যান্ডার্ড স্পিড</li>
@@ -310,10 +323,16 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
               </ul>
             </div>
             <button
-              onClick={() => onOpenAuth(true)}
+              onClick={() => {
+                if (isLoggedIn && onSelectPurchasePackage) {
+                  onSelectPurchasePackage('sp_vip_7d', 'vip');
+                } else {
+                  setPendingPurchaseItem({ id: 'sp_vip_7d', name: 'Starter VIP (৭ দিন)', price: '৳৪৯', type: 'vip' });
+                }
+              }}
               className="w-full py-2.5 rounded-xl border border-zinc-700 text-zinc-200 hover:text-white hover:bg-zinc-800 font-semibold text-xs transition-colors cursor-pointer"
             >
-              কিনো
+              কিনুন
             </button>
           </div>
 
@@ -328,7 +347,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
                 <Crown className="w-3.5 h-3.5 text-amber-400" />
               </div>
               <div className="text-3xl font-bold font-mono text-white mt-2">৳১৪৯</div>
-              <div className="text-xs text-zinc-400 mb-4">/ ৩০ দিন</div>
+              <div className="text-xs text-zinc-400 mb-4">/ ৩০ দিন (~19.18 SP)</div>
               <ul className="space-y-2 text-xs text-zinc-200 mb-6">
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white shrink-0" /> দৈনিক ৫ লাখ টোকেন</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white shrink-0" /> আল্ট্রা-ফাস্ট রেসপন্স</li>
@@ -338,10 +357,16 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
               </ul>
             </div>
             <button
-              onClick={() => onOpenAuth(true)}
+              onClick={() => {
+                if (isLoggedIn && onSelectPurchasePackage) {
+                  onSelectPurchasePackage('sp_vip_30d', 'vip');
+                } else {
+                  setPendingPurchaseItem({ id: 'sp_vip_30d', name: 'Pro VIP (৩০ দিন)', price: '৳১৪৯', type: 'vip' });
+                }
+              }}
               className="w-full py-2.5 rounded-xl bg-gradient-to-r from-zinc-100 via-zinc-200 to-zinc-300 text-black font-bold text-xs hover:brightness-105 transition-all shadow cursor-pointer"
             >
-              কিনো
+              কিনুন
             </button>
           </div>
 
@@ -350,7 +375,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
             <div>
               <div className="text-sm font-bold text-zinc-300">Business</div>
               <div className="text-3xl font-bold font-mono text-white mt-2">৳৩৪৯</div>
-              <div className="text-xs text-zinc-500 mb-4">/ ৩০ দিন</div>
+              <div className="text-xs text-zinc-500 mb-4">/ ৯০ দিন (~44.92 SP)</div>
               <ul className="space-y-2 text-xs text-zinc-300 mb-6">
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400 shrink-0" /> দৈনিক ১৫ লাখ টোকেন</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400 shrink-0" /> ডেভেলপার API অ্যাক্সেস</li>
@@ -359,10 +384,16 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
               </ul>
             </div>
             <button
-              onClick={() => onOpenAuth(true)}
+              onClick={() => {
+                if (isLoggedIn && onSelectPurchasePackage) {
+                  onSelectPurchasePackage('sp_vip_90d', 'vip');
+                } else {
+                  setPendingPurchaseItem({ id: 'sp_vip_90d', name: 'Business VIP (৯০ দিন)', price: '৳৩৪৯', type: 'vip' });
+                }
+              }}
               className="w-full py-2.5 rounded-xl border border-zinc-700 text-zinc-200 hover:text-white hover:bg-zinc-800 font-semibold text-xs transition-colors cursor-pointer"
             >
-              কিনো
+              কিনুন
             </button>
           </div>
 
@@ -371,7 +402,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
             <div>
               <div className="text-sm font-bold text-zinc-300">Ultimate</div>
               <div className="text-3xl font-bold font-mono text-white mt-2">৳৭৯৯</div>
-              <div className="text-xs text-zinc-500 mb-4">/ ৯০ দিন</div>
+              <div className="text-xs text-zinc-500 mb-4">/ আজীবন এক্সেস (~102.83 SP)</div>
               <ul className="space-y-2 text-xs text-zinc-300 mb-6">
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400 shrink-0" /> আনলিমিটেড ফেয়ার-ইউজ</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400 shrink-0" /> সব ফিচার আনলক</li>
@@ -380,38 +411,138 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
               </ul>
             </div>
             <button
-              onClick={() => onOpenAuth(true)}
+              onClick={() => {
+                if (isLoggedIn && onSelectPurchasePackage) {
+                  onSelectPurchasePackage('sp_vip_lifetime', 'vip');
+                } else {
+                  setPendingPurchaseItem({ id: 'sp_vip_lifetime', name: 'Ultimate VIP (আজীবন)', price: '৳৭৯৯', type: 'vip' });
+                }
+              }}
               className="w-full py-2.5 rounded-xl border border-zinc-700 text-zinc-200 hover:text-white hover:bg-zinc-800 font-semibold text-xs transition-colors cursor-pointer"
             >
-              কিনো
+              কিনুন
             </button>
           </div>
         </div>
 
-        {/* Token Packs */}
-        <div className="p-6 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 text-center">
-          <h3 className="text-base font-bold text-white mb-2">টোকেন প্যাক (আলাদা ক্রয়)</h3>
-          <p className="text-zinc-400 text-xs mb-5 max-w-xl mx-auto">
-            প্ল্যান ছাড়াও আলাদা টোকেন কেনা যাবে — প্যাকের টোকেনের কোনো মেয়াদ নেই, আজীবন জমা থাকবে।
+        {/* Token Packs with Real Buy Buttons */}
+        <div className="p-6 sm:p-8 rounded-3xl bg-zinc-900/40 border border-zinc-800/80 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold mb-3">
+            <Zap className="w-3.5 h-3.5" />
+            <span>টোকেন প্যাক (আলাদা ক্রয়)</span>
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">নির্দিষ্ট মেয়াদের বাইরে আজীবন টোকেন ব্যালেন্স</h3>
+          <p className="text-zinc-400 text-xs mb-8 max-w-xl mx-auto">
+            প্ল্যান ছাড়াও সরাসরি টোকেন কিনতে পারেন — প্যাকের টোকেনের কোনো মেয়াদ নেই, সারাজীবন আপনার অ্যাকাউন্টে জমা থাকবে।
           </p>
-          <div className="flex flex-wrap gap-2.5 justify-center">
-            <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
-              <b className="font-mono text-white">50K</b> টোকেন · ৳২৯
-            </span>
-            <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
-              <b className="font-mono text-white">200K</b> টোকেন · ৳৯৯
-            </span>
-            <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
-              <b className="font-mono text-white">500K</b> টোকেন · ৳২২৯
-            </span>
-            <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
-              <b className="font-mono text-white">1M</b> টোকেন · ৳৩৯৯
-            </span>
-            <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
-              <b className="font-mono text-white">2M</b> টোকেন · ৳৫৯৯
-            </span>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {SP_TOKEN_PACKAGES.map((pack) => (
+              <div 
+                key={pack.id}
+                className="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700 transition-all flex flex-col justify-between text-left group"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black font-mono text-white">{pack.name}</span>
+                    {pack.badge && (
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                        {pack.badge}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-white my-1">
+                    ৳{pack.priceBdt}
+                  </div>
+                  <div className="text-[10px] font-mono text-zinc-400 mb-3">
+                    ~{pack.priceSp} SP Coins
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed mb-4">
+                    {pack.description}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (isLoggedIn && onSelectPurchasePackage) {
+                      onSelectPurchasePackage(pack.id, 'tokens');
+                    } else {
+                      setPendingPurchaseItem({ id: pack.id, name: pack.name, price: `৳${pack.priceBdt}`, type: 'tokens' });
+                    }
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs group-hover:bg-indigo-600"
+                >
+                  <CreditCard className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white" />
+                  <span>কিনুন</span>
+                </button>
+              </div>
+            ))}
           </div>
         </div>
+
+        {/* Logged-out Buy Explanation Modal */}
+        <AnimatePresence>
+          {pendingPurchaseItem && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl relative text-left"
+              >
+                <button
+                  onClick={() => setPendingPurchaseItem(null)}
+                  className="absolute top-5 right-5 p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400/20 to-amber-600/20 border border-amber-500/30 text-amber-400 flex items-center justify-center mb-4">
+                  <CreditCard className="w-6 h-6" />
+                </div>
+
+                <h3 className="text-lg font-bold text-white mb-2">
+                  কেনার জন্য প্রথমে অ্যাকাউন্ট খুলুন / লগইন করুন
+                </h3>
+                
+                <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed mb-4">
+                  আপনি <strong className="text-white font-semibold">{pendingPurchaseItem.name}</strong> ({pendingPurchaseItem.price}) বেছে নিয়েছেন। পেমেন্ট সম্পন্ন করার পর এই প্যাকেজটি স্বয়ংক্রিয়ভাবে আপনার অ্যাকাউন্টে ক্রেডিট করার জন্য লগইন থাকা প্রয়োজন।
+                </p>
+
+                <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800/80 mb-6 flex items-center justify-between">
+                  <span className="text-xs text-zinc-400">নির্বাচিত প্যাকেজ</span>
+                  <span className="text-xs font-mono font-bold text-amber-300">{pendingPurchaseItem.price} · SP Wallet BD</span>
+                </div>
+
+                <div className="space-y-2.5">
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem('nipa_pending_purchase', JSON.stringify(pendingPurchaseItem));
+                      setPendingPurchaseItem(null);
+                      onOpenAuth(false);
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-white text-black hover:bg-zinc-200 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    <span>লগইন করুন (Sign In)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem('nipa_pending_purchase', JSON.stringify(pendingPurchaseItem));
+                      setPendingPurchaseItem(null);
+                      onOpenAuth(true);
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-zinc-800 text-white hover:bg-zinc-700 border border-zinc-700 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>নতুন অ্যাকাউন্ট খুলুন (Create Account)</span>
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* FAQ Section */}

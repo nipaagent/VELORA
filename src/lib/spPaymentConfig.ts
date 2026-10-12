@@ -96,62 +96,77 @@ export const SP_VIP_PACKAGES: SpPaymentPackage[] = [
 
 export const SP_TOKEN_PACKAGES: SpPaymentPackage[] = [
   {
-    id: 'sp_token_100k',
-    name: '১,০০,০০০ বোনাস টোকেন',
+    id: 'sp_token_50k',
+    name: '৫০,০০০ (50K) টোকেন',
     type: 'tokens',
-    amount: 100000,
+    amount: 50000,
     priceBdt: 29,
     priceSp: calcSpPrice(29),
-    description: 'দৈনিক ফ্রি লিমিটের বাইরে অতিরিক্ত ১০০কে টোকেন',
+    description: 'ছোট কাজ ও দ্রুত চ্যাটের জন্য অতিরিক্ত ৫০কে টোকেন',
     features: [
-      '+১,০০,০০০ বোনাস টোকেন ব্যালেন্স',
-      'কোনো মেয়াদ নেই (No Expiration)',
-      'যখন খুশি ব্যবহার করুন'
+      '+৫০,০০০ বোনাস টোকেন ব্যালেন্স',
+      'আজীবন মেয়াদ (No Expiration)',
+      'ইনস্ট্যান্ট ক্রেডিট'
+    ]
+  },
+  {
+    id: 'sp_token_200k',
+    name: '২,০০,০০০ (200K) টোকেন',
+    type: 'tokens',
+    amount: 200000,
+    priceBdt: 99,
+    priceSp: calcSpPrice(99),
+    popular: true,
+    badge: 'জনপ্রিয়',
+    description: 'নিয়মিত ব্যবহারের জন্য সেরা ডিল',
+    features: [
+      '+২,০০,০০০ বোনাস টোকেন ব্যালেন্স',
+      'আজীবন মেয়াদ (No Expiration)',
+      'সকল এআই মডেল সাপোর্ট'
     ]
   },
   {
     id: 'sp_token_500k',
-    name: '৫,০০,০০০ বোনাস টোকেন',
+    name: '৫,০০,০০০ (500K) টোকেন',
     type: 'tokens',
     amount: 500000,
-    priceBdt: 99,
-    priceSp: calcSpPrice(99),
-    popular: true,
-    badge: 'বেস্ট সেলার',
-    description: 'বড় প্রজেক্ট এবং লম্বা চ্যাটের জন্য আদর্শ',
+    priceBdt: 229,
+    priceSp: calcSpPrice(229),
+    badge: 'সেরা সেভিংস',
+    description: 'লম্বা আর্টিকেল, স্টাডি ও কোডিংয়ের জন্য আদর্শ',
     features: [
       '+৫,০০,০০০ বোনাস টোকেন ব্যালেন্স',
       'লাইফটাইম ভ্যালিডিটি',
-      'সরাসরি একাউন্টে যুক্ত হবে'
+      'ছবি বিশ্লেষণ ও কোডিং'
+    ]
+  },
+  {
+    id: 'sp_token_1m',
+    name: '১০,০০,০০০ (1M) মেগা টোকেন',
+    type: 'tokens',
+    amount: 1000000,
+    priceBdt: 399,
+    priceSp: calcSpPrice(399),
+    badge: 'মেগা প্যাক',
+    description: 'প্রফেশনাল ব্যবহারকারী ও বড় প্রজেক্টের জন্য',
+    features: [
+      '+১০,০০,০০০ বোনাস টোকেন',
+      'কখনো মেয়াদ শেষ হবে না',
+      'হাই স্পিড প্রায়োরিটি'
     ]
   },
   {
     id: 'sp_token_2m',
-    name: '২,০০,০০,০০ (২ মিলিয়ন) টোকেন',
+    name: '২০,০০,০০০ (2M) আল্টিমেট টোকেন',
     type: 'tokens',
     amount: 2000000,
-    priceBdt: 299,
-    priceSp: calcSpPrice(299),
-    badge: 'মেগা প্যাক',
-    description: 'প্রফেশনাল ও ডেভেলপারদের জন্য বিশাল টোকেন প্যাক',
-    features: [
-      '+২,০০,০০,০০ বোনাস টোকেন',
-      'কখনো মেয়াদ উত্তীর্ণ হবে না',
-      'হাই স্পিড এআই সাপোর্ট'
-    ]
-  },
-  {
-    id: 'sp_token_5m',
-    name: '৫,০০,০০,০০ (৫ মিলিয়ন) টোকেন',
-    type: 'tokens',
-    amount: 5000000,
     priceBdt: 599,
     priceSp: calcSpPrice(599),
-    badge: 'আলটিমেট প্যাক',
-    description: 'সর্বোচ্চ সাইজ টোকেন বান্ডেল',
+    badge: 'আল্টিমেট ডিল',
+    description: 'সর্বোচ্চ সাইজ টোকেন বান্ডেল — দীর্ঘদিনের জন্য নিশ্চিত',
     features: [
-      '+৫,০০,০০,০০ মেগা টোকেন ব্যালেন্স',
-      'একবার কিনে দীর্ঘ সময় নিশ্চিন্ত',
+      '+২০,০০,০০০ মেগা টোকেন ব্যালেন্স',
+      'আজীবন সংরক্ষিত থাকবে',
       'ভিআইপি কাস্টমার সাপোর্ট'
     ]
   }

@@ -496,7 +496,7 @@ export default function TokenModal({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleRedeemCode();
                   }}
-                  placeholder="কোড লিখুন (যেমন: SAMI7 বা SAIMA7)"
+                  placeholder="রিডিম বা রেফার কোড দিন (যেমন: NIPA77 বা NIPA100K)"
                   className="flex-1 px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl text-xs font-mono font-black tracking-widest text-slate-900 placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase shadow-xs"
                 />
                 <motion.button

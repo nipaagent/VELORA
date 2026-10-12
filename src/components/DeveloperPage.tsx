@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Code2, Key, Copy, CheckCircle2, ShieldAlert, Terminal, Zap, ShieldCheck, Play, RefreshCw, AlertTriangle, AlertCircle, Loader2, Send, Lock, Globe, Cpu, Blocks } from 'lucide-react';
+import { ArrowLeft, Code2, Key, Copy, CheckCircle2, ShieldAlert, Terminal, Zap, ShieldCheck, Play, RefreshCw, AlertTriangle, AlertCircle, Loader2, Send, Lock, Globe, Cpu, Blocks, Eye, EyeOff } from 'lucide-react';
 import { UserProfile } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
 import { db } from '../lib/firebase';
@@ -20,6 +20,8 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
   const [copiedEndpoint, setCopiedEndpoint] = useState(false);
   const [apiAccessEnabled, setApiAccessEnabled] = useState(!!userProfile.apiAccessEnabled);
   const [apiKey, setApiKey] = useState(userProfile.apiKey || '');
+  const [showFullKey, setShowFullKey] = useState(false);
+  const [isNewlyGenerated, setIsNewlyGenerated] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [toastMessage, setToastMessage] = useState<{title: string, type: 'success'|'error'} | null>(null);
   const [baseUrl, setBaseUrl] = useState('');
@@ -94,7 +96,9 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
         keyCreatedAt: Date.now(),
         updatedAt: Date.now()
       });
-      showToast("New API key generated successfully!");
+      setIsNewlyGenerated(true);
+      setShowFullKey(true);
+      showToast("New API key generated! Please save it securely.");
     } catch (e: any) {
       showToast(e.message || "Failed to generate key", "error");
     } finally {
@@ -296,14 +300,28 @@ console.log(data);`;
               {apiAccessEnabled ? (
                 apiKey ? (
                   <div className="space-y-3">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Secret API Key</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Secret API Key</label>
+                      {isNewlyGenerated && (
+                        <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          নতুভাবে তৈরি - নিরাপদে সেভ করুন
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 font-mono text-sm text-slate-700 break-all select-all flex items-center justify-between">
-                        {apiKey}
+                      <div className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 font-mono text-sm text-slate-700 break-all select-none flex items-center justify-between">
+                        <span>{showFullKey ? apiKey : `${apiKey.substring(0, 4)}••••••••••••••••`}</span>
+                        <button
+                          onClick={() => setShowFullKey(!showFullKey)}
+                          className="ml-2 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                          title={showFullKey ? "Hide key" : "Reveal key"}
+                        >
+                          {showFullKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
                       <button
                         onClick={() => copyToClipboard(apiKey, 'key')}
-                        className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shrink-0 shadow-sm"
+                        className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shrink-0 shadow-sm cursor-pointer"
                         title="Copy Key"
                       >
                         {copiedKey ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}

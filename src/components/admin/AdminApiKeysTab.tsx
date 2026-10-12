@@ -121,7 +121,7 @@ export const AdminApiKeysTab: React.FC<AdminApiKeysTabProps> = ({
                   <div>
                     <span>সফলতার হার: </span>
                     <span className="font-bold text-emerald-600">
-                      {key.totalCalls ? Math.round(((key.successCalls || 0) / key.totalCalls) * 100) : 100}%
+                      {key.totalCalls ? Math.min(100, Math.max(0, Math.round(((key.successCalls || 0) / key.totalCalls) * 100))) : 100}%
                     </span>
                   </div>
                 </div>

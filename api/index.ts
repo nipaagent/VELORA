@@ -655,6 +655,43 @@ const extractErrorMessage = (data: any, defaultMsg: string = "পেমেন্
   return defaultMsg;
 };
 
+// Google reCAPTCHA Verification Endpoint
+app.post("/api/verify-recaptcha", async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ success: false, error: "reCAPTCHA টোকেন পাওয়া যায়নি।" });
+    }
+
+    const secretKey = process.env.RECAPTCHA_SECRET_KEY || "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe";
+    
+    // Verify with Google reCAPTCHA server
+    const params = new URLSearchParams();
+    params.append("secret", secretKey);
+    params.append("response", token);
+
+    const googleRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString()
+    });
+
+    const result = await googleRes.json();
+    if (result.success) {
+      return res.json({ success: true, message: "reCAPTCHA ভেরিফিকেশন সফল!" });
+    } else {
+      console.warn("[reCAPTCHA] Verification failed:", result);
+      return res.status(400).json({ 
+        success: false, 
+        error: "reCAPTCHA ভেরিফিকেশন ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।" 
+      });
+    }
+  } catch (err: any) {
+    console.error("[reCAPTCHA] Server error:", err);
+    return res.status(500).json({ success: false, error: "reCAPTCHA সার্ভার ত্রুটি।" });
+  }
+});
+
 // SP Wallet BD Virtual Card Checkout API - STRICT REAL-TIME DEBIT
 app.post(["/api/payment/sp-card-checkout", "/api/checkout/card-pay"], async (req, res) => {
   try {

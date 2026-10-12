@@ -2,6 +2,7 @@ import { TokenState } from '../../types';
 
 export interface AdminUser {
   uid: string;
+  email?: string;
   fullName: string;
   username: string;
   avatarUrl?: string;
