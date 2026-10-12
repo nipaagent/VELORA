@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatTokenCount } from '../lib/utils';
 import { ref, get, update } from 'firebase/database';
 import { db } from '../lib/firebase';
+import { triggerToast } from './Toast';
 
 interface TokenModalProps {
   isOpen: boolean;
@@ -142,7 +143,9 @@ export default function TokenModal({
             }
           });
         }
-        setRedeemSuccess(`🎉 অভিনন্দন! +${formatTokenCount(addedTokens)} বোনাস টোকেন আপনার একাউন্টে যুক্ত হয়েছে!`);
+        const msg = `🎉 অভিনন্দন! +${formatTokenCount(addedTokens)} বোনাস টোকেন আপনার একাউন্টে যুক্ত হয়েছে!`;
+        setRedeemSuccess(msg);
+        triggerToast(`+${formatTokenCount(addedTokens)} বোনাস টোকেন যুক্ত হয়েছে!`, 'success');
       } else if (codeData.rewardType === 'vip_days') {
         const days = codeData.vipDays || 1;
         const currentVipExp = userProfile?.vipExpiresAt || 0;
@@ -164,13 +167,17 @@ export default function TokenModal({
             vipExpiresAt: newVipExp
           });
         }
-        setRedeemSuccess(`🎉 অভিনন্দন! ${days} দিনের জন্য ভিআইপি আনলিমিটেড অ্যাক্সেস চালু হয়েছে!`);
+        const msg = `🎉 অভিনন্দন! ${days} দিনের জন্য ভিআইপি আনলিমিটেড অ্যাক্সেস চালু হয়েছে!`;
+        setRedeemSuccess(msg);
+        triggerToast(`${days} দিনের VIP এক্সেস অ্যাক্টিভ হয়েছে!`, 'success');
       }
 
       setRedeemInput('');
     } catch (err: any) {
       console.error("Redeem error:", err);
-      setRedeemError("রিডিম কোড প্রসেস করতে সমস্যা: " + err.message);
+      const errMsg = "রিডিম কোড প্রসেস করতে সমস্যা: " + err.message;
+      setRedeemError(errMsg);
+      triggerToast("রিডিম কোড কার্যকর করা যায়নি", 'error');
     } finally {
       setIsRedeeming(false);
     }

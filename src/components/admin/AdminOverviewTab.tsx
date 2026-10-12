@@ -3,9 +3,11 @@ import {
   Users, Crown, Zap, KeyRound, 
   Activity, CheckCircle2, AlertTriangle, DollarSign, Power
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { AdminUser, ApiKeyDetail } from './adminTypes';
 import { SystemControl, SystemAnnouncement } from '../../types';
 import { formatTokenCount, cn } from '../../lib/utils';
+import { KpiCardSkeleton } from '../SkeletonLoader';
 
 interface AdminOverviewTabProps {
   users: AdminUser[];
@@ -50,131 +52,176 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Row of Compact KPI Tiles - Matching App Palette */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-        {/* KPI 1: Users */}
-        <div 
-          onClick={() => onNavigateTab('users')}
-          className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group"
-        >
-          <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-            <span>মোট ইউজার</span>
-            <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-              <Users className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="text-xl font-bold font-mono text-slate-900 mt-1">
-            {users.length} <span className="text-[11px] font-normal text-slate-500 font-sans">জন</span>
-          </div>
-          <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>{vipCount} জন VIP সদস্য</span>
-          </div>
+      {/* Row of Compact KPI Tiles - Staggered 80ms Entrance */}
+      {isLoading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <KpiCardSkeleton key={i} />
+          ))}
         </div>
+      ) : (
+        <motion.div 
+          initial="hidden"
+          animate="show"
+          variants={{
+            hidden: { opacity: 0 },
+            show: {
+              opacity: 1,
+              transition: {
+                staggerChildren: 0.08
+              }
+            }
+          }}
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5"
+        >
+          {/* KPI 1: Users */}
+          <motion.div 
+            variants={{
+              hidden: { opacity: 0, y: 20 },
+              show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }
+            }}
+            onClick={() => onNavigateTab('users')}
+            className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group btn-animate"
+          >
+            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+              <span>মোট ইউজার</span>
+              <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <Users className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="text-xl font-bold font-mono text-slate-900 mt-1">
+              {users.length} <span className="text-[11px] font-normal text-slate-500 font-sans">জন</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>{vipCount} জন VIP সদস্য</span>
+            </div>
+          </motion.div>
 
-        {/* KPI 2: VIP */}
-        <div 
-          onClick={() => onNavigateTab('users')}
-          className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group"
-        >
-          <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-            <span>VIP / PRO</span>
-            <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-              <Crown className="w-3.5 h-3.5" />
+          {/* KPI 2: VIP */}
+          <motion.div 
+            variants={{
+              hidden: { opacity: 0, y: 20 },
+              show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }
+            }}
+            onClick={() => onNavigateTab('users')}
+            className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group btn-animate"
+          >
+            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+              <span>VIP / PRO</span>
+              <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <Crown className="w-3.5 h-3.5" />
+              </div>
             </div>
-          </div>
-          <div className="text-xl font-bold font-mono text-amber-700 mt-1">
-            {vipCount} <span className="text-[11px] font-normal text-slate-500 font-sans">অ্যাকাউন্ট</span>
-          </div>
-          <div className="text-[10px] text-slate-500 mt-1">
-            সক্রিয় মেম্বারশিপ
-          </div>
-        </div>
+            <div className="text-xl font-bold font-mono text-amber-700 mt-1">
+              {vipCount} <span className="text-[11px] font-normal text-slate-500 font-sans">অ্যাকাউন্ট</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              সক্রিয় মেম্বারশিপ
+            </div>
+          </motion.div>
 
-        {/* KPI 3: Revenue */}
-        <div 
-          onClick={() => onNavigateTab('payments')}
-          className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group"
-        >
-          <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-            <span>মোট রেভেনিউ</span>
-            <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <DollarSign className="w-3.5 h-3.5" />
+          {/* KPI 3: Revenue */}
+          <motion.div 
+            variants={{
+              hidden: { opacity: 0, y: 20 },
+              show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }
+            }}
+            onClick={() => onNavigateTab('payments')}
+            className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group btn-animate"
+          >
+            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+              <span>মোট রেভেনিউ</span>
+              <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <DollarSign className="w-3.5 h-3.5" />
+              </div>
             </div>
-          </div>
-          <div className="text-xl font-bold font-mono text-slate-900 mt-1">
-            ৳২৪৭
-          </div>
-          <div className="text-[10px] text-slate-500 mt-1">
-            SP Wallet ভার্চুয়াল কার্ড
-          </div>
-        </div>
+            <div className="text-xl font-bold font-mono text-slate-900 mt-1">
+              ৳২৪৭
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              SP Wallet ভার্চুয়াল কার্ড
+            </div>
+          </motion.div>
 
-        {/* KPI 4: Tokens */}
-        <div 
-          onClick={() => onNavigateTab('tokens')}
-          className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group"
-        >
-          <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-            <span>টোকেন রিজার্ভ</span>
-            <div className="w-6 h-6 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-              <Zap className="w-3.5 h-3.5" />
+          {/* KPI 4: Tokens */}
+          <motion.div 
+            variants={{
+              hidden: { opacity: 0, y: 20 },
+              show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }
+            }}
+            onClick={() => onNavigateTab('tokens')}
+            className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group btn-animate"
+          >
+            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+              <span>টোকেন রিজার্ভ</span>
+              <div className="w-6 h-6 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                <Zap className="w-3.5 h-3.5" />
+              </div>
             </div>
-          </div>
-          <div className="text-xl font-bold font-mono text-purple-700 mt-1">
-            {formatTokenCount(totalTokensDistributed)}
-          </div>
-          <div className="text-[10px] text-slate-500 mt-1">
-            সব অ্যাকাউন্ট মিলিয়ে
-          </div>
-        </div>
+            <div className="text-xl font-bold font-mono text-purple-700 mt-1">
+              {formatTokenCount(totalTokensDistributed)}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              সব অ্যাকাউন্ট মিলিয়ে
+            </div>
+          </motion.div>
 
-        {/* KPI 5: API Gateway */}
-        <div 
-          onClick={() => onNavigateTab('apikeys')}
-          className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group"
-        >
-          <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-            <span>API সাফল্য</span>
-            <div className="w-6 h-6 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
-              <KeyRound className="w-3.5 h-3.5" />
+          {/* KPI 5: API Gateway */}
+          <motion.div 
+            variants={{
+              hidden: { opacity: 0, y: 20 },
+              show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }
+            }}
+            onClick={() => onNavigateTab('apikeys')}
+            className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group btn-animate"
+          >
+            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+              <span>API সাফল্য</span>
+              <div className="w-6 h-6 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+                <KeyRound className="w-3.5 h-3.5" />
+              </div>
             </div>
-          </div>
-          <div className="text-xl font-bold font-mono text-sky-700 mt-1">
-            {isLoading ? (
-              <div className="h-6 w-14 bg-slate-100 animate-pulse rounded-md my-0.5" />
-            ) : (
-              `${successRate}%`
-            )}
-          </div>
-          <div className="text-[10px] text-slate-500 mt-1">
-            {apiKeys.length}টি গেটওয়ে কি সক্রিয়
-          </div>
-        </div>
+            <div className="text-xl font-bold font-mono text-sky-700 mt-1">
+              {isLoading ? (
+                <div className="h-6 w-14 bg-slate-100 animate-pulse rounded-md my-0.5" />
+              ) : (
+                `${successRate}%`
+              )}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              {apiKeys.length}টি গেটওয়ে কি সক্রিয়
+            </div>
+          </motion.div>
 
-        {/* KPI 6: System Status */}
-        <div 
-          onClick={() => onNavigateTab('security')}
-          className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group"
-        >
-          <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-            <span>সিস্টেম অবস্থা</span>
-            <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <Activity className="w-3.5 h-3.5" />
+          {/* KPI 6: System Status */}
+          <motion.div 
+            variants={{
+              hidden: { opacity: 0, y: 20 },
+              show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }
+            }}
+            onClick={() => onNavigateTab('security')}
+            className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs transition-all cursor-pointer group btn-animate"
+          >
+            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+              <span>সিস্টেম অবস্থা</span>
+              <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <Activity className="w-3.5 h-3.5" />
+              </div>
             </div>
-          </div>
-          <div className={cn(
-            "text-sm font-bold mt-2 truncate flex items-center gap-1.5",
-            systemControl.maintenanceMode ? "text-amber-600" : "text-emerald-700"
-          )}>
-            <span className={cn("w-2 h-2 rounded-full", systemControl.maintenanceMode ? "bg-amber-500" : "bg-emerald-500 animate-pulse")} />
-            <span>{systemControl.maintenanceMode ? "মেইনটেন্যান্স" : "১০০% সচল"}</span>
-          </div>
-          <div className="text-[10px] text-slate-500 mt-1">
-            Firebase RTDB লাইভ
-          </div>
-        </div>
-      </div>
+            <div className={cn(
+              "text-sm font-bold mt-2 truncate flex items-center gap-1.5",
+              systemControl.maintenanceMode ? "text-amber-600" : "text-emerald-700"
+            )}>
+              <span className={cn("w-2 h-2 rounded-full", systemControl.maintenanceMode ? "bg-amber-500" : "bg-emerald-500 animate-pulse")} />
+              <span>{systemControl.maintenanceMode ? "মেইনটেন্যান্স" : "১০০% সচল"}</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              Firebase RTDB লাইভ
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
 
       {/* Main Grid: System Status & Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">

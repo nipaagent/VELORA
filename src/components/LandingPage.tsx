@@ -190,7 +190,14 @@ export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPu
       </section>
 
       {/* Features Grid */}
-      <section id="features" className="relative z-10 py-16 px-4 max-w-6xl mx-auto">
+      <motion.section 
+        id="features" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.15 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 py-16 px-4 max-w-6xl mx-auto"
+      >
         <div className="text-center max-w-2xl mx-auto mb-12">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">কেন NIPA ব্যবহার করবে?</h2>
           <p className="text-zinc-400 text-sm sm:text-base">
@@ -259,10 +266,17 @@ export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPu
             </p>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="relative z-10 py-16 px-4 max-w-4xl mx-auto">
+      <motion.section 
+        id="how-it-works" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.15 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 py-16 px-4 max-w-4xl mx-auto"
+      >
         <div className="text-center mb-12">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">কীভাবে কাজ করে</h2>
           <p className="text-zinc-400 text-sm">তিনটা সহজ ধাপেই শুরু — দুই মিনিটের বেশি লাগবে না</p>
@@ -299,10 +313,17 @@ export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPu
             </p>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="relative z-10 py-16 px-4 max-w-6xl mx-auto">
+      <motion.section 
+        id="pricing" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.15 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 py-16 px-4 max-w-6xl mx-auto"
+      >
         <div className="text-center max-w-2xl mx-auto mb-12">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">VIP প্ল্যান ও প্রাইসিং</h2>
           <p className="text-zinc-400 text-sm">SP Wallet BD দিয়ে সহজ পেমেন্ট · ১ SP = ৳৭.৭৭</p>
@@ -543,10 +564,17 @@ export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPu
             </div>
           )}
         </AnimatePresence>
-      </section>
+      </motion.section>
 
       {/* FAQ Section */}
-      <section id="faq" className="relative z-10 py-16 px-4 max-w-3xl mx-auto">
+      <motion.section 
+        id="faq" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.15 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 py-16 px-4 max-w-3xl mx-auto"
+      >
         <div className="text-center mb-10">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">সাধারণ জিজ্ঞাসা (FAQ)</h2>
           <p className="text-zinc-400 text-sm">NIPA সম্পর্কে আপনার যেকোনো প্রশ্নের উত্তর এখানে পেয়ে যাবেন</p>
@@ -584,10 +612,17 @@ export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPu
             );
           })}
         </div>
-      </section>
+      </motion.section>
 
       {/* Terms & Privacy Summary */}
-      <section id="terms" className="relative z-10 py-12 px-4 max-w-4xl mx-auto">
+      <motion.section 
+        id="terms" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.15 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 py-12 px-4 max-w-4xl mx-auto"
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-6 rounded-2xl bg-zinc-900/40 border border-zinc-800/80">
             <h3 className="font-bold text-white text-sm flex items-center gap-2 mb-2">
@@ -609,7 +644,7 @@ export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPu
             </p>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-zinc-800/80 py-8 px-4 text-center text-xs text-zinc-500">

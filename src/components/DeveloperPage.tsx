@@ -7,6 +7,8 @@ import { db } from '../lib/firebase';
 import { ref, update, onValue } from 'firebase/database';
 import { cn } from '../lib/utils';
 
+import { triggerToast } from './Toast';
+
 interface DeveloperPageProps {
   userProfile: UserProfile;
   user: FirebaseUser;
@@ -50,8 +52,7 @@ export default function DeveloperPage({ userProfile, user, onBackToChat }: Devel
   }, [user]);
 
   const showToast = (title: string, type: 'success'|'error' = 'success') => {
-    setToastMessage({ title, type });
-    setTimeout(() => setToastMessage(null), 3000);
+    triggerToast(title, type);
   };
 
   const copyToClipboard = (text: string, type: 'key' | 'curl' | 'js' | 'endpoint') => {

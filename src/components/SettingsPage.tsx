@@ -9,6 +9,7 @@ import { ref, update, get, set } from 'firebase/database';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, saveChatsToLocal } from '../lib/utils';
 import { SP_GATEWAY_CONFIG, SP_VIP_PACKAGES, SP_TOKEN_PACKAGES } from '../lib/spPaymentConfig';
+import { triggerToast } from './Toast';
 
 interface SettingsPageProps {
   onBack: () => void;
@@ -233,6 +234,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
     if (!userProfile?.referralCode) return;
     navigator.clipboard.writeText(userProfile.referralCode);
     setCopyingCode(true);
+    triggerToast("রেফারেল কোড কপি করা হয়েছে!", 'success');
     setTimeout(() => setCopyingCode(false), 2000);
   };
 
@@ -241,6 +243,7 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
     const link = `${window.location.origin}/?ref=${userProfile.referralCode}`;
     navigator.clipboard.writeText(link);
     setCopyingLink(true);
+    triggerToast("রেফারেল লিংক কপি করা হয়েছে!", 'success');
     setTimeout(() => setCopyingLink(false), 2000);
   };
 

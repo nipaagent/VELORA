@@ -15,6 +15,7 @@ import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
 import SpCardPaymentModal from './components/SpCardPaymentModal';
 import MaintenancePage from './components/MaintenancePage';
+import { ToastContainer } from './components/Toast';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
 import { ref, onValue, set, remove, get, update } from 'firebase/database';
@@ -1313,21 +1314,27 @@ export default function App() {
   if (systemControl.maintenanceMode && !user) {
     if (landingView === 'auth') {
       return (
-        <AuthModal 
-          isOpen={true} 
-          initialReferralCode={urlReferralCode} 
-          initialIsSignUp={authInitialIsSignUp}
-          onBackToLanding={() => setLandingView('landing')}
-        />
+        <>
+          <ToastContainer />
+          <AuthModal 
+            isOpen={true} 
+            initialReferralCode={urlReferralCode} 
+            initialIsSignUp={authInitialIsSignUp}
+            onBackToLanding={() => setLandingView('landing')}
+          />
+        </>
       );
     }
     return (
-      <MaintenancePage
-        onOpenAdminAuth={() => {
-          setAuthInitialIsSignUp(false);
-          setLandingView('auth');
-        }}
-      />
+      <>
+        <ToastContainer />
+        <MaintenancePage
+          onOpenAdminAuth={() => {
+            setAuthInitialIsSignUp(false);
+            setLandingView('auth');
+          }}
+        />
+      </>
     );
   }
 
@@ -1335,35 +1342,45 @@ export default function App() {
   if (!user) {
     if (landingView === 'landing' && !urlReferralCode) {
       return (
-        <LandingPage
-          onOpenAuth={(isSignUp = false) => {
-            setAuthInitialIsSignUp(isSignUp);
-            setLandingView('auth');
-          }}
-        />
+        <>
+          <ToastContainer />
+          <LandingPage
+            onOpenAuth={(isSignUp = false) => {
+              setAuthInitialIsSignUp(isSignUp);
+              setLandingView('auth');
+            }}
+          />
+        </>
       );
     }
     return (
-      <AuthModal 
-        isOpen={true} 
-        initialReferralCode={urlReferralCode} 
-        initialIsSignUp={authInitialIsSignUp}
-        onBackToLanding={() => setLandingView('landing')}
-      />
+      <>
+        <ToastContainer />
+        <AuthModal 
+          isOpen={true} 
+          initialReferralCode={urlReferralCode} 
+          initialIsSignUp={authInitialIsSignUp}
+          onBackToLanding={() => setLandingView('landing')}
+        />
+      </>
     );
   }
 
   // Enforce Maintenance Mode Block for Logged-In Non-Admins
   if (systemControl.maintenanceMode && !isUserAdmin) {
     return (
-      <MaintenancePage
-        onOpenAdminAuth={handleSignOut}
-      />
+      <>
+        <ToastContainer />
+        <MaintenancePage
+          onOpenAdminAuth={handleSignOut}
+        />
+      </>
     );
   }
 
   return (
     <div className="flex h-[100dvh] bg-white text-gray-900 font-sans overflow-hidden selection:bg-indigo-100">
+      <ToastContainer />
       <AnimatePresence mode="wait">
         <motion.div 
           key="main-layout"
