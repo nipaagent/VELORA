@@ -186,6 +186,9 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       }));
       list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setUsers(list);
+    }, (error) => {
+      console.warn("Failed to load users from RTDB:", error);
+      setUsers([]);
     });
 
     const redeemRef = ref(db, 'redeem_codes');
@@ -200,6 +203,9 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         ...data[k]
       }));
       setRedeemCodes(list);
+    }, (error) => {
+      console.warn("Failed to load redeem_codes from RTDB:", error);
+      setRedeemCodes([]);
     });
 
     const tokenConfigRef = ref(db, 'settings/token_config');
@@ -207,6 +213,13 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       if (snapshot.exists()) {
         setTokenConfig(snapshot.val());
       }
+    }, (error) => {
+      console.warn("Failed to load token_config from RTDB:", error);
+      setTokenConfig({
+        adRewardTokenAmount: 30000,
+        defaultMaxDailyTokens: 50000,
+        tokenMultiplier: 1
+      });
     });
 
     const adLinksRef = ref(db, 'settings/ad_links');
@@ -214,6 +227,9 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       if (snapshot.exists()) {
         setAdLinks(snapshot.val() || []);
       }
+    }, (error) => {
+      console.warn("Failed to load ad_links from RTDB:", error);
+      setAdLinks([]);
     });
 
     const annRef = ref(db, 'settings/announcement');
@@ -221,6 +237,17 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       if (snapshot.exists()) {
         setAnnouncement(snapshot.val());
       }
+    }, (error) => {
+      console.warn("Failed to load announcement from RTDB:", error);
+      setAnnouncement({
+        isActive: false,
+        title: '',
+        message: '',
+        type: 'info',
+        linkUrl: '',
+        linkText: '',
+        updatedAt: Date.now()
+      });
     });
 
     const sysRef = ref(db, 'settings/system_control');
@@ -228,6 +255,15 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       if (snapshot.exists()) {
         setSystemControl(snapshot.val());
       }
+    }, (error) => {
+      console.warn("Failed to load system_control from RTDB:", error);
+      setSystemControl({
+        maintenanceMode: false,
+        maintenanceNotice: 'সার্ভার রক্ষণাবেক্ষণের কাজ চলছে। সাময়িক অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত।',
+        allowRegistration: true,
+        aiChatEnabled: true,
+        adRewardsEnabled: true
+      });
     });
 
     const logsRef = ref(db, 'admin_logs');
@@ -243,6 +279,9 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       }));
       list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
       setAdminLogs(list);
+    }, (error) => {
+      console.warn("Failed to load admin_logs from RTDB:", error);
+      setAdminLogs([]);
     });
 
     return () => {

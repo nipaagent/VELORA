@@ -683,6 +683,9 @@ export default function App() {
                 console.warn("Failed to write initial user to RTDB:", err);
               }
             }
+          }, (err) => {
+            console.warn("User profile listener error in RTDB:", err);
+            setAuthLoading(false);
           });
         } catch (e) {
           console.warn("DB profile access notice (using local profile):", e);

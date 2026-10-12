@@ -42,6 +42,8 @@ export const AdminPaymentsTab: React.FC = () => {
         const val = snapshot.val();
         setBkashNumberInput(typeof val === 'string' ? val : (val ? String(val) : ''));
       }
+    }, (err) => {
+      console.warn("bKash merchant number load error:", err);
     });
     return () => unsub();
   }, []);
@@ -79,6 +81,9 @@ export const AdminPaymentsTab: React.FC = () => {
       } else {
         setTransactions([]);
       }
+    }, (err) => {
+      console.warn("Payment transactions load error:", err);
+      setTransactions([]);
     });
     return () => unsub();
   }, []);
