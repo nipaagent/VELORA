@@ -14,6 +14,7 @@ import SettingsPage from './components/SettingsPage';
 import DeveloperPage from './components/DeveloperPage';
 import AdminPage from './components/AdminPage';
 import SpCardPaymentModal from './components/SpCardPaymentModal';
+import MaintenancePage from './components/MaintenancePage';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
 import { ref, onValue, set, remove, get, update } from 'firebase/database';
@@ -1251,6 +1252,29 @@ export default function App() {
     userProfile?.email === 'nipaagent@gmail.com'
   );
 
+  // Enforce Maintenance Mode for Logged-Out Visitors
+  if (systemControl.maintenanceMode && !user) {
+    if (landingView === 'auth') {
+      return (
+        <AuthModal 
+          isOpen={true} 
+          initialReferralCode={urlReferralCode} 
+          initialIsSignUp={authInitialIsSignUp}
+          onBackToLanding={() => setLandingView('landing')}
+        />
+      );
+    }
+    return (
+      <MaintenancePage
+        onOpenAdminAuth={() => {
+          setAuthInitialIsSignUp(false);
+          setLandingView('auth');
+        }}
+      />
+    );
+  }
+
+  // Normal Logged-Out Landing / Auth
   if (!user) {
     if (landingView === 'landing' && !urlReferralCode) {
       return (
@@ -1272,29 +1296,12 @@ export default function App() {
     );
   }
 
-  // Enforce Maintenance Mode Block for Non-Admins
+  // Enforce Maintenance Mode Block for Logged-In Non-Admins
   if (systemControl.maintenanceMode && !isUserAdmin) {
     return (
-      <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-white">
-        <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center mb-5 animate-bounce">
-          <AlertTriangle className="w-8 h-8" />
-        </div>
-        <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider mb-3">
-          Scheduled Maintenance Mode
-        </span>
-        <h2 className="text-2xl font-black text-white mb-3">
-          সিস্টেম রক্ষণাবেক্ষণ চলছে
-        </h2>
-        <p className="text-zinc-300 text-sm max-w-md leading-relaxed mb-6">
-          NIPA NETWORK V2.7 সার্ভার ও AI ক্লাউড ইঞ্জিনের অপটিমাইজেশন কাজ চলছে। সাময়িকভাবে চ্যাট সার্ভিস স্থগিত রাখা হয়েছে। খুব শীঘ্রই সেবা সচল হবে।
-        </p>
-        <button
-          onClick={handleSignOut}
-          className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition-all cursor-pointer"
-        >
-          সাইন আউট / অ্যাডমিন লগইন
-        </button>
-      </div>
+      <MaintenancePage
+        onOpenAdminAuth={handleSignOut}
+      />
     );
   }
 
@@ -1351,6 +1358,25 @@ export default function App() {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 bg-white">
+              {/* Admin Maintenance Notice Banner */}
+              {systemControl.maintenanceMode && isUserAdmin && (
+                <div className="bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-black flex items-center justify-between shadow-xs shrink-0 z-20 border-b border-amber-600">
+                  <div className="flex items-center gap-2 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping shrink-0" />
+                    <span>⚠️ Maintenance mode is ON — public visitors see "NIPA শীঘ্রই ফিরে আসছে"</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsAdminOpen(true);
+                      setIsDeveloperOpen(false);
+                    }}
+                    className="px-2.5 py-0.5 rounded-lg bg-slate-950 text-amber-400 hover:bg-slate-900 text-[10px] font-extrabold uppercase transition-all cursor-pointer shrink-0"
+                  >
+                    Admin Control
+                  </button>
+                </div>
+              )}
+
               {/* Main Header */}
               <header className="h-14 border-b border-slate-200/80 bg-white px-2 sm:px-3 flex items-center shrink-0 z-10 relative shadow-xs">
                 <div className="flex-1 flex justify-start items-center gap-2">

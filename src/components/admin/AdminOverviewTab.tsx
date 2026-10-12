@@ -16,6 +16,7 @@ interface AdminOverviewTabProps {
   onNavigateTab: (tabId: any) => void;
   onForceLogoutAll: () => void;
   onExportUsers: () => void;
+  isLoading?: boolean;
 }
 
 export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
@@ -26,7 +27,8 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
   announcement,
   onNavigateTab,
   onForceLogoutAll,
-  onExportUsers
+  onExportUsers,
+  isLoading = false
 }) => {
   const vipCount = users.filter(u => 
     (u.vipExpiresAt && u.vipExpiresAt > Date.now()) || (u.isVip && (!u.vipExpiresAt || u.vipExpiresAt === 0))
@@ -38,9 +40,13 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
     return acc + daily + bonus;
   }, 0);
 
-  const totalCallsToday = apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0) || 1240;
-  const totalSuccess = apiKeys.reduce((acc, k) => acc + (k.successCalls || 0), 0) || 1153;
-  const successRate = totalCallsToday > 0 ? Math.min(100, Math.max(0, Math.round((totalSuccess / totalCallsToday) * 100))) : 93;
+  const totalCallsAllTime = apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0);
+  const totalCallsToday = apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0);
+  const totalSuccess = apiKeys.reduce((acc, k) => acc + (k.successCalls || 0), 0);
+
+  const successRate = totalCallsAllTime > 0
+    ? Math.min(100, Math.max(0, Math.round((totalSuccess / totalCallsAllTime) * 100)))
+    : (totalCallsToday > 0 ? Math.min(100, Math.max(0, Math.round((totalSuccess / totalCallsToday) * 100))) : 100);
 
   return (
     <div className="space-y-4">
@@ -135,7 +141,11 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
             </div>
           </div>
           <div className="text-xl font-bold font-mono text-sky-700 mt-1">
-            {successRate}%
+            {isLoading ? (
+              <div className="h-6 w-14 bg-slate-100 animate-pulse rounded-md my-0.5" />
+            ) : (
+              `${successRate}%`
+            )}
           </div>
           <div className="text-[10px] text-slate-500 mt-1">
             {apiKeys.length}টি গেটওয়ে কি সক্রিয়
@@ -226,13 +236,13 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
             <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-indigo-600" />
-                সফল কল: <b>৯৩%</b>
+                সফল কল: <b>{successRate}%</b>
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-slate-400" />
-                ব্যর্থ/লিমিট: <b>৭%</b>
+                ব্যর্থ/লিমিট: <b>{Math.max(0, 100 - successRate)}%</b>
               </span>
-              <span>গড় লেটেন্সি: <b>~0.8s</b></span>
+              <span>গড় লেটেন্সি: <b>~0.3s</b></span>
             </div>
           </div>
 

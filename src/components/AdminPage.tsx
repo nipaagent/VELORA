@@ -796,6 +796,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                 onNavigateTab={setActiveTab}
                 onForceLogoutAll={handleForceLogoutAll}
                 onExportUsers={handleExportUsers}
+                isLoading={isLoadingApiKeys}
               />
             )}
 
@@ -864,8 +865,8 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
             {activeTab === 'apikeys' && (
               <AdminApiKeysTab
                 apiKeys={apiKeys}
-                totalCallsToday={apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0) || 1530}
-                totalCallsAllTime={apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0) || 61380}
+                totalCallsToday={apiKeys.reduce((acc, k) => acc + (k.todayCalls || 0), 0)}
+                totalCallsAllTime={apiKeys.reduce((acc, k) => acc + (k.totalCalls || 0), 0)}
                 activeModelName="NIPA AI Core (Unified Gateway)"
                 onRefresh={fetchApiKeysStats}
                 isLoading={isLoadingApiKeys}
