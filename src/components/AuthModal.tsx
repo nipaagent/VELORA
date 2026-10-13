@@ -8,8 +8,6 @@ import { Gift } from 'lucide-react';
 
 declare global {
   interface Window {
-    grecaptcha?: any;
-    onRecaptchaLoadCallback?: () => void;
   }
 }
 
@@ -34,72 +32,9 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
   const [resetError, setResetError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
   
-  const recaptchaContainerRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef = useRef<number | null>(null);
 
-  // Initialize Real Google reCAPTCHA v2 for Sign Up
-  useEffect(() => {
-    if (!isOpen || !isSignUp) return;
 
-    let isMounted = true;
-
-    const renderWidget = () => {
-      if (!isMounted) return;
-      if (window.grecaptcha && recaptchaContainerRef.current) {
-        try {
-          if (widgetIdRef.current === null) {
-            recaptchaContainerRef.current.innerHTML = '';
-            const wid = window.grecaptcha.render(recaptchaContainerRef.current, {
-              sitekey: ((import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY as string) || "6Ld9n_NipaProdSiteKey2026_0199999999",
-              callback: (token: string) => {
-                if (isMounted) {
-                  setRecaptchaToken(token);
-                  setError('');
-                }
-              },
-              'expired-callback': () => {
-                if (isMounted) setRecaptchaToken(null);
-              }
-            });
-            widgetIdRef.current = wid;
-          }
-        } catch (e) {
-          console.warn("reCAPTCHA widget render notice:", e);
-        }
-      }
-    };
-
-    if (window.grecaptcha && typeof window.grecaptcha.render === 'function') {
-      renderWidget();
-    } else {
-      const existingScript = document.getElementById('google-recaptcha-script');
-      if (!existingScript) {
-        const script = document.createElement('script');
-        script.id = 'google-recaptcha-script';
-        script.src = 'https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoadCallback&render=explicit';
-        script.async = true;
-        script.defer = true;
-        window.onRecaptchaLoadCallback = () => {
-          renderWidget();
-        };
-        document.body.appendChild(script);
-      } else {
-        const checkTimer = setInterval(() => {
-          if (window.grecaptcha && typeof window.grecaptcha.render === 'function') {
-            clearInterval(checkTimer);
-            renderWidget();
-          }
-        }, 200);
-        return () => clearInterval(checkTimer);
-      }
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, isSignUp]);
 
   if (!isOpen) return null;
 
@@ -255,32 +190,6 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
           return;
         }
 
-        if (!recaptchaToken) {
-          setError('অনুগ্রহ করে নিচের reCAPTCHA ভেরিফিকেশনটি সম্পন্ন করুন।');
-          setLoading(false);
-          return;
-        }
-
-        // Server-side reCAPTCHA token verification
-        try {
-          const verifyRes = await fetch('/api/verify-recaptcha', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: recaptchaToken })
-          });
-          const verifyData = await verifyRes.json();
-          if (!verifyRes.ok || !verifyData.success) {
-            setError(verifyData.error || 'reCAPTCHA ভেরিফিকেশন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
-            if (window.grecaptcha && widgetIdRef.current !== null) {
-              window.grecaptcha.reset(widgetIdRef.current);
-              setRecaptchaToken(null);
-            }
-            setLoading(false);
-            return;
-          }
-        } catch (vErr) {
-          console.warn("reCAPTCHA validation call error:", vErr);
-        }
 
         // Check if username exists before creating user
         if (!isEmailInput) {
@@ -440,45 +349,44 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-50/50 backdrop-blur-sm overflow-y-auto selection:bg-indigo-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-zinc-950/60 backdrop-blur-sm overflow-y-auto selection:bg-zinc-800 selection:text-white">
       {/* Minimal background accents */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-50/40 blur-[100px] rounded-full -translate-y-1/2" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-purple-50/30 blur-[80px] rounded-full translate-y-1/2" />
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-zinc-800/20 blur-[100px] rounded-full -translate-y-1/2" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-zinc-900/20 blur-[80px] rounded-full translate-y-1/2" />
       </div>
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-[420px] md:max-w-5xl md:h-[600px] bg-white rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border border-slate-200/60 overflow-hidden relative z-10 flex flex-col md:flex-row"
+        className="w-full max-w-[420px] md:max-w-5xl md:h-[600px] bg-white rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border border-zinc-200 overflow-hidden relative z-10 flex flex-col md:flex-row"
       >
         {/* Left Side: Visual Branding (Desktop Only) */}
-        <div className="hidden md:flex md:w-[45%] bg-slate-50 relative overflow-hidden flex-col justify-between p-12 border-r border-slate-100">
-          <div className="absolute inset-0 opacity-40">
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_30%,rgba(99,102,241,0.1),transparent)]"></div>
-            <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_70%,rgba(168,85,247,0.1),transparent)]"></div>
+        <div className="hidden md:flex md:w-[45%] bg-zinc-900 text-white relative overflow-hidden flex-col justify-between p-12 border-r border-zinc-800">
+          <div className="absolute inset-0 opacity-20 pointer-events-none">
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.1),transparent)]"></div>
           </div>
           
           <div className="relative z-10">
-            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-8 shadow-sm border border-slate-100">
-              <Sparkles className="w-6 h-6 text-indigo-600" />
+            <div className="w-12 h-12 bg-zinc-800 rounded-2xl flex items-center justify-center mb-8 border border-zinc-700 shadow-sm text-white">
+              <Sparkles className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-3xl font-black tracking-tight mb-4 leading-tight text-slate-900">
+            <h2 className="text-3xl font-black tracking-tight mb-4 leading-tight text-white">
               Powerful Gateway <br /> 
-              <span className="text-indigo-600">for Modern AI.</span>
+              <span className="text-zinc-400">for Modern AI.</span>
             </h2>
-            <p className="text-slate-500 text-sm leading-relaxed max-w-[260px] font-medium">
+            <p className="text-zinc-400 text-sm leading-relaxed max-w-[260px] font-medium">
               Experience the next generation of AI chat intelligence. Fast, secure, and always accessible.
             </p>
           </div>
 
           <div className="relative z-10 space-y-5">
-            <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] bg-white border border-slate-100 p-3 rounded-xl shadow-sm inline-flex">
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+            <div className="flex items-center gap-3 text-[10px] font-bold text-zinc-300 uppercase tracking-[0.2em] bg-zinc-800 border border-zinc-700 p-3 rounded-xl shadow-sm inline-flex">
+              <div className="w-2 h-2 rounded-full bg-zinc-100"></div>
               NIPA Network v2.7
             </div>
-            <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">© 2026 NIPA SOLUTIONS</p>
+            <p className="text-[10px] text-zinc-500 font-medium tracking-wider uppercase">© 2026 NIPA SOLUTIONS</p>
           </div>
         </div>
 
@@ -486,20 +394,18 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
         <div className="flex-1 flex flex-col bg-white overflow-y-auto">
           {/* Mobile Logo (Visible only on small screens) */}
           <div className="md:hidden px-8 pt-10 pb-2 text-center">
-            <div className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
+            <div className="w-12 h-12 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <h2 className="text-lg font-black tracking-widest text-slate-900 uppercase">NIPA</h2>
+            <h2 className="text-lg font-black tracking-widest text-zinc-900 uppercase">NIPA</h2>
           </div>
 
           <div className="px-8 md:px-16 pt-8 md:pt-16 pb-12 flex-1 flex flex-col justify-center">
             <div className="mb-8 hidden md:block">
-              <h1 className="text-2xl font-black text-slate-900">
+              <h1 className="text-2xl font-black text-zinc-900">
                 {isSignUp ? 'Create Account' : 'Welcome Back'}
               </h1>
-              <p className="text-slate-400 text-sm mt-1 font-medium">
+              <p className="text-zinc-400 text-sm mt-1 font-medium">
                 {isSignUp ? 'Get started with your account' : 'Sign in to access your AI chat dashboard'}
               </p>
             </div>
@@ -509,9 +415,9 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-[11px] font-bold flex items-center gap-3"
+                className="mb-6 p-4 rounded-2xl bg-zinc-100 border border-zinc-300 text-zinc-900 text-[11px] font-bold flex items-center gap-3"
               >
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <AlertCircle className="w-4 h-4 shrink-0 text-zinc-900" />
                 <span>{error}</span>
               </motion.div>
             )}
@@ -526,16 +432,16 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
                   exit={{ opacity: 0, height: 0 }}
                   className="space-y-2"
                 >
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Full Name</label>
                   <div className="relative group">
-                    <User className="w-4 h-4 text-slate-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-indigo-600" />
+                    <User className="w-4 h-4 text-zinc-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-zinc-900" />
                     <input
                       type="text"
                       required={isSignUp}
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Enter your name"
-                      className="w-full pl-11 pr-4 py-3 text-sm bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-medium placeholder:text-slate-300"
+                      className="w-full pl-11 pr-4 py-3 text-sm bg-zinc-50 border border-zinc-200 rounded-2xl focus:bg-white focus:border-zinc-900 focus:ring-4 focus:ring-zinc-900/10 outline-none transition-all font-medium placeholder:text-zinc-400"
                     />
                   </div>
                 </motion.div>
@@ -543,36 +449,36 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
             </AnimatePresence>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username or Gmail (ইউজারনেম বা জিমেইল)</label>
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Username or Gmail (ইউজারনেম বা জিমেইল)</label>
               <div className="relative group">
-                <UserCheck className="w-4 h-4 text-slate-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-indigo-600" />
+                <UserCheck className="w-4 h-4 text-zinc-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-zinc-900" />
                 <input
                   type="text"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))}
                   placeholder="e.g. alex_john or name@gmail.com"
-                  className="w-full pl-11 pr-4 py-3 text-sm bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-medium placeholder:text-slate-300"
+                  className="w-full pl-11 pr-4 py-3 text-sm bg-zinc-50 border border-zinc-200 rounded-2xl focus:bg-white focus:border-zinc-900 focus:ring-4 focus:ring-zinc-900/10 outline-none transition-all font-medium placeholder:text-zinc-400"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Password</label>
               <div className="relative group">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-indigo-600" />
+                <Lock className="w-4 h-4 text-zinc-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-zinc-900" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value.replace(/\s/g, ""))}
                   placeholder="••••••••"
-                  className="w-full pl-11 pr-12 py-3 text-sm bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-medium placeholder:text-slate-300"
+                  className="w-full pl-11 pr-12 py-3 text-sm bg-zinc-50 border border-zinc-200 rounded-2xl focus:bg-white focus:border-zinc-900 focus:ring-4 focus:ring-zinc-900/10 outline-none transition-all font-medium placeholder:text-zinc-400"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-4 top-3.5 text-zinc-400 hover:text-zinc-700 transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -590,7 +496,7 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
                   <button
                     type="button"
                     onClick={handleOpenForgotPassword}
-                    className="text-[11px] font-semibold text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+                    className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer"
                   >
                     পাসওয়ার্ড ভুলে গেছেন?
                   </button>
@@ -598,8 +504,8 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
               )}
             </div>
 
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100/70 text-[11px] text-indigo-700 font-medium leading-relaxed">
-              <ShieldCheck className="w-4 h-4 shrink-0 text-indigo-600" />
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-100 border border-zinc-200 text-[11px] text-zinc-800 font-medium leading-relaxed">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-zinc-900" />
               <span>প্রতিটি অ্যাকাউন্টের ডাটা ক্লাউডে ১০০% আলাদা ও সম্পূর্ণ নিজস্বভাবে সংরক্ষিত থাকে।</span>
             </div>
 
@@ -611,38 +517,28 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
                   exit={{ opacity: 0, height: 0 }}
                   className="space-y-2"
                 >
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Referral Code (Optional)</label>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Referral Code (Optional)</label>
                   <div className="relative group">
-                    <Gift className="w-4 h-4 text-slate-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-indigo-600" />
+                    <Gift className="w-4 h-4 text-zinc-400 absolute left-4 top-3.5 transition-colors group-focus-within:text-zinc-900" />
                     <input
                       type="text"
                       value={referralCodeInput}
                       onChange={(e) => setReferralCodeInput(e.target.value)}
                       placeholder="e.g. NIPA77"
                       readOnly={!!initialReferralCode}
-                      className={`w-full pl-11 pr-4 py-3 text-sm rounded-2xl outline-none transition-all font-medium uppercase placeholder:text-slate-300 ${initialReferralCode ? 'bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed opacity-90' : 'bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50'}`}
+                      className={`w-full pl-11 pr-4 py-3 text-sm rounded-2xl outline-none transition-all font-medium uppercase placeholder:text-zinc-400 ${initialReferralCode ? 'bg-zinc-100 border border-zinc-200 text-zinc-500 cursor-not-allowed opacity-90' : 'bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-zinc-900 focus:ring-4 focus:ring-zinc-900/10'}`}
                     />
                   </div>
-                  <p className="text-[10px] text-indigo-600 ml-1 font-semibold">রেফার কোড থাকলে অ্যাকাউন্টে ৫০,০০০ বোনাস টোকেন যুক্ত হবে!</p>
+                  <p className="text-[10px] text-zinc-900 ml-1 font-semibold">রেফার কোড থাকলে অ্যাকাউন্টে ৫০,০০০ বোনাস টোকেন যুক্ত হবে!</p>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Real Google reCAPTCHA v2 Widget Container */}
-            {isSignUp && (
-              <div className="py-2 flex flex-col items-center justify-center">
-                <div 
-                  ref={recaptchaContainerRef} 
-                  className="overflow-hidden rounded-xl border border-slate-200/80 shadow-2xs min-h-[78px] flex items-center justify-center bg-slate-50/50 w-full max-w-[304px]" 
-                />
-                <span className="text-[10px] text-slate-400 mt-1.5 font-medium">Google reCAPTCHA বট প্রতিরোধ সিস্টেম</span>
-              </div>
-            )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 mt-2 bg-indigo-600 text-white rounded-2xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2.5 disabled:opacity-70"
+              className="w-full py-4 mt-2 bg-zinc-900 text-white rounded-2xl text-[11px] font-black tracking-[0.1em] uppercase hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2.5 disabled:opacity-70"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -660,18 +556,18 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-slate-100 text-center space-y-4">
+          <div className="mt-6 pt-5 border-t border-zinc-200 text-center space-y-4">
             <button
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError('');
               }}
-              className="text-[11px] text-slate-500 hover:text-indigo-600 font-bold transition-colors uppercase tracking-wider cursor-pointer"
+              className="text-[11px] text-zinc-500 hover:text-zinc-900 font-bold transition-colors uppercase tracking-wider cursor-pointer"
             >
               {isSignUp ? (
-                <>Already a member? <span className="text-indigo-600">Sign In</span></>
+                <>Already a member? <span className="text-zinc-900 underline">Sign In</span></>
               ) : (
-                <>New to NIPA? <span className="text-indigo-600">Create Account</span></>
+                <>New to NIPA? <span className="text-zinc-900 underline">Create Account</span></>
               )}
             </button>
 

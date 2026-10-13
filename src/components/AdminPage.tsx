@@ -295,11 +295,45 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     };
   }, []);
 
+  const saveSettingsViaApi = async (path: string, data: any) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("Not authenticated");
+      const idToken = await currentUser.getIdToken();
+      
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ path, data })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+      return true;
+    } catch (e: any) {
+      console.error(`API Settings Update Failed for ${path}:`, e);
+      return false;
+    }
+  };
+
   // Handlers
   const handleUpdateSystemControl = async (ctrl: SystemControl) => {
     setIsSaving(true);
     try {
-      await set(ref(db, 'settings/system_control'), ctrl);
+      // Try direct SDK write first
+      try {
+        await set(ref(db, 'settings/system_control'), ctrl);
+      } catch (sdkErr) {
+        // Fallback to API if PERMISSION_DENIED
+        const success = await saveSettingsViaApi('settings/system_control', ctrl);
+        if (!success) throw sdkErr;
+      }
+
       await logAdminAction(
         'SYSTEM_CONTROL_UPDATED',
         `সিস্টেম কন্ট্রোল আপডেট: মেইনটেন্যান্স=${ctrl.maintenanceMode ? 'অন' : 'অফ'}, রেজিস্ট্রেশন=${ctrl.allowRegistration ? 'অন' : 'অফ'}`
@@ -314,7 +348,12 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const handleSaveAnnouncement = async (ann: SystemAnnouncement) => {
     setIsSaving(true);
     try {
-      await set(ref(db, 'settings/announcement'), ann);
+      try {
+        await set(ref(db, 'settings/announcement'), ann);
+      } catch (sdkErr) {
+        const success = await saveSettingsViaApi('settings/announcement', ann);
+        if (!success) throw sdkErr;
+      }
       await logAdminAction('ANNOUNCEMENT_UPDATED', `সিস্টেম ব্রডকাস্ট আপডেট করা হয়েছে: "${ann.title}"`);
       alert("ব্রডকাস্ট ঘোষণা সফলভাবে সংরক্ষণ করা হয়েছে!");
     } catch (e: any) {
@@ -327,7 +366,12 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const handleSaveTokenConfig = async (cfg: typeof tokenConfig) => {
     setIsSaving(true);
     try {
-      await set(ref(db, 'settings/token_config'), cfg);
+      try {
+        await set(ref(db, 'settings/token_config'), cfg);
+      } catch (sdkErr) {
+        const success = await saveSettingsViaApi('settings/token_config', cfg);
+        if (!success) throw sdkErr;
+      }
       await logAdminAction(
         'TOKEN_CONFIG_UPDATED',
         `টোকেন সেটিং আপডেট: ডেইলি=${cfg.defaultMaxDailyTokens}, এড=${cfg.adRewardTokenAmount}`
@@ -408,6 +452,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
         updates[`users/${uid}/tokenState/maxDailyTokens`] = amount;
       } else if (action === 'reset_used') {
         updates[`users/${uid}/tokenState/tokensUsedToday`] = 0;
+        updates[`users/${uid}/tokenState/lastResetDate`] = new Date().toISOString().split('T')[0];
       }
 
       await update(ref(db), updates);

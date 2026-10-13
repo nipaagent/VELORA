@@ -95,7 +95,7 @@ export default function ChatMessageItem({
             <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[10px] select-none">
               {message.status === 'sending' && (
                 <span className="flex items-center gap-1.5 text-zinc-300 font-medium animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping inline-block" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-ping inline-block" />
                   পাঠানো হচ্ছে...
                 </span>
               )}

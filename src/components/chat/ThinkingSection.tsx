@@ -25,9 +25,9 @@ export default function ThinkingSection({ thinking, isGenerating }: ThinkingSect
       <button 
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors py-1 group cursor-pointer"
+        className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-900 transition-colors py-1 group cursor-pointer"
       >
-        <BrainCircuit className={cn("w-3.5 h-3.5", isGenerating ? "text-indigo-500 animate-pulse" : "")} />
+        <BrainCircuit className={cn("w-3.5 h-3.5", isGenerating ? "text-zinc-900 animate-pulse" : "")} />
         <span className="text-xs font-medium">
           {isGenerating ? 'Thinking...' : 'Show thought process'}
         </span>
@@ -35,7 +35,7 @@ export default function ThinkingSection({ thinking, isGenerating }: ThinkingSect
       </button>
       
       {isOpen && (
-        <div className="mt-2 px-4 py-3 bg-slate-50/80 rounded-xl text-[13px] text-slate-600 leading-relaxed font-sans whitespace-pre-wrap border-l-[3px] border-l-indigo-300">
+        <div className="mt-2 px-4 py-3 bg-zinc-50 rounded-xl text-[13px] text-zinc-700 leading-relaxed font-sans whitespace-pre-wrap border-l-[3px] border-l-zinc-800">
           {thinking}
         </div>
       )}

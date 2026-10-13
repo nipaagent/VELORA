@@ -163,6 +163,15 @@ const deductUserTokens = async (
 
     const todayStr = new Date().toISOString().split('T')[0];
     const isToday = currentTokenState.lastResetDate === todayStr;
+    const maxDaily = currentTokenState.maxDailyTokens || 50000;
+    let bonusTokens = currentTokenState.bonusTokens || 0;
+
+    if (!isToday) {
+      const prevUsed = currentTokenState.tokensUsedToday || 0;
+      const bonusSpent = Math.max(0, prevUsed - maxDaily);
+      bonusTokens = Math.max(0, bonusTokens - bonusSpent);
+    }
+
     const currentUsed = isToday ? (currentTokenState.tokensUsedToday || 0) : 0;
     const newUsed = currentUsed + usage;
 
@@ -171,6 +180,7 @@ const deductUserTokens = async (
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tokensUsedToday: newUsed,
+        bonusTokens: bonusTokens,
         lastResetDate: todayStr
       })
     });
@@ -271,20 +281,29 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
 
     // Compute quota: VIP active -> unlimited
     const now = Date.now();
+    const todayStr = new Date().toISOString().split('T')[0];
     const isVipActive = Boolean(
       (userDoc.vipExpiresAt && userDoc.vipExpiresAt > now) ||
       (userDoc.isVip && (!userDoc.vipExpiresAt || userDoc.vipExpiresAt === 0))
     );
 
     const tokenState = userDoc.tokenState || {};
+    const isToday = tokenState.lastResetDate === todayStr;
     const maxDaily = tokenState.maxDailyTokens || defaultMaxDailyTokens;
-    const bonusTokens = tokenState.bonusTokens || 0;
+    let bonusTokens = tokenState.bonusTokens || 0;
+
+    if (!isToday) {
+      const prevUsed = tokenState.tokensUsedToday || 0;
+      const bonusSpent = Math.max(0, prevUsed - maxDaily);
+      bonusTokens = Math.max(0, bonusTokens - bonusSpent);
+    }
+
+    const tokensUsedToday = isToday ? (tokenState.tokensUsedToday || 0) : 0;
     const totalAvailable = maxDaily + bonusTokens;
-    const tokensUsedToday = tokenState.tokensUsedToday || 0;
     const remaining = isVipActive ? 999999999 : (totalAvailable - tokensUsedToday);
 
     if (!isVipActive && remaining <= 0) {
-      const quotaMsg = `আপনার আজকের ${maxDaily.toLocaleString()} ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! ${adRewardTokenAmount.toLocaleString()} ফ্রি টোকেন পেতে একটি অ্যাড দেখুন অথবা রিডিম কোড ব্যবহার করুন।`;
+      const quotaMsg = `আপনার আজকের ${maxDaily.toLocaleString()} ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! রিডিম কোড ব্যবহার করুন অথবা প্রিমিয়াম প্ল্যান নিন।`;
       return res.status(402).json({ error: quotaMsg });
     }
 
@@ -332,14 +351,16 @@ Guidelines:
 2. CLEAN OUTPUT: Never output internal thoughts, chain-of-thought, or XML tags other than <GENERATE_IMAGE> or <SAVE_MEMORY>.
 3. LANGUAGE: Match the language and tone of the user.
 
-ANDROID APP SECURITY ANALYSIS KNOWLEDGE:
-You understand Android application structure and security analysis for educational and defensive purposes: how APK files are organized (manifest, dex bytecode, resources, native libraries), how standard analysis tools work (apktool for decoding resources, jadx for reading decompiled code, Frida for observing runtime behavior), and how to spot common security weaknesses (hardcoded API keys, insecure local storage, weak network validation).
-Guidelines:
-1. Start by identifying where the app's logic lives — Java/Kotlin code, native libraries, or a framework like Flutter — since each needs a different analysis approach.
-2. Explain concepts clearly with examples when teaching (e.g., how the manifest declares permissions, how activities and intents work).
-3. When asked about security, analyze from a defender's perspective: identify the weakness and suggest how a developer would fix it.
-4. Be honest about limits: protections enforced on a server cannot be evaluated from the app alone — explain why in simple terms.
-5. Keep every answer educational: explain how things work and how to build more secure apps.`;
+APK REVERSE ENGINEERING EXPERTISE & SECURITY ANALYSIS:
+You are an expert in Android APK reverse engineering (decompiling, surgical DEX patching, repacking, runtime analysis) and defensive security analysis.
+Core rules (Skill: apk-reverse):
+1. CLASSIFY FIRST — Identify the owning layer (Java/dex, native .so, Dart/Flutter, Unity, server) before patching.
+2. DEFINE DELIVERABLE — Usually an installable APK for unrooted phones; root-only is a fallback.
+3. CONTROL EXPERIMENT — Change ONE variable per experiment; keep a control build.
+4. TOOLCHAIN — Use apktool (decode/rebuild), jadx (viewer), Frida (dynamic hooks), and apksigner (re-sign).
+5. TRAPS — Launch-crash usually means tamper detection or cert-derived API keys. Server-enforced checks (paywalls, auth) cannot be beaten client-side — say so honestly.
+6. DEFENDER PERSPECTIVE — Identify weaknesses (hardcoded keys, insecure storage, weak network validation) and suggest developer-side fixes for educational purposes.
+7. EDUCATIONAL — Explain Android application structure (manifest, dex bytecode, resources, native libraries) clearly with examples to help users build more secure apps.`;
 
     let dynamicPrompt = baseIdentityPrompt;
 
@@ -754,14 +775,16 @@ app.get(["/api/admin/stats", "/admin/stats"], async (req, res) => {
       return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
     }
 
-    // Read role via RTDB with ?auth=
+    // Read user via RTDB with ?auth= to verify role and email
     try {
-      const roleRes = await fetch(rtdb(`users/${tokenUid}/role`, bearerToken));
-      if (!roleRes.ok) {
+      const userRes = await fetch(rtdb(`users/${tokenUid}`, bearerToken));
+      if (!userRes.ok) {
         return res.status(403).json({ error: "অ্যাডমিন অনুমতি প্রয়োজন।" });
       }
-      const role = await roleRes.json();
-      if (role !== 'admin') {
+      const userDoc = await userRes.json();
+      const isAdmin = userDoc?.role === 'admin' || userDoc?.email === 'nipaagent@gmail.com';
+      
+      if (!isAdmin) {
         return res.status(403).json({ error: "অ্যাডমিন অনুমতি প্রয়োজন।" });
       }
     } catch (e) {
@@ -815,6 +838,43 @@ app.get(["/api/admin/stats", "/admin/stats"], async (req, res) => {
   }
 });
 
+// Admin Settings Update
+app.post(["/api/admin/settings", "/admin/settings"], async (req, res) => {
+  try {
+    const bearerToken = getBearerToken(req);
+    if (!bearerToken) return res.status(401).json({ error: "Unauthorized" });
+
+    const tokenUid = getUidFromToken(bearerToken);
+    if (!tokenUid) return res.status(401).json({ error: "Unauthorized" });
+
+    // Verify admin
+    const userRes = await fetch(rtdb(`users/${tokenUid}`, bearerToken));
+    if (!userRes.ok) return res.status(401).json({ error: "Unauthorized" });
+    const userDoc = await userRes.json();
+    const isAdmin = userDoc?.role === 'admin' || userDoc?.email === 'nipaagent@gmail.com';
+    if (!isAdmin) return res.status(403).json({ error: "Forbidden" });
+
+    const { path, data } = req.body;
+    if (!path) return res.status(400).json({ error: "Path is required" });
+
+    // Perform the update on behalf of the admin
+    const updateRes = await fetch(rtdb(path, bearerToken), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    if (updateRes.ok) {
+      return res.json({ status: "success" });
+    } else {
+      const err = await updateRes.text();
+      return res.status(updateRes.status).json({ error: err });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // Health check
 app.get(["/api/v1/health", "/health", "/api/health"], (req, res) => {
   res.json({ status: "ok", service: "NIPA AI API", version: "1.0.0" });
@@ -850,45 +910,6 @@ const extractErrorMessage = (data: any, defaultMsg: string = "পেমেন্
   return defaultMsg;
 };
 
-// Google reCAPTCHA Verification Endpoint
-app.post("/api/verify-recaptcha", async (req, res) => {
-  try {
-    const { token } = req.body;
-    if (!token) {
-      return res.status(400).json({ success: false, error: "reCAPTCHA টোকেন পাওয়া যায়নি।" });
-    }
-
-    const secretKey = process.env.RECAPTCHA_SECRET_KEY;
-    if (!secretKey) {
-      return res.status(500).json({ success: false, error: "reCAPTCHA কনফিগার করা নেই।" });
-    }
-    
-    // Verify with Google reCAPTCHA server
-    const params = new URLSearchParams();
-    params.append("secret", secretKey);
-    params.append("response", token);
-
-    const googleRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString()
-    });
-
-    const result = await googleRes.json();
-    if (result.success) {
-      return res.json({ success: true, message: "reCAPTCHA ভেরিফিকেশন সফল!" });
-    } else {
-      console.warn("[reCAPTCHA] Verification failed:", result);
-      return res.status(400).json({ 
-        success: false, 
-        error: "reCAPTCHA ভেরিফিকেশন ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।" 
-      });
-    }
-  } catch (err: any) {
-    console.error("[reCAPTCHA] Server error:", err);
-    return res.status(500).json({ success: false, error: "reCAPTCHA সার্ভার ত্রুটি।" });
-  }
-});
 
 // SP Wallet BD Virtual Card Checkout API - STRICT REAL-TIME DEBIT
 app.post(["/api/payment/sp-card-checkout", "/api/checkout/card-pay"], async (req, res) => {

@@ -19,6 +19,52 @@ export function formatTokenCount(num: number): string {
   return num.toString();
 }
 
+export function getTodayStr(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+export function calculateTokenBalance(tokenState?: any, defaultMaxDaily = 50000) {
+  const todayStr = getTodayStr();
+  if (!tokenState) {
+    return {
+      maxDailyTokens: defaultMaxDaily,
+      bonusTokens: 0,
+      tokensUsedToday: 0,
+      lastResetDate: todayStr,
+      remaining: defaultMaxDaily,
+      totalLimit: defaultMaxDaily,
+      percentage: 100,
+      isToday: true
+    };
+  }
+
+  const isToday = tokenState.lastResetDate === todayStr;
+  const maxDaily = tokenState.maxDailyTokens || defaultMaxDaily;
+  let bonusTokens = tokenState.bonusTokens || 0;
+
+  if (!isToday) {
+    const prevUsed = tokenState.tokensUsedToday || 0;
+    const bonusSpent = Math.max(0, prevUsed - maxDaily);
+    bonusTokens = Math.max(0, bonusTokens - bonusSpent);
+  }
+
+  const usedToday = isToday ? (tokenState.tokensUsedToday || 0) : 0;
+  const totalLimit = maxDaily + bonusTokens;
+  const remaining = Math.max(0, totalLimit - usedToday);
+  const percentage = totalLimit > 0 ? Math.min(100, Math.max(0, Math.round((remaining / totalLimit) * 100))) : 0;
+
+  return {
+    maxDailyTokens: maxDaily,
+    bonusTokens,
+    tokensUsedToday: usedToday,
+    lastResetDate: todayStr,
+    remaining,
+    totalLimit,
+    percentage,
+    isToday
+  };
+}
+
 /**
  * Safely saves chat history to local storage.
  * If QuotaExceededError occurs, it prunes the chat list/messages and retries.

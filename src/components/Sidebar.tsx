@@ -35,8 +35,8 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-2"
           >
-            <Sparkles className="w-4.5 h-4.5 text-indigo-600" />
-            <span className="font-black text-gray-900 text-sm tracking-wider uppercase">NIPA</span>
+            <Sparkles className="w-4.5 h-4.5 text-zinc-900 dark:text-zinc-100" />
+            <span className="font-black text-zinc-900 text-sm tracking-wider uppercase">NIPA</span>
           </motion.div>
         </div>
         
@@ -45,7 +45,7 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={onNewChat}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors text-[13px] font-black uppercase tracking-wider shadow-2xs"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-colors text-[13px] font-black uppercase tracking-wider shadow-2xs"
           >
             <Plus className="w-4 h-4" />
             <span>New Chat</span>
@@ -56,7 +56,7 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
             whileTap={{ scale: 0.95 }}
             onClick={onClearAllChats}
             disabled={chats.length === 0}
-            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-500 rounded-xl transition-colors shrink-0 border border-gray-200/80 hover:border-red-200 shadow-2xs"
+            className="p-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-500 rounded-xl transition-colors shrink-0 border border-zinc-200 shadow-2xs"
             title="সব চ্যাট হিস্টোরি ডিলিট করুন (Delete All History)"
           >
             <Trash2 className="w-4 h-4" />
@@ -75,15 +75,15 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
                 className={cn(
                   "group flex items-center justify-between px-2.5 py-2 rounded-xl cursor-pointer transition-colors text-[13px]",
                   currentChatId === chat.id 
-                    ? 'bg-indigo-50/80 text-indigo-900 font-bold border border-indigo-100 shadow-2xs' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-zinc-900 text-white font-bold border border-zinc-900 shadow-2xs' 
+                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
                 )}
                 onClick={() => onSelectChat(chat.id)}
               >
                 <div className="flex items-center gap-2 overflow-hidden">
                   <MessageSquare className={cn(
                     "w-3.5 h-3.5 shrink-0 transition-colors",
-                    currentChatId === chat.id ? "text-indigo-600" : "text-gray-400 group-hover:text-gray-600"
+                    currentChatId === chat.id ? "text-white" : "text-zinc-400 group-hover:text-zinc-600"
                   )} />
                   <span className="truncate">{chat.title}</span>
                 </div>
@@ -92,7 +92,10 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
                     e.stopPropagation();
                     onDeleteChat(chat.id);
                   }}
-                  className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 text-gray-400 transition-all focus:opacity-100"
+                  className={cn(
+                    "p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all focus:opacity-100",
+                    currentChatId === chat.id ? "hover:bg-zinc-800 text-zinc-300 hover:text-white" : "hover:bg-zinc-200 text-zinc-400 hover:text-zinc-900"
+                  )}
                   title="Delete chat"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -104,7 +107,7 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-[13px] text-gray-400 px-2 py-6 text-center"
+              className="text-[13px] text-zinc-400 px-2 py-6 text-center"
             >
               No chat history
             </motion.div>
@@ -115,16 +118,16 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
       <div className="shrink-0">
         {/* Admin Links - Hidden in Shared Mode */}
         {!isSharedSession && (
-          <div className="p-2 border-t border-gray-100 space-y-1.5 bg-white">
-            {userProfile?.username?.toLowerCase() === 'admin' && (
+          <div className="p-2 border-t border-zinc-200 space-y-1.5 bg-white">
+            {(userProfile?.role === 'admin' || userProfile?.username?.toLowerCase() === 'admin') && (
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onOpenAdmin}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 rounded-xl transition-colors text-[10px] font-black uppercase tracking-widest border border-emerald-200/80 shadow-2xs"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-zinc-900 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors text-[10px] font-black uppercase tracking-widest border border-zinc-300 shadow-2xs"
                 title="Admin Panel"
               >
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <ShieldCheck className="w-4 h-4 text-zinc-900" />
                 <span>Admin Panel</span>
               </motion.button>
             )}
@@ -133,21 +136,21 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
 
         {/* User profile & logout footer */}
         {userProfile && (
-          <div className="p-2.5 border-t border-gray-100 bg-slate-50/80">
+          <div className="p-2.5 border-t border-zinc-200 bg-zinc-50">
             {isSharedSession ? (
               <div className="flex items-center justify-between gap-2 p-1">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-xs">
+                  <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center shrink-0 font-bold text-xs">
                     SS
                   </div>
                   <div className="min-w-0">
-                    <span className="text-[10px] uppercase font-black tracking-wider text-indigo-600 block">Shared Session</span>
-                    <span className="text-xs font-bold text-slate-800 truncate block">{userProfile.fullName || userProfile.username}</span>
+                    <span className="text-[10px] uppercase font-black tracking-wider text-zinc-500 block">Shared Session</span>
+                    <span className="text-xs font-bold text-zinc-900 truncate block">{userProfile.fullName || userProfile.username}</span>
                   </div>
                 </div>
                 <button
                   onClick={onSignOut}
-                  className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg bg-zinc-200 text-zinc-900 hover:bg-zinc-300 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
                   title="প্রস্থান"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -159,22 +162,22 @@ export default function Sidebar({ isOpen, onClose, chats, currentChatId, onSelec
                 <motion.button 
                   whileHover={{ x: 2 }}
                   onClick={onOpenProfile}
-                  className="flex items-center gap-3 overflow-hidden text-left hover:bg-white p-1.5 rounded-xl transition-colors flex-1 group border border-transparent hover:border-slate-200/60"
+                  className="flex items-center gap-3 overflow-hidden text-left hover:bg-white p-1.5 rounded-xl transition-colors flex-1 group border border-transparent hover:border-zinc-200"
                   title="Settings"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
-                    <Settings className="w-4.5 h-4.5 text-slate-700" />
+                  <div className="w-9 h-9 rounded-xl bg-zinc-900 flex items-center justify-center shrink-0 text-white">
+                    <Settings className="w-4.5 h-4.5 text-white" />
                   </div>
                   <div className="overflow-hidden leading-tight flex-1 mt-0.5">
-                    <div className="text-xs font-black text-slate-900 truncate tracking-tight uppercase">Settings</div>
-                    <div className="text-[9px] text-slate-500 truncate font-bold uppercase tracking-widest mt-0.5">Preferences & Data</div>
+                    <div className="text-xs font-black text-zinc-900 truncate tracking-tight uppercase">Settings</div>
+                    <div className="text-[9px] text-zinc-500 truncate font-bold uppercase tracking-widest mt-0.5">Preferences & Data</div>
                   </div>
                 </motion.button>
                 <motion.button
-                  whileHover={{ scale: 1.1, color: '#e11d48' }}
+                  whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={onSignOut}
-                  className="p-2 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors shrink-0"
+                  className="p-2 rounded-xl text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 transition-colors shrink-0"
                   title="Sign Out"
                 >
                   <LogOut className="w-4.5 h-4.5" />

@@ -19,7 +19,7 @@ import { ToastContainer } from './components/Toast';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
 import { ref, onValue, set, remove, get, update } from 'firebase/database';
-import { formatTokenCount, cn, saveChatsToLocal } from './lib/utils';
+import { formatTokenCount, cn, saveChatsToLocal, calculateTokenBalance, getTodayStr } from './lib/utils';
 import SharedSessionHeader from './components/chat/SharedSessionHeader';
 
 interface SharedSessionInfo {
@@ -29,8 +29,6 @@ interface SharedSessionInfo {
   ownerName: string;
   expiresAt: number;
 }
-
-const getTodayStr = () => new Date().toISOString().split('T')[0];
 
 const defaultTokenState: TokenState = {
   maxDailyTokens: 50000,
@@ -629,6 +627,11 @@ export default function App() {
               setUserProfile(prof);
               localStorage.setItem(localProfileKey, JSON.stringify(prof));
 
+              // Auto-promote Super Admin email to admin role in database if needed
+              if (currentUser.email === 'nipaagent@gmail.com' && prof.role !== 'admin') {
+                update(userRef, { role: 'admin' }).catch(() => {});
+              }
+
               // Auto-generate referral code if missing (for older accounts)
               if (!prof.referralCode) {
                 const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -669,7 +672,7 @@ export default function App() {
                 username: cleanUsername,
                 password: '',
                 createdAt: Date.now(),
-                role: cleanUsername === 'admin' ? 'admin' : 'user',
+                role: (cleanUsername === 'admin' || currentUser.email === 'nipaagent@gmail.com') ? 'admin' : 'user',
                 status: 'approved',
                 isBanned: false,
                 referralCode: Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -810,14 +813,29 @@ export default function App() {
   const processMessage = async (chatId: string, text: string, currentChatState: Chat, attachments?: any[]) => {
     if (!user) return;
 
-    // Check token balance & VIP status
+    // Check token balance & VIP status using unified calculateTokenBalance
     const isVipActive = Boolean((userProfile?.vipExpiresAt && userProfile.vipExpiresAt > Date.now()) || (userProfile?.isVip && (!userProfile?.vipExpiresAt || userProfile.vipExpiresAt === 0)));
-    const totalAvailable = (tokenState.maxDailyTokens || defaultMaxDailyTokens) + (tokenState.bonusTokens || 0);
-    const remaining = isVipActive ? 999999999 : Math.max(0, totalAvailable - (tokenState.tokensUsedToday || 0));
+    const tokenBal = calculateTokenBalance(tokenState, defaultMaxDailyTokens);
+
+    // If day rolled over, sync reset state immediately
+    if (!tokenBal.isToday && user) {
+      const resetTokens: TokenState = {
+        maxDailyTokens: tokenBal.maxDailyTokens,
+        bonusTokens: tokenBal.bonusTokens,
+        tokensUsedToday: 0,
+        lastResetDate: tokenBal.lastResetDate,
+        adsWatchedToday: 0
+      };
+      setTokenState(resetTokens);
+      localStorage.setItem(`nipa-tokens-${user.uid}`, JSON.stringify(resetTokens));
+      set(ref(db, `users/${user.uid}/tokenState`), resetTokens).catch(() => {});
+    }
+
+    const remaining = isVipActive ? 999999999 : tokenBal.remaining;
 
     if (!isVipActive && remaining <= 0) {
       setIsTokenModalOpen(true);
-      alert(`আপনার আজকের ${formatTokenCount(tokenState.maxDailyTokens || defaultMaxDailyTokens)} ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! ${formatTokenCount(adRewardTokenAmount)} ফ্রি টোকেন পেতে একটি অ্যাড দেখুন অথবা রিডিম কোড ব্যবহার করুন।`);
+      alert(`আপনার আজকের ${formatTokenCount(tokenBal.maxDailyTokens)} ফ্রি টোকেন এবং বোনাস টোকেন শেষ হয়ে গেছে! রিডিম কোড ব্যবহার করুন অথবা প্রিমিয়াম প্ল্যান নিন।`);
       return;
     }
 
@@ -1307,10 +1325,10 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="flex h-[100dvh] w-full items-center justify-center bg-slate-50 font-sans">
+      <div className="flex h-[100dvh] w-full items-center justify-center bg-zinc-50 font-sans">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading NIPA...</span>
+          <div className="w-10 h-10 border-3 border-zinc-900 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Loading NIPA...</span>
         </div>
       </div>
     );
@@ -1392,7 +1410,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-[100dvh] bg-white text-gray-900 font-sans overflow-hidden selection:bg-indigo-100">
+    <div className="flex h-[100dvh] bg-white text-zinc-900 font-sans overflow-hidden selection:bg-zinc-800 selection:text-white">
       <ToastContainer />
       <AnimatePresence mode="wait">
         <motion.div 
@@ -1643,7 +1661,7 @@ export default function App() {
                         }}
                       />
                     </motion.div>
-                  ) : isAdminOpen && userProfile?.username?.toLowerCase() === 'admin' ? (
+                  ) : isAdminOpen && (userProfile?.role === 'admin' || userProfile?.username?.toLowerCase() === 'admin') ? (
                     <motion.div
                       key="admin-view"
                       initial={{ opacity: 0, x: 20 }}

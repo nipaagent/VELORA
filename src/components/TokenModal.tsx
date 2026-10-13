@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Zap, Tv, CheckCircle2, Sparkles, AlertCircle, PlayCircle, Loader2, Award, Gift, ExternalLink, RefreshCw, Ticket, Crown, Send, Clock, Save, CreditCard } from 'lucide-react';
 import { TokenState, UserProfile, RedeemCode } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, formatTokenCount } from '../lib/utils';
+import { cn, formatTokenCount, calculateTokenBalance } from '../lib/utils';
 import { ref, get, update } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { triggerToast } from './Toast';
@@ -62,10 +62,7 @@ export default function TokenModal({
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState<string | null>(null);
 
-  const totalLimit = (tokenState.maxDailyTokens || defaultMaxDailyTokens) + (tokenState.bonusTokens || 0);
-  const used = tokenState.tokensUsedToday || 0;
-  const remaining = Math.max(0, totalLimit - used);
-  const percentage = Math.min(100, Math.max(0, Math.round((remaining / totalLimit) * 100)));
+  const { remaining, totalLimit, percentage } = calculateTokenBalance(tokenState, defaultMaxDailyTokens);
 
   // Realtime Redeem Code Submit Handler
   const handleRedeemCode = async () => {
