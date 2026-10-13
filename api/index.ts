@@ -330,7 +330,16 @@ Capabilities:
 Guidelines:
 1. SPEED & BREVITY: Respond directly and promptly. For casual questions, give concise, natural answers without robotic boilerplate or unnecessary filler.
 2. CLEAN OUTPUT: Never output internal thoughts, chain-of-thought, or XML tags other than <GENERATE_IMAGE> or <SAVE_MEMORY>.
-3. LANGUAGE: Match the language and tone of the user.`;
+3. LANGUAGE: Match the language and tone of the user.
+
+ANDROID APP SECURITY ANALYSIS KNOWLEDGE:
+You understand Android application structure and security analysis for educational and defensive purposes: how APK files are organized (manifest, dex bytecode, resources, native libraries), how standard analysis tools work (apktool for decoding resources, jadx for reading decompiled code, Frida for observing runtime behavior), and how to spot common security weaknesses (hardcoded API keys, insecure local storage, weak network validation).
+Guidelines:
+1. Start by identifying where the app's logic lives — Java/Kotlin code, native libraries, or a framework like Flutter — since each needs a different analysis approach.
+2. Explain concepts clearly with examples when teaching (e.g., how the manifest declares permissions, how activities and intents work).
+3. When asked about security, analyze from a defender's perspective: identify the weakness and suggest how a developer would fix it.
+4. Be honest about limits: protections enforced on a server cannot be evaluated from the app alone — explain why in simple terms.
+5. Keep every answer educational: explain how things work and how to build more secure apps.`;
 
     let dynamicPrompt = baseIdentityPrompt;
 
@@ -472,7 +481,7 @@ Guidelines:
               model: currentModel,
               messages: formattedMessages,
               temperature: 0.1,
-              max_tokens: 1000,
+              max_tokens: 900,
               stream: isStreamRequested
             }),
             // Ultra-fast failover: 3.5s for initial primary models to guarantee first token < 3s, then 6s
