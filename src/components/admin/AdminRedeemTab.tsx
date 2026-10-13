@@ -55,8 +55,8 @@ export const AdminRedeemTab: React.FC<AdminRedeemTabProps> = ({
     const payload: Omit<RedeemCode, 'id' | 'usedCount' | 'usedBy'> = {
       code: codeText.trim().toUpperCase(),
       rewardType,
-      tokenAmount: rewardType === 'tokens' ? Number(tokenAmount) || 0 : undefined,
-      vipDays: rewardType === 'vip_days' ? Number(vipDays) || 0 : undefined,
+      ...(rewardType === 'tokens' ? { tokenAmount: Number(tokenAmount) || 0 } : {}),
+      ...(rewardType === 'vip_days' ? { vipDays: Number(vipDays) || 0 } : {}),
       maxUses: Number(maxUses) || 1,
       createdAt: Date.now(),
       isActive: true
