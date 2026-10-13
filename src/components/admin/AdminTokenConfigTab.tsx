@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { 
   Zap, Gift, ExternalLink, Plus, Trash2, 
-  CheckCircle2, Sparkles, AlertCircle, RefreshCw, Link as LinkIcon
+  CheckCircle2, Sparkles, AlertCircle, RefreshCw, Link as LinkIcon, Send
 } from 'lucide-react';
 import { cn, formatTokenCount } from '../../lib/utils';
+import { auth, db } from '../../lib/firebase';
+import { ref, push, set } from 'firebase/database';
 
 interface AdminTokenConfigTabProps {
   tokenConfig: {
@@ -28,6 +30,54 @@ export const AdminTokenConfigTab: React.FC<AdminTokenConfigTabProps> = ({
   const [multiplier, setMultiplier] = useState(tokenConfig.tokenMultiplier || 1);
   const [isBatchUpdating, setIsBatchUpdating] = useState(false);
   const [savedConfig, setSavedConfig] = useState(false);
+
+  // Ad Link state
+  const [newAdUrl, setNewAdUrl] = useState('');
+  const [newAdDescription, setNewAdDescription] = useState('');
+  const [isPublishingAd, setIsPublishingAd] = useState(false);
+
+  const handlePublishAd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdUrl.trim()) return;
+    setIsPublishingAd(true);
+    try {
+      const currentUser = auth.currentUser;
+      const idToken = currentUser ? await currentUser.getIdToken() : '';
+      const adInfo = newAdDescription.trim() || 'নতুন অফার বা স্পন্সর বিজ্ঞাপন যুক্ত হয়েছে! টোকেন আর্ন করুন।';
+      
+      // Save to Firebase RTDB settings/ad_links
+      const adRef = push(ref(db, 'settings/ad_links'));
+      await set(adRef, {
+        url: newAdUrl.trim(),
+        description: adInfo,
+        createdAt: Date.now()
+      });
+
+      // Broadcast to ALL subscribed users with title "নতুন অফার এসেছে!" and ad info in body
+      if (idToken) {
+        await fetch('/api/admin/ads/publish', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            adUrl: newAdUrl.trim(),
+            body: adInfo
+          })
+        }).catch(() => {});
+      }
+
+      setNewAdUrl('');
+      setNewAdDescription('');
+      alert('নতুন অফার সফলভাবে প্রকাশিত হয়েছে এবং সকল ইউজারের কাছে পুশ নোটিফিকেশন পাঠানো হয়েছে!');
+    } catch (err: any) {
+      alert('অফার প্রকাশ ব্যর্থ: ' + err.message);
+    } finally {
+      setIsPublishingAd(false);
+    }
+  };
+
 
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,6 +228,64 @@ export const AdminTokenConfigTab: React.FC<AdminTokenConfigTabProps> = ({
         </form>
       </div>
 
+      {/* 2. New Ad Publishing & Push Broadcast Card (Strict Monochrome) */}
+      <div className="bg-white rounded-3xl p-5 sm:p-7 border border-black shadow-xs space-y-5 text-black">
+        <div className="flex items-center gap-3 border-b border-zinc-200 pb-4">
+          <div className="w-10 h-10 rounded-2xl bg-black text-white flex items-center justify-center shrink-0">
+            <LinkIcon className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-base font-black text-black tracking-tight flex items-center gap-2">
+              নতুন অফার বা বিজ্ঞাপন প্রকাশ (New Ad Link)
+            </h2>
+            <p className="text-xs text-zinc-600 mt-0.5">
+              নতুন অফার বা স্পন্সর লিংক প্রকাশ করুন। প্রকাশ করার সাথে সাথে সকল সাবস্ক্রাইবারদের ডিভাইসে "নতুন অফার এসেছে!" পুশ পাঠানো হবে।
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handlePublishAd} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-black uppercase tracking-wider mb-1">
+              অফার বা বিজ্ঞাপনের লিংক (Ad URL) <span className="text-black">*</span>
+            </label>
+            <input
+              type="url"
+              required
+              value={newAdUrl}
+              onChange={(e) => setNewAdUrl(e.target.value)}
+              placeholder="https://example.com/special-offer"
+              className="w-full px-3.5 py-2.5 bg-white border border-black rounded-xl text-xs font-mono text-black focus:outline-none focus:ring-1 focus:ring-black"
+              disabled={isPublishingAd}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-black uppercase tracking-wider mb-1">
+              অফারের বিবরণ বা মেসেজ (Offer Info)
+            </label>
+            <input
+              type="text"
+              value={newAdDescription}
+              onChange={(e) => setNewAdDescription(e.target.value)}
+              placeholder="যেমন: স্পেশাল বোনাস অফার! বিজ্ঞাপন দেখে এখনই ৩০,০০০ টোকেন নিন।"
+              className="w-full px-3.5 py-2.5 bg-white border border-black rounded-xl text-xs text-black focus:outline-none focus:ring-1 focus:ring-black"
+              disabled={isPublishingAd}
+            />
+          </div>
+
+          <div className="pt-1">
+            <button
+              type="submit"
+              disabled={isPublishingAd || !newAdUrl.trim()}
+              className="px-6 py-2.5 bg-black hover:bg-zinc-800 text-white border border-black rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Send className="w-4 h-4" />
+              <span>{isPublishingAd ? 'প্রকাশ ও ব্রডকাস্ট করা হচ্ছে...' : 'অফার প্রকাশ ও নোটিফিকেশন পাঠান'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

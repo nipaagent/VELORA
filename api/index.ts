@@ -184,6 +184,7 @@ const deductUserTokens = async (
       const prevUsed = currentTokenState.tokensUsedToday || 0;
       const bonusSpent = Math.max(0, prevUsed - maxDaily);
       bonusTokens = Math.max(0, bonusTokens - bonusSpent);
+      sendPushToUser(uid, "ডেইলি টোকেন রিসেট হয়েছে!", "আপনার দৈনিক ফ্রি টোকেন কোটা রিসেট হয়েছে। এখনই চ্যাট শুরু করুন!").catch(() => {});
     }
 
     const currentUsed = isToday ? (currentTokenState.tokensUsedToday || 0) : 0;
@@ -1463,6 +1464,232 @@ app.post("/api/admin/push/send", async (req, res) => {
   }
 });
 
+// Exported helper: sendPushToUser(uid, title, body, url?)
+// Reads push_subscriptions/{uid} from RTDB and calls webpush.sendNotification in try/catch (NEVER throws).
+export const sendPushToUser = async (uid: string, title: string, body: string, url: string = "/") => {
+  try {
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return;
+    try {
+      webpush.setVapidDetails(
+        process.env.VAPID_SUBJECT || "mailto:support@nipa.app",
+        process.env.VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+      );
+    } catch (e) {}
+
+    const res = await fetch(`${FIREBASE_DB_URL}/push_subscriptions/${uid}.json`);
+    if (!res.ok) return;
+    const sub = await res.json();
+    if (!sub || !sub.endpoint) return;
+
+    await webpush.sendNotification(sub, JSON.stringify({
+      title,
+      body,
+      url: url || "/"
+    }));
+  } catch (err: any) {
+    if (err?.statusCode === 404 || err?.statusCode === 410) {
+      await fetch(`${FIREBASE_DB_URL}/push_subscriptions/${uid}.json`, {
+        method: "DELETE"
+      }).catch(() => {});
+    }
+    // NEVER throws
+  }
+};
+
+// Helper: broadcastPushToAll(title, body, url?)
+export const broadcastPushToAll = async (title: string, body: string, url: string = "/") => {
+  try {
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return;
+    try {
+      webpush.setVapidDetails(
+        process.env.VAPID_SUBJECT || "mailto:support@nipa.app",
+        process.env.VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+      );
+    } catch (e) {}
+
+    const subsRes = await fetch(`${FIREBASE_DB_URL}/push_subscriptions.json`);
+    if (!subsRes.ok) return;
+    const subsData = await subsRes.json();
+    if (!subsData || typeof subsData !== "object") return;
+
+    const payload = JSON.stringify({ title, body, url: url || "/" });
+    await Promise.all(
+      Object.entries(subsData).map(async ([subUid, sub]: [string, any]) => {
+        if (!sub || !sub.endpoint) return;
+        try {
+          await webpush.sendNotification(sub, payload);
+        } catch (err: any) {
+          if (err?.statusCode === 404 || err?.statusCode === 410) {
+            await fetch(`${FIREBASE_DB_URL}/push_subscriptions/${subUid}.json`, {
+              method: "DELETE"
+            }).catch(() => {});
+          }
+        }
+      })
+    );
+  } catch (err) {
+    // NEVER throws
+  }
+};
+
+// Helper: notifyAllAdmins(title, body, url?)
+export const notifyAllAdmins = async (title: string, body: string, url: string = "/") => {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/users.json`);
+    if (!res.ok) return;
+    const users = await res.json();
+    if (!users || typeof users !== "object") return;
+
+    const adminUids: string[] = [];
+    for (const [adminUid, u] of Object.entries(users)) {
+      if ((u as any)?.role === "admin") {
+        adminUids.push(adminUid);
+      }
+    }
+
+    await Promise.all(
+      adminUids.map(adminUid => sendPushToUser(adminUid, title, body, url))
+    );
+  } catch (err) {
+    // NEVER throws
+  }
+};
+
+// EVENT 1: Daily token reset notification
+app.post("/api/notifications/daily-reset", async (req, res) => {
+  try {
+    const bearerToken = getBearerToken(req);
+    const tokenUid = getUidFromToken(bearerToken || "");
+    if (tokenUid) {
+      await sendPushToUser(tokenUid, "ডেইলি টোকেন রিসেট হয়েছে!", "আপনার দৈনিক ফ্রি টোকেন কোটা রিসেট হয়েছে। এখনই চ্যাট শুরু করুন!", "/");
+    }
+  } catch (e) {}
+  return res.json({ ok: true });
+});
+
+// EVENT 2: New ad published (ad_links): broadcast to ALL subscribed users
+app.post(["/api/admin/ads/publish", "/api/admin/ad-links/broadcast"], async (req, res) => {
+  try {
+    const bearerToken = getBearerToken(req);
+    const tokenUid = getUidFromToken(bearerToken || "");
+    if (!tokenUid) return res.status(401).json({ error: "লগইন প্রয়োজন।" });
+
+    const { title, body, adTitle, adUrl } = req.body || {};
+    const adInfo = body || adTitle || adUrl || "একটি নতুন অফার প্রকাশিত হয়েছে! টোকেন জিতে নিন।";
+
+    await broadcastPushToAll("নতুন অফার এসেছে!", adInfo, adUrl || "/");
+    return res.json({ success: true, message: "অফার সফলভাবে ব্রডকাস্ট করা হয়েছে।" });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || "বিজ্ঞাপন ব্রডকাস্ট ব্যর্থ হয়েছে।" });
+  }
+});
+
+// EVENT 3: VIP granted by admin
+app.post("/api/admin/vip/grant", async (req, res) => {
+  try {
+    const bearerToken = getBearerToken(req);
+    const tokenUid = getUidFromToken(bearerToken || "");
+    if (!tokenUid) return res.status(401).json({ error: "লগইন প্রয়োজন।" });
+
+    const { targetUid, days, body } = req.body || {};
+    if (targetUid) {
+      const msg = body || (days === "lifetime" ? "আপনার অ্যাকাউন্টে লাইফটাইম VIP সুবিধা চালু হয়েছে!" : `আপনার অ্যাকাউন্টে ${days || 30} দিনের VIP চালু হয়েছে!`);
+      await sendPushToUser(targetUid, "VIP চালু হয়েছে!", msg, "/");
+    }
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message });
+  }
+});
+
+// EVENT 4: User submits bKash payment request: notify ALL admins
+app.post(["/api/bkash/notify-admins", "/api/payment/bkash-notify"], async (req, res) => {
+  try {
+    const { username, packageName, priceBdt, trxId } = req.body || {};
+    const msg = username 
+      ? `@${username} ${packageName || 'প্যাকেজের'} জন্য ৳${priceBdt || ''} রিকোয়েস্ট পাঠিয়েছেন (TrxID: ${trxId || ''})`
+      : "একজন ইউজার নতুন bKash পেমেন্ট রিকোয়েস্ট সাবমিট করেছেন।";
+    await notifyAllAdmins("নতুন পেমেন্ট রিকোয়েস্ট!", msg, "/admin");
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message });
+  }
+});
+
+// TASK 3: GET /api/cron/dormant-nudge protected by CRON_SECRET
+app.get("/api/cron/dormant-nudge", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const bearerSecret = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+    const providedSecret = (req.query.secret as string) || bearerSecret;
+    const expectedSecret = process.env.CRON_SECRET;
+
+    if (!expectedSecret || providedSecret !== expectedSecret) {
+      return res.status(401).json({ error: "Unauthorized: Invalid or missing CRON_SECRET" });
+    }
+
+    const usersRes = await fetch(`${FIREBASE_DB_URL}/users.json`);
+    if (!usersRes.ok) {
+      return res.status(500).json({ error: "Failed to read users from RTDB" });
+    }
+    const usersData = await usersRes.json();
+    if (!usersData || typeof usersData !== "object") {
+      return res.status(200).json({ nudged: 0 });
+    }
+
+    const now = Date.now();
+    const threshold = now - (6 * 3600 * 1000); // 6 hours
+
+    // Filter users: lastActive < threshold AND (lastNudgeSent missing OR lastNudgeSent < lastActive). Cap 100 users.
+    const eligibleEntries = Object.entries(usersData).filter(([_, u]: [string, any]) => {
+      if (!u || typeof u !== "object") return false;
+      const lastActive = typeof u.lastActive === "number" ? u.lastActive : 0;
+      if (lastActive === 0 || lastActive >= threshold) return false;
+      const lastNudgeSent = typeof u.lastNudgeSent === "number" ? u.lastNudgeSent : 0;
+      return !lastNudgeSent || lastNudgeSent < lastActive;
+    }).slice(0, 100);
+
+    let nudged = 0;
+    await Promise.all(
+      eligibleEntries.map(async ([uid, u]: [string, any]) => {
+        try {
+          const subRes = await fetch(`${FIREBASE_DB_URL}/push_subscriptions/${uid}.json`);
+          if (!subRes.ok) return;
+          const sub = await subRes.json();
+          if (!sub || !sub.endpoint) return;
+
+          await webpush.sendNotification(sub, JSON.stringify({
+            title: "আমাকে ভুলে গেলেন কি? 😊",
+            body: "NIPA আপনাকে মিস করছে! ফিরে আসুন।",
+            url: "/"
+          }));
+
+          // Mark lastNudgeSent = now
+          await fetch(`${FIREBASE_DB_URL}/users/${uid}.json`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lastNudgeSent: now })
+          }).catch(() => {});
+
+          nudged++;
+        } catch (subErr: any) {
+          if (subErr?.statusCode === 404 || subErr?.statusCode === 410) {
+            await fetch(`${FIREBASE_DB_URL}/push_subscriptions/${uid}.json`, {
+              method: "DELETE"
+            }).catch(() => {});
+          }
+        }
+      })
+    );
+
+    return res.status(200).json({ nudged });
+  } catch (err: any) {
+    console.error("Dormant nudge cron error:", err);
+    return res.status(500).json({ error: err?.message || "Internal server error", nudged: 0 });
+  }
+});
 
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

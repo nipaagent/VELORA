@@ -356,12 +356,17 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
         <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-zinc-900/20 blur-[80px] rounded-full translate-y-1/2" />
       </div>
 
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-[420px] md:max-w-5xl md:h-[600px] bg-white rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border border-zinc-200 overflow-hidden relative z-10 flex flex-col md:flex-row"
-      >
+      <div className="relative z-10 w-full max-w-[420px] md:max-w-5xl flex flex-col items-center">
+        <div className="mb-4 flex justify-center">
+          <img src="/logo.png" alt="NIPA" style={{width:80,height:80}} className="object-contain" />
+        </div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full md:h-[600px] bg-white rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border border-zinc-200 overflow-hidden flex flex-col md:flex-row"
+        >
         {/* Left Side: Visual Branding (Desktop Only) */}
         <div className="hidden md:flex md:w-[45%] bg-zinc-900 text-white relative overflow-hidden flex-col justify-between p-12 border-r border-zinc-800">
           <div className="absolute inset-0 opacity-20 pointer-events-none">
@@ -596,6 +601,8 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
         </div>
       </div>
     </motion.div>
+  </div>
+
 
     {/* Real Password Reset Modal Dialog */}
     <AnimatePresence>

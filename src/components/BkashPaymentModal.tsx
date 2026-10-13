@@ -183,6 +183,19 @@ export default function BkashPaymentModal({
       };
 
       await set(ref(db, `bkash_requests/${requestId}`), requestData);
+
+      // Notify ALL admins with title "নতুন পেমেন্ট রিকোয়েস্ট!"
+      fetch('/api/bkash/notify-admins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: userProfile?.username || userProfile?.fullName || 'User',
+          packageName: selectedPkg.name,
+          priceBdt: selectedPkg.priceBdt,
+          trxId: cleanTrx
+        })
+      }).catch(err => console.warn('Admin push notification notify warning:', err));
+
       setStep(3);
     } catch (err: any) {
       console.error("bKash submission error:", err);

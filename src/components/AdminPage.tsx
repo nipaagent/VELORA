@@ -623,6 +623,31 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
       };
 
       await update(ref(db), updates);
+
+      if (isVip) {
+        try {
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            const idToken = await currentUser.getIdToken();
+            const vipBody = days === 'lifetime'
+              ? 'আপনার অ্যাকাউন্টে লাইফটাইম VIP সুবিধা সক্রিয় করা হয়েছে!'
+              : `আপনার অ্যাকাউন্টে ${days} দিনের VIP সুবিধা সক্রিয় করা হয়েছে!`;
+            fetch('/api/admin/vip/grant', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+              },
+              body: JSON.stringify({
+                targetUid: uid,
+                days,
+                body: vipBody
+              })
+            }).catch(() => {});
+          }
+        } catch {}
+      }
+
       setSelectedUserForVip(null);
     } finally {
       setIsSaving(false);

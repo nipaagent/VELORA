@@ -13,8 +13,8 @@ self.addEventListener('push', function (event) {
   var title = data.title || 'NIPA NETWORK';
   var options = {
     body: data.body || '',
-    icon: '/icon.png',
-    badge: '/icon.png',
+    icon: '/logo.png',
+    badge: '/logo.png',
     data: {
       url: data.url || '/'
     }

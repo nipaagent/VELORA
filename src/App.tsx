@@ -690,6 +690,15 @@ export default function App() {
                   setTokenState(resetTokens);
                   localStorage.setItem(localTokensKey, JSON.stringify(resetTokens));
                   set(ref(db, `users/${currentUser.uid}/tokenState`), resetTokens).catch(() => {});
+                  currentUser.getIdToken().then(idToken => {
+                    fetch('/api/notifications/daily-reset', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                      }
+                    }).catch(() => {});
+                  }).catch(() => {});
                 }
               }
             } else {
@@ -752,6 +761,33 @@ export default function App() {
       unsubscribeChatsRef();
     };
   }, []);
+
+  // Task 3: Update users/{uid}/lastActive = Date.now() in RTDB on app open/foreground and on visibilitychange
+  useEffect(() => {
+    if (!user) return;
+    const uid = user.uid;
+
+    const recordActive = () => {
+      try {
+        update(ref(db, `users/${uid}`), { lastActive: Date.now() }).catch(() => {});
+      } catch {}
+    };
+
+    // On app open / initial foreground
+    recordActive();
+
+    // On visibilitychange (when returning to foreground)
+    const handleVisChange = () => {
+      if (document.visibilityState === 'visible') {
+        recordActive();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisChange);
+    };
+  }, [user]);
 
   // Global Force Logout Listener
   useEffect(() => {
@@ -1634,18 +1670,21 @@ export default function App() {
                             </div>
                           </motion.div>
                         )}
-                        <h1 
-                          className={cn(
-                            "relative text-sm font-black tracking-[0.2em] uppercase transition-all duration-500",
-                            !isVipActive && "text-slate-900"
-                          )}
-                          style={isVipActive ? { 
-                            color: 'var(--user-theme-color)',
-                            filter: `drop-shadow(0 0 1px var(--user-theme-color-border))`
-                          } : {}}
-                        >
-                          NIPA
-                        </h1>
+                        <div className="flex items-center gap-2">
+                          <img src="/logo.png" alt="NIPA" style={{width:32,height:32}} className="object-contain shrink-0" />
+                          <h1 
+                            className={cn(
+                              "relative text-sm font-black tracking-[0.2em] uppercase transition-all duration-500",
+                              !isVipActive && "text-slate-900"
+                            )}
+                            style={isVipActive ? { 
+                              color: 'var(--user-theme-color)',
+                              filter: `drop-shadow(0 0 1px var(--user-theme-color-border))`
+                            } : {}}
+                          >
+                            NIPA
+                          </h1>
+                        </div>
                       </>
                     );
                   })()}
