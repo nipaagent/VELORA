@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Lightbulb, Info, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database, Edit2, ChevronRight, FileText, UploadCloud, X, Crown, ExternalLink, CreditCard, Users } from 'lucide-react';
+import { ArrowLeft, Lightbulb, Info, User, Key, Save, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Code2, Zap, Lock, BadgeCheck, Cpu, Clock, Copy, Share2, Gift, Download, Upload, Database, Edit2, ChevronRight, FileText, UploadCloud, X, Crown, ExternalLink, CreditCard, Users, Bell } from 'lucide-react';
 import { UserProfile, Attachment } from '../types';
 import { auth, db } from '../lib/firebase';
 import UserAvatar from './UserAvatar';
@@ -10,6 +10,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn, saveChatsToLocal } from '../lib/utils';
 import { SP_GATEWAY_CONFIG, SP_VIP_PACKAGES, SP_TOKEN_PACKAGES } from '../lib/spPaymentConfig';
 import { triggerToast } from './Toast';
+import { registerPush, disablePush, getPushSubscriptionState } from '../lib/pushNotifications';
+
 
 interface SettingsPageProps {
   onBack: () => void;
@@ -51,6 +53,53 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
   const [isSavingKb, setIsSavingKb] = useState(false);
   const [kbSuccess, setKbSuccess] = useState('');
   const [kbError, setKbError] = useState('');
+
+  const [isPushEnabled, setIsPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushPermissionState, setPushPermissionState] = useState<string>('default');
+
+  useEffect(() => {
+    let isMounted = true;
+    getPushSubscriptionState().then(state => {
+      if (!isMounted) return;
+      setIsPushEnabled(state.subscribed);
+      setPushPermissionState(state.permission);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleTogglePush = async () => {
+    if (pushLoading) return;
+    setPushLoading(true);
+    try {
+      if (isPushEnabled) {
+        await disablePush();
+        setIsPushEnabled(false);
+        triggerToast('নোটিফিকেশন বন্ধ করা হয়েছে');
+      } else {
+        const res = await registerPush();
+        if (res === 'subscribed') {
+          setIsPushEnabled(true);
+          setPushPermissionState('granted');
+          triggerToast('ওয়েব পুশ নোটিফিকেশন সফলভাবে চালু করা হয়েছে');
+        } else if (res === 'denied') {
+          setIsPushEnabled(false);
+          setPushPermissionState('denied');
+          triggerToast('নোটিফিকেশন পারমিশন দেওয়া হয়নি');
+        } else if (res === 'unavailable') {
+          triggerToast('VAPID পাবলিক কি কনফিগার করা নেই');
+        } else if (res === 'unsupported') {
+          triggerToast('আপনার ব্রাউজার পুশ নোটিফিকেশন সমর্থন করে না');
+        } else {
+          triggerToast('নোটিফিকেশন চালু করতে সমস্যা হয়েছে');
+        }
+      }
+    } catch (err) {
+      console.error('Push toggle error:', err);
+    } finally {
+      setPushLoading(false);
+    }
+  };
   
   const handleSaveKb = async () => {
     if (!kbTitle.trim() || !kbContent.trim()) {
@@ -575,7 +624,55 @@ export default function SettingsPage({ onBack, userProfile, onUpdateProfile, cur
               </p>
             </div>
 
-            <div className="space-y-2 mt-4">
+            {/* Strict Black-White Monochrome Notifications Toggle (Bengali) */}
+            <div className="w-full p-3.5 sm:p-4 bg-white border border-zinc-900 rounded-xl shadow-xs transition-all mb-3 text-black">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 rounded-lg bg-black text-white shrink-0">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold text-black tracking-tight">নোটিফিকেশন</h4>
+                    <p className="text-xs text-zinc-600 truncate mt-0.5">
+                      {pushLoading 
+                        ? 'প্রক্রিয়াকরণ হচ্ছে...' 
+                        : isPushEnabled 
+                          ? 'ওয়েব পুশ নোটিফিকেশন চালু আছে (২৪/৭ ব্যাকগ্রাউন্ড)' 
+                          : 'নোটিফিকেশন বন্ধ আছে'}
+                    </p>
+                  </div>
+                </div>
+                
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isPushEnabled}
+                  disabled={pushLoading}
+                  onClick={handleTogglePush}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                    isPushEnabled ? "bg-black" : "bg-zinc-300",
+                    pushLoading && "opacity-50 cursor-not-allowed"
+                  )}
+                  title={isPushEnabled ? "নোটিফিকেশন বন্ধ করুন" : "নোটিফিকেশন চালু করুন"}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out",
+                      isPushEnabled ? "translate-x-5" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+              {pushPermissionState === 'denied' && (
+                <div className="mt-2.5 pt-2 border-t border-zinc-200 text-[11px] text-zinc-700 font-medium">
+                  ⚠️ ব্রাউজারে নোটিফিকেশন পারমিশন বন্ধ আছে। অনুগ্রহ করে ব্রাউজার সেটিংসে গিয়ে এলাও (Allow) করুন।
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 mt-2">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}

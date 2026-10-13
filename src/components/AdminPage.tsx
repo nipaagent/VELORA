@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, CreditCard, Zap, Crown, 
   ShieldCheck, KeyRound, Radio, RefreshCw, Settings, 
   ArrowLeft, Search, Command, ChevronLeft, ChevronRight, 
-  Menu, X, Power, FileDown, LogOut, Check, Sliders
+  Menu, X, Power, FileDown, LogOut, Check, Sliders, Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AdminOverviewTab } from './admin/AdminOverviewTab';
@@ -17,6 +17,7 @@ import { AdminRedeemTab } from './admin/AdminRedeemTab';
 import { AdminSecurityTab } from './admin/AdminSecurityTab';
 import { AdminApiKeysTab } from './admin/AdminApiKeysTab';
 import { AdminBroadcastTab } from './admin/AdminBroadcastTab';
+import { AdminPushTab } from './admin/AdminPushTab';
 import { AdminLogsTab } from './admin/AdminLogsTab';
 import { AdminSettingsTab } from './admin/AdminSettingsTab';
 import { AdminUserTokenModal } from './admin/AdminUserTokenModal';
@@ -40,8 +41,10 @@ export type AdminTabId =
   | 'security' 
   | 'apikeys' 
   | 'broadcast' 
+  | 'push'
   | 'logs' 
   | 'settings';
+
 
 export default function AdminPage({ onBackToChat }: AdminPageProps) {
   const [activeTab, setActiveTab] = useState<AdminTabId>('overview');
@@ -79,7 +82,25 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     adRewardsEnabled: true
   });
 
+  const [pushSubscribersCount, setPushSubscribersCount] = useState<number>(0);
+
+  useEffect(() => {
+    const subsRef = ref(db, 'push_subscriptions');
+    const unsub = onValue(subsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        setPushSubscribersCount(typeof val === 'object' && val !== null ? Object.keys(val).length : 0);
+      } else {
+        setPushSubscribersCount(0);
+      }
+    }, () => {
+      setPushSubscribersCount(0);
+    });
+    return () => unsub();
+  }, []);
+
   // Modal States
+
   const [selectedUserForToken, setSelectedUserForToken] = useState<AdminUser | null>(null);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<AdminUser | null>(null);
   const [selectedUserForVip, setSelectedUserForVip] = useState<AdminUser | null>(null);
@@ -625,6 +646,7 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
     { id: 'security', label: 'Security', icon: ShieldCheck, badge: systemControl.maintenanceMode ? 'Alert' : undefined },
     { id: 'apikeys', label: 'API Gateway', icon: KeyRound, badge: `${successRate}%` },
     { id: 'broadcast', label: 'Broadcast', icon: Radio, badge: announcement.isActive ? 'Live' : undefined },
+    { id: 'push', label: 'Push Notifications', icon: Bell, badge: pushSubscribersCount > 0 ? pushSubscribersCount : undefined },
     { id: 'logs', label: 'Audit Logs', icon: RefreshCw, badge: adminLogs.length },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -980,6 +1002,10 @@ export default function AdminPage({ onBackToChat }: AdminPageProps) {
                 onSaveAnnouncement={handleSaveAnnouncement}
                 isSaving={isSaving}
               />
+            )}
+
+            {activeTab === 'push' && (
+              <AdminPushTab />
             )}
 
             {activeTab === 'logs' && (

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, LogOut, ArrowLeft, User, Sparkles, BrainCircuit, Crown, AlertTriangle } from 'lucide-react';
+import { Menu, LogOut, ArrowLeft, User, Sparkles, BrainCircuit, Crown, AlertTriangle, Bell, X } from 'lucide-react';
+import { registerPush } from './lib/pushNotifications';
 import { Chat, Message, UserProfile, TokenState, SystemControl } from './types';
+
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
@@ -84,10 +86,38 @@ export default function App() {
   const [spPaymentInitialTab, setSpPaymentInitialTab] = useState<'vip' | 'tokens'>('vip');
   const [tokenState, setTokenState] = useState<TokenState>(defaultTokenState);
 
+  // Web Push Notification State
+  const hasRegisteredPushRef = useRef(false);
+  const [showPushBanner, setShowPushBanner] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator) {
+      if (Notification.permission === 'default') {
+        const isDismissed = sessionStorage.getItem('nipa_push_banner_dismissed');
+        if (!isDismissed) {
+          setShowPushBanner(true);
+        }
+      }
+    }
+  }, []);
+
+  const handleBannerRegisterPush = async () => {
+    setShowPushBanner(false);
+    sessionStorage.setItem('nipa_push_banner_dismissed', 'true');
+    await registerPush();
+  };
+
+  const handleBannerDismiss = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowPushBanner(false);
+    sessionStorage.setItem('nipa_push_banner_dismissed', 'true');
+  };
+
   const handleOpenSpPayment = (tab: 'vip' | 'tokens' = 'vip') => {
     setSpPaymentInitialTab(tab);
     setIsSpPaymentModalOpen(true);
   };
+
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [urlReferralCode, setUrlReferralCode] = useState<string>('');
@@ -695,15 +725,25 @@ export default function App() {
         }
 
         setAuthLoading(false);
+
+        // After user login completes successfully, call registerPush() exactly once (guard with a ref)
+        if (!hasRegisteredPushRef.current) {
+          hasRegisteredPushRef.current = true;
+          registerPush().catch(err => {
+            console.warn('[WebPush] Auto registerPush on login notice:', err);
+          });
+        }
       } else {
         activeUserUidRef.current = null;
         isInitialChatSyncDoneRef.current = null;
+        hasRegisteredPushRef.current = false;
         setUser(null);
         setUserProfile(null);
         setChats([]);
         setCurrentChatId(null);
         setAuthLoading(false);
       }
+
     });
 
     return () => {
@@ -1463,6 +1503,40 @@ export default function App() {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 bg-white">
+              {/* Web Push Notification Banner (Strict Black-White Monochrome, Bengali) */}
+              {showPushBanner && (
+                <div 
+                  onClick={handleBannerRegisterPush}
+                  className="bg-black text-white px-3 py-2 text-xs flex items-center justify-between border-b border-zinc-800 shrink-0 z-20 cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Bell className="w-4 h-4 text-white shrink-0" />
+                    <span className="font-semibold text-white truncate">২৪/৭ আপডেট ও সতর্কবার্তা পেতে নোটিফিকেশন চালু করুন</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBannerRegisterPush();
+                      }}
+                      className="px-2.5 py-1 bg-white text-black font-bold text-xs rounded hover:bg-zinc-200 transition-colors cursor-pointer"
+                    >
+                      নোটিফিকেশন চালু করুন
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBannerDismiss}
+                      className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      title="বন্ধ করুন"
+                      aria-label="বন্ধ করুন"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Admin Maintenance Notice Banner */}
               {systemControl.maintenanceMode && isUserAdmin && (
                 <div className="bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-black flex items-center justify-between shadow-xs shrink-0 z-20 border-b border-amber-600">

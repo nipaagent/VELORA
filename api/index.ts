@@ -1,8 +1,22 @@
 import express from "express";
 import dotenv from "dotenv";
 import { Readable } from "stream";
+import webpush from "web-push";
 
 dotenv.config();
+
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT || "mailto:support@nipa.app",
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY
+    );
+  } catch (vapidErr) {
+    console.warn("VAPID initialization error:", vapidErr);
+  }
+}
+
 
 export const app = express();
 
@@ -1233,8 +1247,224 @@ app.get(["/api/admin/payments", "/api/payment/transactions"], async (req, res) =
   }
 });
 
+// Web Push API Endpoints (VAPID)
+// 1. POST /api/push/subscribe — Firebase auth required. Save subscription to push_subscriptions/{uid}. Return 200 {ok: true}.
+app.post("/api/push/subscribe", async (req, res) => {
+  try {
+    const bearerToken = getBearerToken(req);
+    if (!bearerToken) {
+      return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
+    }
+    const tokenUid = getUidFromToken(bearerToken);
+    if (!tokenUid) {
+      return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
+    }
 
-// Fallback error middleware to ensure ALL responses are JSON
+    const subscription = req.body?.subscription || req.body;
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ error: "Invalid subscription payload" });
+    }
+
+    // Save subscription JSON to Firebase RTDB at push_subscriptions/{uid}
+    await fetch(rtdb(`push_subscriptions/${tokenUid}`, bearerToken), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...subscription,
+        updatedAt: Date.now()
+      })
+    });
+
+    return res.status(200).json({ ok: true });
+  } catch (err: any) {
+    console.error("Push subscribe error:", err);
+    return res.status(500).json({ error: err?.message || "Failed to subscribe" });
+  }
+});
+
+// 2. POST /api/push/unsubscribe — Firebase auth required. Remove push_subscriptions/{uid}. Return 200 {ok: true}.
+app.post("/api/push/unsubscribe", async (req, res) => {
+  try {
+    const bearerToken = getBearerToken(req);
+    if (!bearerToken) {
+      return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
+    }
+    const tokenUid = getUidFromToken(bearerToken);
+    if (!tokenUid) {
+      return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
+    }
+
+    // Remove push_subscriptions/{uid}
+    await fetch(rtdb(`push_subscriptions/${tokenUid}`, bearerToken), {
+      method: "DELETE"
+    });
+
+    return res.status(200).json({ ok: true });
+  } catch (err: any) {
+    console.error("Push unsubscribe error:", err);
+    return res.status(500).json({ error: err?.message || "Failed to unsubscribe" });
+  }
+});
+
+// 3. POST /api/admin/push/broadcast — admin role required. Broadcast to all push_subscriptions. Return {sent, failed}.
+app.post("/api/admin/push/broadcast", async (req, res) => {
+  try {
+    const bearerToken = getBearerToken(req);
+    if (!bearerToken) {
+      return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
+    }
+    const tokenUid = getUidFromToken(bearerToken);
+    if (!tokenUid) {
+      return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
+    }
+
+    // Verify admin role
+    const roleRes = await fetch(rtdb(`users/${tokenUid}/role`, bearerToken));
+    if (!roleRes.ok) {
+      return res.status(403).json({ error: "অ্যাডমিন অনুমতি প্রয়োজন।" });
+    }
+    const role = await roleRes.json();
+    if (role !== "admin") {
+      return res.status(403).json({ error: "অ্যাডমিন অনুমতি প্রয়োজন।" });
+    }
+
+    const { title, body, url } = req.body || {};
+    if (!title || !body) {
+      return res.status(400).json({ error: "শিরোনাম এবং বার্তা আবশ্যক।" });
+    }
+
+    // Configure web-push with VAPID env
+    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      try {
+        webpush.setVapidDetails(
+          process.env.VAPID_SUBJECT || "mailto:support@nipa.app",
+          process.env.VAPID_PUBLIC_KEY,
+          process.env.VAPID_PRIVATE_KEY
+        );
+      } catch (vapidErr) {
+        console.warn("VAPID config error:", vapidErr);
+      }
+    } else {
+      return res.status(500).json({ error: "সার্ভারে VAPID কী কনফিগার করা নেই।" });
+    }
+
+    // Read ALL push_subscriptions from RTDB
+    const subsRes = await fetch(rtdb("push_subscriptions", bearerToken));
+    const subsData = await subsRes.json();
+
+    if (!subsData || typeof subsData !== "object") {
+      return res.status(200).json({ sent: 0, failed: 0 });
+    }
+
+    let sent = 0;
+    let failed = 0;
+    const payload = JSON.stringify({
+      title,
+      body,
+      url: url || "/"
+    });
+
+    const entries = Object.entries(subsData);
+    await Promise.all(
+      entries.map(async ([subUid, sub]: [string, any]) => {
+        if (!sub || !sub.endpoint) return;
+        try {
+          await webpush.sendNotification(sub, payload);
+          sent++;
+        } catch (err: any) {
+          failed++;
+          // Delete subscriptions that return 404 or 410 (expired)
+          if (err.statusCode === 404 || err.statusCode === 410) {
+            await fetch(rtdb(`push_subscriptions/${subUid}`, bearerToken), {
+              method: "DELETE"
+            }).catch(() => {});
+          }
+        }
+      })
+    );
+
+    return res.status(200).json({ sent, failed });
+  } catch (err: any) {
+    console.error("Push broadcast error:", err);
+    return res.status(500).json({ error: err?.message || "ব্রডকাস্ট পাঠাতে সমস্যা হয়েছে।" });
+  }
+});
+
+// 4. POST /api/admin/push/send — admin role required. Body: {uid, title, body, url?}. Send push to that user only.
+app.post("/api/admin/push/send", async (req, res) => {
+  try {
+    const bearerToken = getBearerToken(req);
+    if (!bearerToken) {
+      return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
+    }
+    const tokenUid = getUidFromToken(bearerToken);
+    if (!tokenUid) {
+      return res.status(401).json({ error: "লগইন প্রয়োজন। দয়া করে আবার লগইন করুন।" });
+    }
+
+    // Verify admin role
+    const roleRes = await fetch(rtdb(`users/${tokenUid}/role`, bearerToken));
+    if (!roleRes.ok) {
+      return res.status(403).json({ error: "অ্যাডমিন অনুমতি প্রয়োজন।" });
+    }
+    const role = await roleRes.json();
+    if (role !== "admin") {
+      return res.status(403).json({ error: "অ্যাডমিন অনুমতি প্রয়োজন।" });
+    }
+
+    const { uid, title, body, url } = req.body || {};
+    if (!uid || !title || !body) {
+      return res.status(400).json({ error: "ইউজার আইডি, শিরোনাম এবং বার্তা আবশ্যক।" });
+    }
+
+    // Configure web-push with VAPID env
+    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      try {
+        webpush.setVapidDetails(
+          process.env.VAPID_SUBJECT || "mailto:support@nipa.app",
+          process.env.VAPID_PUBLIC_KEY,
+          process.env.VAPID_PRIVATE_KEY
+        );
+      } catch (vapidErr) {
+        console.warn("VAPID config error:", vapidErr);
+      }
+    } else {
+      return res.status(500).json({ error: "সার্ভারে VAPID কী কনফিগার করা নেই।" });
+    }
+
+    // Read that user's subscription
+    const subRes = await fetch(rtdb(`push_subscriptions/${uid}`, bearerToken));
+    if (!subRes.ok) {
+      return res.status(200).json({ sent: 0, failed: 1, message: "Subscription not found" });
+    }
+    const sub = await subRes.json();
+    if (!sub || !sub.endpoint) {
+      return res.status(200).json({ sent: 0, failed: 1, message: "Subscription not found" });
+    }
+
+    try {
+      await webpush.sendNotification(sub, JSON.stringify({
+        title,
+        body,
+        url: url || "/"
+      }));
+      return res.status(200).json({ sent: 1, failed: 0 });
+    } catch (pushErr: any) {
+      if (pushErr.statusCode === 404 || pushErr.statusCode === 410) {
+        await fetch(rtdb(`push_subscriptions/${uid}`, bearerToken), {
+          method: "DELETE"
+        }).catch(() => {});
+      }
+      return res.status(200).json({ sent: 0, failed: 1, error: pushErr?.message });
+    }
+  } catch (err: any) {
+    console.error("Push send error:", err);
+    return res.status(500).json({ error: err?.message || "পুশ নোটিফিকেশন পাঠাতে সমস্যা হয়েছে।" });
+  }
+});
+
+
+
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error("Express error:", err);
   res.status(200).json({ status: "error", error: err?.message || "Internal server error" });

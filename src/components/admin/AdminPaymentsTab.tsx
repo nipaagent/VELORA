@@ -187,6 +187,33 @@ export const AdminPaymentsTab: React.FC = () => {
       updates[`users/${reqItem.userId}/transactions/${reqItem.trxId}`] = transactionRecord;
 
       await update(ref(db), updates);
+
+      // In bKash approve flow: send push notification in try/catch (never breaks approval)
+      try {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const idToken = await currentUser.getIdToken();
+          const pkgInfo = reqItem.packageType === 'vip'
+            ? `${reqItem.packageName || 'VIP'} (${reqItem.amount} দিন VIP)`
+            : `${reqItem.packageName || 'টোকেন'} (${Number(reqItem.amount || 0).toLocaleString()} বোনাস টোকেন)`;
+          await fetch('/api/admin/push/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({
+              uid: reqItem.userId,
+              title: "পেমেন্ট অনুমোদিত",
+              body: `আপনার ${pkgInfo} প্যাকেজের পেমেন্ট সফলভাবে অনুমোদিত হয়েছে!`,
+              url: '/'
+            })
+          }).catch(pushErr => console.warn("bKash approve push notification warning:", pushErr));
+        }
+      } catch (pushErr) {
+        console.warn("bKash approve push notification ignored error:", pushErr);
+      }
+
       alert(`সফলভাবে রিকোয়েস্ট অনুমোদিত হয়েছে এবং ইউজারের একাউন্টে ক্রেডিট যোগ করা হয়েছে!`);
     } catch (err: any) {
       console.error("Approve error:", err);
@@ -214,6 +241,33 @@ export const AdminPaymentsTab: React.FC = () => {
       };
 
       await update(ref(db), updates);
+
+      // In bKash reject flow: send push notification in try/catch (never breaks rejection)
+      try {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const idToken = await currentUser.getIdToken();
+          const pkgInfo = rejectingRequest.packageType === 'vip'
+            ? `${rejectingRequest.packageName || 'VIP'} (${rejectingRequest.amount} দিন VIP)`
+            : `${rejectingRequest.packageName || 'টোকেন'} (${Number(rejectingRequest.amount || 0).toLocaleString()} টোকেন)`;
+          await fetch('/api/admin/push/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({
+              uid: rejectingRequest.userId,
+              title: "পেমেন্ট বাতিল",
+              body: `আপনার ${pkgInfo} প্যাকেজের পেমেন্ট বাতিল করা হয়েছে। কারণ: ${reason}`,
+              url: '/'
+            })
+          }).catch(pushErr => console.warn("bKash reject push notification warning:", pushErr));
+        }
+      } catch (pushErr) {
+        console.warn("bKash reject push notification ignored error:", pushErr);
+      }
+
       setRejectingRequest(null);
       setRejectionReasonInput('');
     } catch (err: any) {
@@ -223,6 +277,7 @@ export const AdminPaymentsTab: React.FC = () => {
       setProcessingId(null);
     }
   };
+
 
   // Filter bKash requests
   const filteredBkashRequests = bkashRequests.filter((r) => {
