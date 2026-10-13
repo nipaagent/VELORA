@@ -92,8 +92,8 @@ export default function LandingPage({ onOpenAuth, isLoggedIn = false, onSelectPu
       {/* Top Navbar */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#0a0a0a]/85 border-b border-zinc-800/80">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="NIPA" style={{width:32,height:32}} className="object-contain shrink-0" />
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.png" alt="NIPA" style={{width:36,height:36}} className="object-contain shrink-0 rounded-lg shadow-sm" />
             <div>
               <div className="font-bold text-base tracking-tight flex items-center gap-1.5 text-white">
                 NIPA <span className="text-[11px] font-mono text-zinc-400 font-normal px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">NETWORK V2.7</span>

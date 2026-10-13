@@ -357,9 +357,13 @@ export default function AuthModal({ isOpen, initialReferralCode, initialIsSignUp
       </div>
 
       <div className="relative z-10 w-full max-w-[420px] md:max-w-5xl flex flex-col items-center">
-        <div className="mb-4 flex justify-center">
-          <img src="/logo.png" alt="NIPA" style={{width:80,height:80}} className="object-contain" />
-        </div>
+        <div className="mb-6 flex flex-col items-center">
+  <div className="rounded-2xl bg-white p-3 shadow-lg border border-gray-100">
+    <img src="/logo.png" alt="NIPA" style={{width:72,height:72}} className="object-contain rounded-xl" />
+  </div>
+  <h2 className="mt-4 text-2xl font-bold tracking-widest text-black">NIPA</h2>
+  <p className="mt-1 text-sm text-gray-500 tracking-wide">Welcome back</p>
+</div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}

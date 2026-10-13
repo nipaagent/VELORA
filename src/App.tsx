@@ -1670,8 +1670,8 @@ export default function App() {
                             </div>
                           </motion.div>
                         )}
-                        <div className="flex items-center gap-2">
-                          <img src="/logo.png" alt="NIPA" style={{width:32,height:32}} className="object-contain shrink-0" />
+                        <div className="flex items-center gap-2.5">
+                          <img src="/logo.png" alt="NIPA" style={{width:36,height:36}} className="object-contain shrink-0 rounded-lg shadow-sm" />
                           <h1 
                             className={cn(
                               "relative text-sm font-black tracking-[0.2em] uppercase transition-all duration-500",
