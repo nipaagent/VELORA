@@ -58,21 +58,21 @@ const isKeyHealthy = (apiKey: string): boolean => {
   return true;
 };
 const getApiKeysInfo = async () => {
-  const keysMap = new Map<string, { name: string; type: 'unorouter'; customEndpoint?: string }>();
+  const keysMap = new Map<string, { name: string; type: 'naga'; customEndpoint?: string }>();
 
   // Chat completions must go ONLY through the Unorouter API using the UNOROUTER_AI secret key
-  const val = process.env.UNOROUTER_AI;
+  const val = process.env.NAGA_API_KEY;
   if (val && typeof val === 'string') {
     const splitValues = val.split(/[\n,;\s]+/).map(k => k.trim()).filter(k => k.length > 5);
     splitValues.forEach((k, idx) => {
       keysMap.set(k, { 
-        name: splitValues.length > 1 ? `NIPA UNOROUTER GATEWAY_${idx + 1}` : 'NIPA UNOROUTER GATEWAY', 
-        type: 'unorouter' 
+        name: splitValues.length > 1 ? `NIPA NAGA GATEWAY_${idx + 1}` : 'NIPA NAGA GATEWAY', 
+        type: 'naga' 
       });
     });
   }
 
-  const keys: { name: string; value: string; type: 'unorouter'; customEndpoint?: string }[] = [];
+  const keys: { name: string; value: string; type: 'naga'; customEndpoint?: string }[] = [];
   keysMap.forEach((info, value) => {
     keys.push({ name: info.name, value, type: info.type, customEndpoint: info.customEndpoint });
   });
@@ -204,8 +204,8 @@ const deductUserTokens = async (
   }
 };
 
-const generateImageDirect = async (imagePrompt: string, apiKey: string, type: 'unorouter' | 'naga', endpoint?: string) => {
-  const url = endpoint || (type === 'unorouter' ? "https://api.unorouter.com/v1/chat/completions" : "https://api.naga.ac/v1/chat/completions");
+const generateImageDirect = async (imagePrompt: string, apiKey: string, type: 'naga' | 'naga', endpoint?: string) => {
+  const url = endpoint || (type === 'naga' ? "https://api.unorouter.com/v1/chat/completions" : "https://api.naga.ac/v1/chat/completions");
   const imageCandidateModels = ["juggernaut-xl:free", "dreamshaper:free", "albedobase-xl-sdxl:free", "absolutereality:free"];
   
   for (const imgModel of imageCandidateModels) {
@@ -344,7 +344,7 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
     }
 
     // Always locked to exactly gpt-oss-safeguard-20b:free (ignore client/env parameters)
-    const modelName = "gpt-oss-safeguard-20b:free";
+    const modelName = "llama-3.3-70b-instruct:free";
 
     const isStreamRequested = (req.body?.stream === true || req.query?.stream === 'true') && 
       !message.toLowerCase().match(/(generate|make|create|draw|paint|show|ছবি)\s+(image|picture|photo|art|আঁকো|বানাও)/i);
@@ -490,10 +490,10 @@ Core rules (Skill: apk-reverse):
       const apiKey = keyObj.value;
 
       // All chat completions must go ONLY through the Unorouter API using the UNOROUTER_AI secret key
-      const endpointUrl = "https://api.unorouter.com/v1/chat/completions";
+      const endpointUrl = "https://api.naga.ac/v1/chat/completions";
 
       // The model must ALWAYS be exactly gpt-oss-safeguard-20b:free
-      const candidateModels = ["gpt-oss-safeguard-20b:free"];
+      const candidateModels = ["llama-3.3-70b-instruct:free"];
 
       const uniqueModels = Array.from(new Set(candidateModels));
 
@@ -729,7 +729,7 @@ const handleModelsRequest = (req: express.Request, res: express.Response) => {
   res.json({
     object: "list",
     data: [
-      { id: "gpt-oss-safeguard-20b:free", object: "model", created: now, owned_by: "unorouter", permission: defaultPerm }
+      { id: "gpt-oss-safeguard-20b:free", object: "model", created: now, owned_by: "naga", permission: defaultPerm }
     ]
   });
 };
