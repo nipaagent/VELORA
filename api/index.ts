@@ -345,7 +345,7 @@ const handleChatRequest = async (req: express.Request, res: express.Response) =>
     }
 
     // Always locked to exactly gpt-oss-safeguard-20b:free (ignore client/env parameters)
-    const modelName = "llama-3.3-70b-instruct:free";
+    const modelName = "sonar:free";
 
     const isStreamRequested = (req.body?.stream === true || req.query?.stream === 'true') && 
       !message.toLowerCase().match(/(generate|make|create|draw|paint|show|ছবি)\s+(image|picture|photo|art|আঁকো|বানাও)/i);
@@ -494,7 +494,7 @@ Core rules (Skill: apk-reverse):
       const endpointUrl = "https://api.naga.ac/v1/chat/completions";
 
       // The model must ALWAYS be exactly gpt-oss-safeguard-20b:free
-      const candidateModels = ["llama-3.3-70b-instruct:free"];
+      const candidateModels = ["sonar:free"];
 
       const uniqueModels = Array.from(new Set(candidateModels));
 
@@ -730,7 +730,7 @@ const handleModelsRequest = (req: express.Request, res: express.Response) => {
   res.json({
     object: "list",
     data: [
-      { id: "llama-3.3-70b-instruct:free", object: "model", created: now, owned_by: "naga", permission: defaultPerm }
+      { id: "sonar:free", object: "model", created: now, owned_by: "naga", permission: defaultPerm }
     ]
   });
 };
