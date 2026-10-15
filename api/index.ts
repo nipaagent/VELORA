@@ -61,7 +61,8 @@ const getApiKeysInfo = async () => {
   const keysMap = new Map<string, { name: string; type: 'naga'; customEndpoint?: string }>();
 
   // Chat completions must go ONLY through the Unorouter API using the UNOROUTER_AI secret key
-  const val = [process.env.NAGA_API_KEY, process.env.NAGA_API_KEY_1, process.env.NAGA_API_KEY_2, process.env.NAGA_API_KEY_3].filter(Boolean).join(",");
+  const nagaKeys = [];if (process.env.NAGA_API_KEY) nagaKeys.push(process.env.NAGA_API_KEY);for (let i = 1; i <= 50; i++) {
+    const k = process.env[`NAGA_API_KEY_${i}`];if (k) nagaKeys.push(k);}const val = nagaKeys.join(",");
   if (val && typeof val === 'string') {
     const splitValues = val.split(/[\n,;\s]+/).map(k => k.trim()).filter(k => k.length > 5);
     splitValues.forEach((k, idx) => {
