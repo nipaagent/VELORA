@@ -204,8 +204,8 @@ const deductUserTokens = async (
   }
 };
 
-const generateImageDirect = async (imagePrompt: string, apiKey: string, type: 'naga' | 'naga', endpoint?: string) => {
-  const url = endpoint || (type === 'naga' ? "https://api.unorouter.com/v1/chat/completions" : "https://api.naga.ac/v1/chat/completions");
+const generateImageDirect = async (imagePrompt: string, apiKey: string, type: 'unorouter' | 'naga', endpoint?: string) => {
+  const url = endpoint || (type === 'unorouter' ? "https://api.unorouter.com/v1/chat/completions" : "https://api.naga.ac/v1/chat/completions");
   const imageCandidateModels = ["juggernaut-xl:free", "dreamshaper:free", "albedobase-xl-sdxl:free", "absolutereality:free"];
   
   for (const imgModel of imageCandidateModels) {
