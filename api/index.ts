@@ -730,7 +730,7 @@ const handleModelsRequest = (req: express.Request, res: express.Response) => {
   res.json({
     object: "list",
     data: [
-      { id: "gpt-oss-safeguard-20b:free", object: "model", created: now, owned_by: "naga", permission: defaultPerm }
+      { id: "llama-3.3-70b-instruct:free", object: "model", created: now, owned_by: "naga", permission: defaultPerm }
     ]
   });
 };
